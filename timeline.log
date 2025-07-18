@@ -1,0 +1,33 @@
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8505
+  Network URL: http://182.198.212.173:8505
+
+  For better performance, install the Watchdog module:
+
+  $ xcode-select --install
+  $ pip install watchdog
+            
+DataFrame 로드 실패: 파일을 찾을 수 없습니다: tag_data_24.6 (version: None)
+메타데이터 저장 실패: Object of type Int64DType is not JSON serializable
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+DataFrame 로드 실패: 파일을 찾을 수 없습니다: tag_data_24.6 (version: None)
+메타데이터 저장 실패: Object of type Int64DType is not JSON serializable
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+DataFrame 로드 실패: 파일을 찾을 수 없습니다: tag_data_24.6 (version: None)
+메타데이터 로드 실패: Expecting value: line 13 column 18 (char 441)
+메타데이터 저장 실패: Object of type Int64DType is not JSON serializable
+DataFrame 로드 실패: 파일을 찾을 수 없습니다: tag_data_24.6 (version: None)
+메타데이터 저장 실패: Object of type Int64DType is not JSON serializable

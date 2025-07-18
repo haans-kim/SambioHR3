@@ -1,8 +1,14 @@
+pandas>=1.5.0
+numpy>=1.21.0
+streamlit>=1.25.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+openpyxl>=3.0.0
+scikit-learn>=1.1.0
+hmmlearn>=0.2.8
+plotly>=5.10.0
 pycaret==3.2.0
-scikit-learn==1.2.2
 sktime==0.21.0
 imbalanced-learn==0.11.0
 scikit-base==0.5.0
-streamlit
 joblib==1.2.0
-openpyxl

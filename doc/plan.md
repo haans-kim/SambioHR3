@@ -6,32 +6,32 @@
 ## 1단계: 프로젝트 초기 설정 및 구조 구축 (1-2주)
 
 ### 1.1 프로젝트 구조 설정
-- [ ] 프로젝트 디렉터리 구조 생성
-- [ ] src/data_processing/ 폴더 및 파일 생성
-  - [ ] excel_loader.py
-  - [ ] data_transformer.py
-  - [ ] pickle_manager.py
-- [ ] src/database/ 폴더 및 파일 생성
-  - [ ] schema.py
-  - [ ] db_manager.py
-  - [ ] models.py
-- [ ] src/hmm/ 폴더 및 파일 생성
-  - [ ] hmm_model.py
-  - [ ] baum_welch.py
-  - [ ] viterbi.py
-  - [ ] rule_editor.py
-- [ ] src/analysis/ 폴더 및 파일 생성
-  - [ ] individual_analyzer.py
-  - [ ] organization_analyzer.py
-- [ ] src/ui/ 폴더 및 파일 생성
-  - [ ] streamlit_app.py
-  - [ ] components/
-- [ ] data/ 폴더 구조 생성
-  - [ ] raw/
-  - [ ] processed/
-  - [ ] pickles/
-- [ ] tests/ 폴더 생성
-- [ ] config/ 폴더 생성
+- [x] 프로젝트 디렉터리 구조 생성
+- [x] src/data_processing/ 폴더 및 파일 생성
+  - [x] excel_loader.py
+  - [x] data_transformer.py
+  - [x] pickle_manager.py
+- [x] src/database/ 폴더 및 파일 생성
+  - [x] schema.py
+  - [x] db_manager.py
+  - [x] models.py
+- [x] src/hmm/ 폴더 및 파일 생성
+  - [x] hmm_model.py
+  - [x] baum_welch.py
+  - [x] viterbi.py
+  - [x] rule_editor.py
+- [x] src/analysis/ 폴더 및 파일 생성
+  - [x] individual_analyzer.py
+  - [x] organization_analyzer.py
+- [x] src/ui/ 폴더 및 파일 생성
+  - [x] streamlit_app.py
+  - [x] components/
+- [x] data/ 폴더 구조 생성
+  - [x] raw/
+  - [x] processed/
+  - [x] pickles/
+- [x] tests/ 폴더 생성
+- [x] config/ 폴더 생성
 
 ### 1.2 가상환경 및 의존성 설정
 - [x] Python 3.9+ 가상환경 생성
@@ -43,9 +43,9 @@
 - [x] matplotlib>=3.5.0 설치
 - [x] seaborn>=0.11.0 설치
 - [x] openpyxl>=3.0.0 설치
-- [ ] scikit-learn>=1.1.0 설치
-- [ ] hmmlearn>=0.2.8 설치
-- [ ] plotly>=5.10.0 설치
+- [x] scikit-learn>=1.1.0 설치
+- [x] hmmlearn>=0.2.8 설치
+- [x] plotly>=5.10.0 설치
 
 ## 실제 데이터 구조 분석 (2025년 6월)
 
@@ -72,21 +72,21 @@
 ## 2단계: 데이터 처리 파이프라인 구축 (2-3주)
 
 ### 2.1 엑셀 데이터 로더 구현
-- [ ] excel_loader.py 기본 구조 구현
-- [ ] 100MB+ 엑셀 파일 효율적 로딩 기능
-- [ ] 청크 단위 읽기 및 메모리 최적화
-- [ ] 데이터 검증 및 오류 처리
+- [x] excel_loader.py 기본 구조 구현
+- [x] 100MB+ 엑셀 파일 효율적 로딩 기능
+- [x] 청크 단위 읽기 및 메모리 최적화
+- [x] 데이터 검증 및 오류 처리
 
 ### 2.2 데이터 변환 및 전처리
-- [ ] data_transformer.py 기본 구조 구현
-- [ ] 태깅데이터 시계열 정렬 로직
-- [ ] 꼬리물기 현상 처리 알고리즘 구현
-- [ ] 누락 구간 탐지 및 보간 로직
+- [x] data_transformer.py 기본 구조 구현
+- [x] 태깅데이터 시계열 정렬 로직
+- [x] 꼬리물기 현상 처리 알고리즘 구현
+- [x] 누락 구간 탐지 및 보간 로직
 
 ### 2.3 Pickle 파일 관리
-- [ ] pickle_manager.py 구현
-- [ ] 데이터프레임 직렬화/역직렬화
-- [ ] 버전 관리 및 캐싱 전략
+- [x] pickle_manager.py 구현
+- [x] 데이터프레임 직렬화/역직렬화
+- [x] 버전 관리 및 캐싱 전략
 
 ### 2.4 데이터 타입별 처리 로직 (2교대 근무 반영)
 - [ ] 태깅데이터 처리 로직
@@ -118,66 +118,75 @@
 ## 3단계: 데이터베이스 설계 및 구현 (1-2주)
 
 ### 3.1 SQLite 데이터베이스 스키마 설계
-- [ ] daily_work_data 테이블 설계 (2교대 근무 반영)
-- [ ] shift_work_data 테이블 설계 (교대근무 시간 데이터)
-- [ ] organization_summary 테이블 설계
-- [ ] tag_logs 테이블 설계
+- [x] daily_work_data 테이블 설계 (2교대 근무 반영)
+- [x] shift_work_data 테이블 설계 (교대근무 시간 데이터)
+- [x] organization_summary 테이블 설계
+- [x] tag_logs 테이블 설계
+- [x] abc_activity_data 테이블 설계 (ABC 작업 데이터)
+- [x] claim_data 테이블 설계 (근무시간 Claim 데이터)
+- [x] attendance_data 테이블 설계 (근태 사용 데이터)
+- [x] non_work_time_data 테이블 설계 (비근무시간 데이터)
+- [x] employee_info 테이블 설계 (직원 정보)
+- [x] tag_location_master 테이블 설계 (태깅 지점 마스터)
+- [x] organization_mapping 테이블 설계 (조직 매칭)
+- [x] hmm_model_config 테이블 설계 (HMM 모델 설정)
+- [x] processing_log 테이블 설계 (처리 로그)
 
 ### 3.2 데이터베이스 매니저 구현
-- [ ] db_manager.py 구현
-- [ ] 연결 관리 및 쿼리 실행
-- [ ] 트랜잭션 처리 및 오류 복구
-- [ ] 대용량 데이터 배치 처리
+- [x] db_manager.py 구현
+- [x] 연결 관리 및 쿼리 실행
+- [x] 트랜잭션 처리 및 오류 복구
+- [x] 대용량 데이터 배치 처리
 
 ## 4단계: HMM 모델 구현 (3-4주)
 
 ### 4.1 HMM 모델 기본 구조
-- [ ] hmm_model.py 기본 구조 구현
-- [ ] 상태 정의 (2교대 근무 반영)
-  - [ ] 근무상태: 근무, 집중근무, 장비조작, 회의, 작업준비, 작업중
-  - [ ] 식사상태: 조식, 중식, 석식, 야식 (시간대별 구분)
-  - [ ] 이동상태: 이동, 출근, 퇴근
-  - [ ] 휴식상태: 휴식, 피트니스
-  - [ ] 비근무상태: 연차, 배우자출산
-- [ ] 관측값 정의 (24시간 근무 반영)
-  - [ ] 태그 위치 (DR_NO, DR_NM 기반)
-  - [ ] 시간 간격 (출입시각 차이)
-  - [ ] 요일 (DAY_NM)
-  - [ ] 시간대 (출입시각을 시간 구간으로 변환, 자정 이후 처리)
-  - [ ] 근무구역 여부 (마스터파일 기반)
-  - [ ] ABC 작업 데이터 (Activity 분류)
-  - [ ] 근태 상태 (근태코드)
-  - [ ] 제외시간 여부 (비근무시간 데이터 기반)
-  - [ ] CAFETERIA 위치 + 시간대 → 식사상태 식별
-  - [ ] 교대근무자 식별 (야간근무자 시간 처리)
+- [x] hmm_model.py 기본 구조 구현
+- [x] 상태 정의 (2교대 근무 반영)
+  - [x] 근무상태: 근무, 집중근무, 장비조작, 회의, 작업준비, 작업중
+  - [x] 식사상태: 조식, 중식, 석식, 야식 (시간대별 구분)
+  - [x] 이동상태: 이동, 출근, 퇴근
+  - [x] 휴식상태: 휴식, 피트니스
+  - [x] 비근무상태: 연차, 배우자출산
+- [x] 관측값 정의 (24시간 근무 반영)
+  - [x] 태그 위치 (DR_NO, DR_NM 기반)
+  - [x] 시간 간격 (출입시각 차이)
+  - [x] 요일 (DAY_NM)
+  - [x] 시간대 (출입시각을 시간 구간으로 변환, 자정 이후 처리)
+  - [x] 근무구역 여부 (마스터파일 기반)
+  - [x] ABC 작업 데이터 (Activity 분류)
+  - [x] 근태 상태 (근태코드)
+  - [x] 제외시간 여부 (비근무시간 데이터 기반)
+  - [x] CAFETERIA 위치 + 시간대 → 식사상태 식별
+  - [x] 교대근무자 식별 (야간근무자 시간 처리)
 
 ### 4.2 전이 규칙 (Transition Rules) 정의
-- [ ] 상태 간 전이 확률 매트릭스 구현
-- [ ] 시간대별 전이 확률 조정
-- [ ] 개인별/조직별 전이 패턴 학습
+- [x] 상태 간 전이 확률 매트릭스 구현
+- [x] 시간대별 전이 확률 조정
+- [x] 개인별/조직별 전이 패턴 학습
 
 ### 4.3 방출 규칙 (Emission Rules) 정의
-- [ ] 각 상태별 태그 위치 확률 구현
-- [ ] 시간 간격별 방출 확률
-- [ ] 다차원 관측값 처리
+- [x] 각 상태별 태그 위치 확률 구현
+- [x] 시간 간격별 방출 확률
+- [x] 다차원 관측값 처리
 
 ### 4.4 Baum-Welch 학습 알고리즘 구현
-- [ ] baum_welch.py 구현
-- [ ] 파라미터 최적화
-- [ ] 수렴 조건 설정 및 성능 모니터링
-- [ ] 정규화 및 수치 안정성 확보
+- [x] baum_welch.py 구현
+- [x] 파라미터 최적화
+- [x] 수렴 조건 설정 및 성능 모니터링
+- [x] 정규화 및 수치 안정성 확보
 
 ### 4.5 Viterbi 예측 알고리즘 구현
-- [ ] viterbi.py 구현
-- [ ] 최적 상태 시퀀스 추정
-- [ ] 로그 확률 계산으로 언더플로우 방지
-- [ ] 실시간 예측 성능 최적화
+- [x] viterbi.py 구현
+- [x] 최적 상태 시퀀스 추정
+- [x] 로그 확률 계산으로 언더플로우 방지
+- [x] 실시간 예측 성능 최적화
 
 ### 4.6 규칙 에디터 구현
-- [ ] rule_editor.py 구현
-- [ ] 전이/방출 규칙 수정 인터페이스
-- [ ] 규칙 검증 및 일관성 검사
-- [ ] 규칙 버전 관리
+- [x] rule_editor.py 구현
+- [x] 전이/방출 규칙 수정 인터페이스
+- [x] 규칙 검증 및 일관성 검사
+- [x] 규칙 버전 관리
 
 ## 5단계: 분석 엔진 구현 (2-3주)
 
