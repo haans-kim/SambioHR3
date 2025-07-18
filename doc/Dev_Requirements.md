@@ -30,10 +30,18 @@
 - [동선 기반 활동 레이블링 시스템 ](https://claude.ai/public/artifacts/6a6def58-e1ed-405c-90e7-d07e507e558e)
 - [HMM Rule Editor](https://claude.ai/public/artifacts/5f6c4bb6-9483-4fee-ab6f-5ded9cf8b780")
 
+## 교대근무조
+- 이 회사는 24시간 근무 2교대로 근무하고 있어. 그렇기 때문에 4번의 식사를 제공하고 출근한날과 퇴근한 날이 하루에 있지 않고 다른 날짜에 있는 경우가 있으므로 반영하여 검토해야해.
+- •06:30-09:00 + CAFETERIA → 조식
+- •11:20-13:20 + CAFETERIA → 중식
+- •17:00-20:00 + CAFETERIA → 석식
+- •23:30-01:00 + CAFETERIA → 야식
+
+
 ## Data
 - Data folder에 위치
 - tag_data.xlsx : tag logging data
 -   : 년월차 데이터
 -   : 조직도
--  : 
+
 
