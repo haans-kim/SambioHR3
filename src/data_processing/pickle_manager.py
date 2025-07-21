@@ -48,6 +48,9 @@ class PickleManager:
         Returns:
             str: 저장된 파일 경로
         """
+        # 기존 파일들 삭제 (버전 관리하지 않음)
+        self._remove_old_versions(name)
+        
         if version is None:
             version = datetime.now().strftime("%Y%m%d_%H%M%S")
         
@@ -57,15 +60,6 @@ class PickleManager:
         file_path = self.base_path / filename
         
         try:
-            # 데이터 해시 생성 (중복 확인용)
-            data_hash = self._generate_data_hash(df)
-            
-            # 기존 동일 데이터 확인
-            existing_file = self._find_existing_data(name, data_hash)
-            if existing_file:
-                self.logger.info(f"동일한 데이터가 이미 존재: {existing_file}")
-                return str(existing_file)
-            
             # 저장 실행
             if compress:
                 with gzip.open(file_path, 'wb') as f:
@@ -74,8 +68,8 @@ class PickleManager:
                 with open(file_path, 'wb') as f:
                     pickle.dump(df, f, protocol=pickle.HIGHEST_PROTOCOL)
             
-            # 메타데이터 업데이트
-            self._update_metadata(name, version, file_path, df, data_hash, description)
+            # 메타데이터 업데이트 (해시 없이)
+            self._update_metadata(name, version, file_path, df, None, description)
             
             # 파일 크기 정보
             file_size = file_path.stat().st_size / (1024 * 1024)  # MB
@@ -86,6 +80,18 @@ class PickleManager:
         except Exception as e:
             self.logger.error(f"DataFrame 저장 실패: {e}")
             raise
+    
+    def _remove_old_versions(self, name: str):
+        """특정 이름의 모든 이전 버전 파일 삭제"""
+        pattern = f"{name}_v*"
+        old_files = list(self.base_path.glob(pattern))
+        
+        for old_file in old_files:
+            try:
+                old_file.unlink()
+                self.logger.info(f"이전 버전 삭제: {old_file}")
+            except Exception as e:
+                self.logger.warning(f"파일 삭제 실패: {old_file} - {e}")
     
     def load_dataframe(self, name: str, version: str = None) -> pd.DataFrame:
         """

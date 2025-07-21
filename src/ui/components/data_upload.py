@@ -178,6 +178,11 @@ class DataUploadComponent:
         """업로드 인터페이스 렌더링"""
         st.markdown("### 📤 데이터 업로드 관리")
         
+        # 초기 로드 시 pickle 파일 정보로 상태 업데이트
+        if 'data_status_refreshed' not in st.session_state:
+            self._refresh_data_status()
+            st.session_state.data_status_refreshed = True
+        
         # 데이터 상태 테이블 표시
         self._render_data_status_table()
         
@@ -212,6 +217,7 @@ class DataUploadComponent:
                 
         with col3:
             if st.button("🔄 새로고침", use_container_width=True):
+                self._refresh_data_status()
                 st.rerun()
                 
         with col4:
@@ -381,7 +387,7 @@ class DataUploadComponent:
             if needs_reload and len(config['files']) > 0:
                 # 엑셀 파일에서 로드
                 detail_text.text(f"📂 {info['display_name']} 파일 로딩 중...")
-                self._load_from_excel(data_type, info, config)
+                self._load_from_excel(data_type, info, config, detail_text)
             elif len(pickle_files) > 0 and len(config['files']) == 0:
                 # Pickle 파일에서 로드
                 detail_text.text(f"💾 {info['display_name']} 캐시에서 로딩 중...")
@@ -403,7 +409,7 @@ class DataUploadComponent:
         # 버튼 클릭 후에만 rerun
         time.sleep(2)  # 성공 메시지를 보여주기 위한 대기
     
-    def _load_from_excel(self, data_type: str, info: Dict, config: Dict):
+    def _load_from_excel(self, data_type: str, info: Dict, config: Dict, detail_text=None):
         """엑셀 파일에서 데이터 로드"""
         try:
             all_dfs = []
@@ -422,11 +428,15 @@ class DataUploadComponent:
                     tmp_path = tmp_file.name
                 
                 try:
-                    # ExcelLoader 사용하여 로드
-                    df = self.excel_loader.load_excel_file(tmp_path)
+                    # ExcelLoader 사용하여 로드 (여러 시트 자동 병합)
+                    if detail_text:
+                        detail_text.text(f"📂 {file_info['name']} 파일 분석 중...")
+                    df = self.excel_loader.load_excel_file(tmp_path, auto_merge_sheets=True)
                     all_dfs.append(df)
                     file_names.append(file_info['name'])
                     self.logger.info(f"{file_info['name']} 로드 완료: {len(df):,}행")
+                    if detail_text:
+                        detail_text.text(f"✅ {file_info['name']} 로드 완료: {len(df):,}행")
                 finally:
                     # 임시 파일 삭제
                     import os
@@ -526,6 +536,46 @@ class DataUploadComponent:
         except Exception as e:
             st.error(f"❌ {info['display_name']} Pickle 로드 오류: {e}")
             self.logger.error(f"{data_type} pickle 로드 오류: {e}")
+    
+    def _refresh_data_status(self):
+        """데이터 상태 정보를 pickle 파일에서 다시 읽어서 업데이트"""
+        self.logger.info("데이터 상태 새로고침 시작...")
+        
+        for data_type, info in self.data_types.items():
+            # 최신 pickle 파일 정보 가져오기
+            pickle_files = self.pickle_manager.list_pickle_files(info['table_name'])
+            
+            if pickle_files:
+                latest_pickle = pickle_files[0]  # 가장 최신 파일
+                
+                # 설정 업데이트
+                config = st.session_state.upload_config.get(data_type, {})
+                config['pickle_exists'] = True
+                config['dataframe_name'] = info['table_name']
+                config['row_count'] = latest_pickle.get('rows', 0)
+                config['last_modified'] = latest_pickle.get('created_at', datetime.now().isoformat())
+                
+                # 파일명 정보가 없으면 description에서 추출 시도
+                if not config.get('file_names'):
+                    description = latest_pickle.get('description', '')
+                    if 'Combined from' in description:
+                        # "Combined from X files" 형태에서 파일 수만 표시
+                        config['file_names'] = [f"Pickle 파일 ({latest_pickle.get('rows', 0):,}행)"]
+                
+                # 세션 상태 업데이트
+                st.session_state.upload_config[data_type] = config
+                self.logger.info(f"{data_type} 상태 업데이트: {latest_pickle.get('rows', 0):,}행")
+            else:
+                # pickle 파일이 없는 경우 초기화
+                config = st.session_state.upload_config.get(data_type, {})
+                config['pickle_exists'] = False
+                config['row_count'] = 0
+                config['last_modified'] = '-'
+                st.session_state.upload_config[data_type] = config
+        
+        # 업데이트된 설정 저장
+        self._save_upload_config()
+        self.logger.info("데이터 상태 새로고침 완료")
     
     def _clear_cache(self):
         """캐시 초기화"""

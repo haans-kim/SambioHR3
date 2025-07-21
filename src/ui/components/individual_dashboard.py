@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, date
 import logging
+from .improved_gantt_chart import render_improved_gantt_chart
 
 from ...analysis import IndividualAnalyzer
 from ...config.activity_types import (
@@ -253,8 +254,17 @@ class IndividualDashboard:
                 self.logger.info(f"조인 전 - daily_data DR_NO 샘플: {daily_data['DR_NO_str'].head().tolist()}")
                 self.logger.info(f"조인 전 - master DR_NO 샘플: {tag_location_master['DR_NO_str'].head().tolist()}")
                 
-                # 조인할 컬럼 확인
+                # 조인할 컬럼 확인 (새로운 태그 코드 체계 적용)
                 join_columns = ['DR_NO_str']
+                if 'Tag_Code' in tag_location_master.columns:
+                    join_columns.append('Tag_Code')
+                if '공간구분_NM' in tag_location_master.columns:
+                    join_columns.append('공간구분_NM')
+                if '세부유형_NM' in tag_location_master.columns:
+                    join_columns.append('세부유형_NM')
+                if '라벨링_활동' in tag_location_master.columns:
+                    join_columns.append('라벨링_활동')
+                # 기존 컬럼들도 체크 (호환성)
                 if '근무구역여부' in tag_location_master.columns:
                     join_columns.append('근무구역여부')
                 if '근무' in tag_location_master.columns:
@@ -271,52 +281,105 @@ class IndividualDashboard:
                 )
                 
                 # 조인 후 결과 확인
-                matched_count = daily_data['근무구역여부'].notna().sum()
+                if 'Tag_Code' in daily_data.columns:
+                    matched_count = daily_data['Tag_Code'].notna().sum()
+                elif '근무구역여부' in daily_data.columns:
+                    matched_count = daily_data['근무구역여부'].notna().sum()
+                else:
+                    matched_count = 0
                 self.logger.info(f"조인 결과: {matched_count}/{len(daily_data)} 매칭됨")
                 
-                # 마스터 데이터 적용
-                daily_data['work_area_type'] = daily_data['근무구역여부'].fillna('Y')
-                daily_data['work_status'] = daily_data['근무'].fillna('W')
-                daily_data['activity_label'] = daily_data['라벨링'].fillna('YW')
+                # 새로운 태그 코드 체계 적용
+                if 'Tag_Code' in daily_data.columns:
+                    # Tag_Code 기반 활동 분류
+                    # G1~G4: 근무영역, N1~N2: 비근무영역, T1~T3: 이동구간
+                    daily_data['tag_code'] = daily_data['Tag_Code'].fillna('G1')  # 기본값
+                    daily_data['space_type'] = daily_data['공간구분_NM'].fillna('근무영역')  # 기본값
+                    daily_data['detail_type'] = daily_data['세부유형_NM'].fillna('주업무공간')  # 기본값
+                    daily_data['allowed_activities'] = daily_data['라벨링_활동'].fillna('업무, 식사, 휴게')  # 기본값
+                    
+                    # 기존 컬럼과의 호환성 유지
+                    # Tag_Code를 기반으로 work_area_type 설정
+                    daily_data.loc[daily_data['tag_code'].str.startswith('G'), 'work_area_type'] = 'Y'  # 근무영역
+                    daily_data.loc[daily_data['tag_code'].str.startswith('N'), 'work_area_type'] = 'N'  # 비근무영역
+                    daily_data.loc[daily_data['tag_code'].str.startswith('T'), 'work_area_type'] = 'T'  # 이동구간
+                else:
+                    # 기존 방식 유지 (호환성)
+                    daily_data['work_area_type'] = daily_data['근무구역여부'].fillna('Y')
+                    daily_data['work_status'] = daily_data['근무'].fillna('W')
+                    daily_data['activity_label'] = daily_data['라벨링'].fillna('YW')
                 
-                # 라벨링 기반 기본 활동 분류
-                # GM: 근무구역 중 1선게이트로 들어옴 (이동)
-                daily_data.loc[daily_data['activity_label'] == 'GM', 'activity_code'] = 'MOVEMENT'
+                # Tag_Code 기반 기본 활동 분류
+                if 'tag_code' in daily_data.columns:
+                    # G1: 주업무공간 -> 업무
+                    daily_data.loc[daily_data['tag_code'] == 'G1', 'activity_code'] = 'WORK'
+                    
+                    # G2: 보조업무공간 -> 준비
+                    daily_data.loc[daily_data['tag_code'] == 'G2', 'activity_code'] = 'WORK_PREPARATION'
+                    
+                    # G3: 협업공간 -> 회의
+                    daily_data.loc[daily_data['tag_code'] == 'G3', 'activity_code'] = 'MEETING'
+                    
+                    # G4: 교육공간 -> 교육
+                    daily_data.loc[daily_data['tag_code'] == 'G4', 'activity_code'] = 'TRAINING'
+                    
+                    # N1: 휴게공간 -> 휴게
+                    daily_data.loc[daily_data['tag_code'] == 'N1', 'activity_code'] = 'REST'
+                    
+                    # N2: 복지공간 -> 휴게
+                    daily_data.loc[daily_data['tag_code'] == 'N2', 'activity_code'] = 'REST'
+                    
+                    # T1: 건물/구역 연결 -> 내부이동
+                    daily_data.loc[daily_data['tag_code'] == 'T1', 'activity_code'] = 'MOVEMENT'
+                    
+                    # T2: 출입포인트(IN) -> 출근
+                    daily_data.loc[daily_data['tag_code'] == 'T2', 'activity_code'] = 'COMMUTE_IN'
+                    
+                    # T3: 출입포인트(OUT) -> 퇴근
+                    daily_data.loc[daily_data['tag_code'] == 'T3', 'activity_code'] = 'COMMUTE_OUT'
+                else:
+                    # 기존 라벨링 기반 분류 (호환성)
+                    if 'activity_label' in daily_data.columns:
+                        # GM: 근무구역 중 1선게이트로 들어옴 (이동)
+                        daily_data.loc[daily_data['activity_label'] == 'GM', 'activity_code'] = 'MOVEMENT'
+                        
+                        # NM: 비근무구역에서 이동중
+                        daily_data.loc[daily_data['activity_label'] == 'NM', 'activity_code'] = 'MOVEMENT'
+                        
+                        # YW: 근무구역에서 근무중
+                        daily_data.loc[daily_data['activity_label'] == 'YW', 'activity_code'] = 'WORK'
+                        
+                        # NN: 비근무구역에서 비근무중 (휴식)
+                        daily_data.loc[daily_data['activity_label'] == 'NN', 'activity_code'] = 'REST'
+                        
+                        # YM: 근무구역에서 이동중
+                        daily_data.loc[daily_data['activity_label'] == 'YM', 'activity_code'] = 'MOVEMENT'
+            
+            # 신뢰도 초기화
+            daily_data['confidence'] = 80  # 기본값
+            
+            # Tag_Code 기반 신뢰도 세분화
+            if 'tag_code' in daily_data.columns:
+                # T2, T3 (출퇴근 포인트)는 가장 확실한 데이터 - 100%
+                daily_data.loc[daily_data['tag_code'].isin(['T2', 'T3']), 'confidence'] = 100
                 
-                # NM: 비근무구역에서 이동중
-                daily_data.loc[daily_data['activity_label'] == 'NM', 'activity_code'] = 'MOVEMENT'
+                # G3 (협업공간), G4 (교육공간)는 명확한 활동 - 95%
+                daily_data.loc[daily_data['tag_code'].isin(['G3', 'G4']), 'confidence'] = 95
                 
-                # YW: 근무구역에서 근무중
-                daily_data.loc[daily_data['activity_label'] == 'YW', 'activity_code'] = 'WORK'
+                # G1 (주업무공간), G2 (보조업무공간)는 일반 작업 - 90%
+                daily_data.loc[daily_data['tag_code'].isin(['G1', 'G2']), 'confidence'] = 90
                 
-                # NN: 비근무구역에서 비근무중 (휴식)
-                daily_data.loc[daily_data['activity_label'] == 'NN', 'activity_code'] = 'REST'
+                # N1, N2 (휴게/복지공간) - 90%
+                daily_data.loc[daily_data['tag_code'].isin(['N1', 'N2']), 'confidence'] = 90
                 
-                # YM: 근무구역에서 이동중
-                daily_data.loc[daily_data['activity_label'] == 'YM', 'activity_code'] = 'MOVEMENT'
+                # T1 (내부 이동) - 85%
+                daily_data.loc[daily_data['tag_code'] == 'T1', 'confidence'] = 85
             
             # 우선순위 기반 상세 활동 분류
-            # 1. 출근/퇴근 체크 (가장 높은 우선순위)
-            first_record_idx = daily_data.index[0] if len(daily_data) > 0 else None
-            last_record_idx = daily_data.index[-1] if len(daily_data) > 0 else None
+            # 참고: Tag_Code T2(출근), T3(퇴근)이 이미 설정되어 있으므로, 
+            # 더 정확한 출퇴근 시간대 검증만 추가
             
-            if first_record_idx is not None:
-                # 첫 기록이 정문이고 시간대가 맞으면 출근
-                if (daily_data.loc[first_record_idx, 'DR_NM'].upper().find('GATE') >= 0 or 
-                    daily_data.loc[first_record_idx, 'DR_NM'].find('정문') >= 0):
-                    hour = daily_data.loc[first_record_idx, 'datetime'].hour
-                    if 6 <= hour <= 10 or 18 <= hour <= 22:  # 주간/야간 출근 시간
-                        daily_data.loc[first_record_idx, 'activity_code'] = 'COMMUTE_IN'
-            
-            if last_record_idx is not None:
-                # 마지막 기록이 정문이고 시간대가 맞으면 퇴근
-                if (daily_data.loc[last_record_idx, 'DR_NM'].upper().find('GATE') >= 0 or 
-                    daily_data.loc[last_record_idx, 'DR_NM'].find('정문') >= 0):
-                    hour = daily_data.loc[last_record_idx, 'datetime'].hour
-                    if 16 <= hour <= 20 or 4 <= hour <= 8:  # 주간/야간 퇴근 시간
-                        daily_data.loc[last_record_idx, 'activity_code'] = 'COMMUTE_OUT'
-            
-            # 2. 식사시간 분류 (CAFETERIA 위치 + 시간대)
+            # 1. 식사시간 분류 (CAFETERIA 위치 + 시간대)
             cafeteria_mask = daily_data['DR_NM'].str.contains('CAFETERIA|식당|구내식당', case=False, na=False)
             
             # 시간대별 식사 분류 (더 정확한 시간대)
@@ -330,14 +393,26 @@ class IndividualDashboard:
             daily_data.loc[dinner_mask, 'activity_code'] = 'DINNER'
             daily_data.loc[midnight_mask, 'activity_code'] = 'MIDNIGHT_MEAL'
             
-            # 3. 특수 활동 분류
+            # 식사 활동은 위치+시간이 모두 일치하므로 신뢰도 상향
+            meal_masks = breakfast_mask | lunch_mask | dinner_mask | midnight_mask
+            # 식사 활동이면서 tag_code가 G1인 경우만 95%로 상향 (나머지는 기존 유지)
+            if 'tag_code' in daily_data.columns:
+                daily_data.loc[meal_masks & (daily_data['tag_code'] == 'G1'), 'confidence'] = 95
+            
+            # 2. 특수 활동 분류 (위치명 기반 세부 분류)
             # 회의실
             meeting_mask = daily_data['DR_NM'].str.contains('MEETING|회의|CONFERENCE', case=False, na=False)
             daily_data.loc[meeting_mask, 'activity_code'] = 'MEETING'
+            # tag_code가 G3(협업공간)이 아닌 경우만 신뢰도 조정
+            if 'tag_code' in daily_data.columns:
+                daily_data.loc[meeting_mask & (daily_data['tag_code'] != 'G3'), 'confidence'] = 88
             
             # 피트니스/운동실
             fitness_mask = daily_data['DR_NM'].str.contains('FITNESS|GYM|체력단련|운동실', case=False, na=False)
             daily_data.loc[fitness_mask, 'activity_code'] = 'FITNESS'
+            # tag_code가 N2(복지공간)이 아닌 경우만 신뢰도 조정
+            if 'tag_code' in daily_data.columns:
+                daily_data.loc[fitness_mask & (daily_data['tag_code'] != 'N2'), 'confidence'] = 87
             
             # 장비실/기계실
             equipment_mask = daily_data['DR_NM'].str.contains('EQUIPMENT|MACHINE|장비|기계실', case=False, na=False)
@@ -350,8 +425,11 @@ class IndividualDashboard:
             # 휴게실
             rest_mask = daily_data['DR_NM'].str.contains('REST|LOUNGE|휴게실|탈의실', case=False, na=False)
             daily_data.loc[rest_mask, 'activity_code'] = 'REST'
+            # tag_code가 N1(휴게공간)이 아닌 경우만 신뢰도 조정
+            if 'tag_code' in daily_data.columns:
+                daily_data.loc[rest_mask & (daily_data['tag_code'] != 'N1'), 'confidence'] = 86
             
-            # 4. 집중근무 판별 (같은 작업 위치에 30분 이상 체류)
+            # 3. 집중근무 판별 (같은 작업 위치에 30분 이상 체류)
             # 체류시간 계산
             daily_data['next_time'] = daily_data['datetime'].shift(-1)
             daily_data['duration_minutes'] = (daily_data['next_time'] - daily_data['datetime']).dt.total_seconds() / 60
@@ -370,18 +448,21 @@ class IndividualDashboard:
                 (daily_data['DR_NM'].str.contains('WORK_AREA', case=False, na=False))
             )
             daily_data.loc[focused_work_mask, 'activity_code'] = 'FOCUSED_WORK'
+            # 집중근무는 추론 기반이므로 약간 낮은 신뢰도
+            daily_data.loc[focused_work_mask & (daily_data['confidence'] > 85), 'confidence'] = 83
             
-            # 5. 활동 타입 매핑 (이전 버전과의 호환성)
+            # 4. 활동 타입 매핑 (이전 버전과의 호환성)
             activity_type_mapping = {
                 'WORK': 'work',
                 'FOCUSED_WORK': 'work',
                 'EQUIPMENT_OPERATION': 'work',
                 'WORK_PREPARATION': 'work',
                 'WORKING': 'work',
+                'TRAINING': 'education',
                 'MEETING': 'meeting',
                 'MOVEMENT': 'movement',
-                'COMMUTE_IN': 'movement',
-                'COMMUTE_OUT': 'movement',
+                'COMMUTE_IN': 'commute',
+                'COMMUTE_OUT': 'commute',
                 'BREAKFAST': 'breakfast',
                 'LUNCH': 'lunch',
                 'DINNER': 'dinner',
@@ -450,11 +531,34 @@ class IndividualDashboard:
                     'activity': row['activity_type'],
                     'activity_code': row.get('activity_code', 'WORK'),
                     'location': row['DR_NM'],
-                    'duration_minutes': row.get('duration_minutes', 5)
+                    'duration_minutes': row.get('duration_minutes', 5),
+                    'confidence': row.get('confidence', 80)  # 신뢰도 추가
                 })
             
             # Claim 데이터 가져오기
             claim_data = self.get_daily_claim_data(employee_id, selected_date)
+            
+            # 데이터 품질 분석
+            data_quality = self.analyze_data_quality(classified_data)
+            
+            # 활동별 시간 통계 (시간 단위로)
+            work_time_analysis = {
+                'actual_work_hours': activity_type_summary.get('work', 0) / 60,
+                'claimed_work_hours': claim_data['claim_hours'] if claim_data else 8.0,
+                'efficiency_ratio': 0,
+                'work_breakdown': {}
+            }
+            
+            # 효율성 계산
+            if work_time_analysis['claimed_work_hours'] > 0:
+                work_time_analysis['efficiency_ratio'] = (
+                    work_time_analysis['actual_work_hours'] / 
+                    work_time_analysis['claimed_work_hours'] * 100
+                )
+            
+            # 활동별 시간 분석
+            for activity_type, minutes in activity_type_summary.items():
+                work_time_analysis['work_breakdown'][activity_type] = minutes / 60
             
             return {
                 'employee_id': employee_id,
@@ -467,12 +571,55 @@ class IndividualDashboard:
                 'activity_segments': activity_segments,
                 'raw_data': classified_data,
                 'total_records': len(classified_data),
-                'claim_data': claim_data
+                'claim_data': claim_data,
+                'data_quality': data_quality,
+                'work_time_analysis': work_time_analysis
             }
             
         except Exception as e:
             self.logger.error(f"일일 데이터 분석 실패: {e}")
             return None
+    
+    def analyze_data_quality(self, classified_data: pd.DataFrame) -> dict:
+        """데이터 품질 분석"""
+        if 'confidence' not in classified_data.columns:
+            return {
+                'overall_quality_score': 80,
+                'tag_data_completeness': 100,
+                'confidence_distribution': {
+                    'high': 50,
+                    'medium': 40,
+                    'low': 10
+                }
+            }
+        
+        # 신뢰도 분포 계산
+        confidence_values = classified_data['confidence']
+        high_conf = (confidence_values >= 90).sum()
+        medium_conf = ((confidence_values >= 80) & (confidence_values < 90)).sum()
+        low_conf = (confidence_values < 80).sum()
+        total = len(classified_data)
+        
+        confidence_dist = {
+            'high': round(high_conf / total * 100, 1) if total > 0 else 0,
+            'medium': round(medium_conf / total * 100, 1) if total > 0 else 0,
+            'low': round(low_conf / total * 100, 1) if total > 0 else 0
+        }
+        
+        # 전체 품질 점수 (평균 신뢰도)
+        overall_score = round(confidence_values.mean(), 1) if len(confidence_values) > 0 else 80
+        
+        # 태그 데이터 완성도 (태그 코드가 있는 비율)
+        if 'tag_code' in classified_data.columns:
+            completeness = (classified_data['tag_code'].notna().sum() / total * 100) if total > 0 else 0
+        else:
+            completeness = 100
+        
+        return {
+            'overall_quality_score': overall_score,
+            'tag_data_completeness': round(completeness, 1),
+            'confidence_distribution': confidence_dist
+        }
     
     def render(self):
         """대시보드 렌더링"""
@@ -699,7 +846,13 @@ class IndividualDashboard:
         
         # 상세 Gantt 차트
         st.markdown("### 📊 활동 시퀀스 타임라인")
-        self.render_detailed_gantt_chart(analysis_result)
+        # 개선된 Gantt 차트 사용
+        improved_chart = render_improved_gantt_chart(analysis_result)
+        if improved_chart:
+            st.plotly_chart(improved_chart, use_container_width=True)
+        else:
+            # fallback to original chart
+            self.render_detailed_gantt_chart(analysis_result)
         
         # 상세 태그 기록
         st.markdown("### 📋 상세 태그 기록")
@@ -1478,8 +1631,8 @@ class IndividualDashboard:
         if location_filter:
             filtered_df = filtered_df[filtered_df['위치'].str.contains(location_filter, case=False, na=False)]
         
-        # 데이터 표시
-        st.dataframe(filtered_df, use_container_width=True, height=400, hide_index=True)
+        # 데이터 표시 (height 제거하여 전체 표시)
+        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
         
         # 다운로드 버튼
         csv = filtered_df.to_csv(index=False).encode('utf-8-sig')
