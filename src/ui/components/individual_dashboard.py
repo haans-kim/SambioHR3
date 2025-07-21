@@ -124,6 +124,57 @@ class IndividualDashboard:
             self.logger.warning(f"Claim 데이터 로드 실패: {e}")
             return None
     
+    def get_tag_location_master(self):
+        """태깅지점 마스터 데이터 가져오기"""
+        try:
+            from ...data_processing import PickleManager
+            import gzip
+            pickle_manager = PickleManager()
+            
+            # 직접 파일 경로로 로드 시도
+            import glob
+            pattern = str(pickle_manager.base_path / "tag_location_master_v*.pkl.gz")
+            files = glob.glob(pattern)
+            
+            if files:
+                # 가장 최신 파일 선택
+                latest_file = sorted(files)[-1]
+                self.logger.info(f"태깅지점 마스터 파일 직접 로드: {latest_file}")
+                
+                with gzip.open(latest_file, 'rb') as f:
+                    tag_location_master = pd.read_pickle(f)
+            else:
+                self.logger.warning("태깅지점 마스터 파일을 찾을 수 없습니다.")
+                return None
+            
+            if tag_location_master is not None:
+                self.logger.info(f"태깅지점 마스터 데이터 로드 성공: {len(tag_location_master)}건")
+                self.logger.info(f"마스터 데이터 컬럼: {tag_location_master.columns.tolist()}")
+                
+                # 컬럼명 확인 및 표준화
+                # 가능한 컬럼명 변형들
+                dr_no_variations = ['DR_NO', 'dr_no', 'Dr_No', 'DRNO', 'dr번호', 'DR번호', '기기번호']
+                work_area_variations = ['근무구역여부', '근무구역', 'work_area', 'WORK_AREA']
+                work_status_variations = ['근무', '근무상태', 'work_status', 'WORK_STATUS']
+                label_variations = ['라벨링', '라벨', 'label', 'LABEL', '레이블']
+                
+                # 실제 컬럼명 찾기
+                for col in dr_no_variations:
+                    if col in tag_location_master.columns:
+                        tag_location_master['DR_NO'] = tag_location_master[col]
+                        break
+                
+                # 근무구역여부, 근무, 라벨링 컬럼은 이미 있으므로 추가 처리 불필요
+                
+                return tag_location_master
+            else:
+                self.logger.warning("태깅지점 마스터 데이터가 없습니다.")
+                return None
+                
+        except Exception as e:
+            self.logger.warning(f"태깅지점 마스터 데이터 로드 실패: {e}")
+            return None
+    
     def get_daily_tag_data(self, employee_id: str, selected_date: date):
         """특정 직원의 특정 날짜 태깅 데이터 가져오기"""
         try:
@@ -163,13 +214,77 @@ class IndividualDashboard:
             return None
     
     def classify_activities(self, daily_data: pd.DataFrame):
-        """활동 분류 수행"""
+        """활동 분류 수행 (태깅지점 마스터 데이터 활용)"""
         try:
-            # 활동 분류 로직
-            daily_data['activity_type'] = 'work'  # 기본값
+            # 태깅지점 마스터 데이터 로드
+            tag_location_master = self.get_tag_location_master()
             
-            # 식사시간 분류 (CAFETERIA 위치 + 시간대)
-            cafeteria_mask = daily_data['DR_NM'].str.contains('CAFETERIA', case=False, na=False)
+            # 기본 활동 분류
+            daily_data['activity_type'] = 'work'  # 기본값
+            daily_data['work_area_type'] = 'Y'  # 기본값 (근무구역)
+            daily_data['work_status'] = 'W'  # 기본값 (근무상태)
+            daily_data['activity_label'] = 'YW'  # 기본값 (근무구역에서 근무중)
+            
+            # 태깅지점 마스터 데이터와 조인
+            if tag_location_master is not None and 'DR_NO' in tag_location_master.columns:
+                # DR_NO 데이터 타입 맞추기
+                # 태그 데이터의 DR_NO 형식 변환 (예: '701-8-1-1' -> '701-8-1-1')
+                daily_data['DR_NO_str'] = daily_data['DR_NO'].astype(str).str.strip()
+                
+                # 마스터 데이터의 DR_NO가 숫자형이면 문자열로 변환
+                if tag_location_master['DR_NO'].dtype in ['int64', 'float64']:
+                    tag_location_master['DR_NO_str'] = tag_location_master['DR_NO'].astype(int).astype(str)
+                else:
+                    tag_location_master['DR_NO_str'] = tag_location_master['DR_NO'].astype(str).str.strip()
+                
+                # 조인 전 데이터 확인
+                self.logger.info(f"조인 전 - daily_data DR_NO 샘플: {daily_data['DR_NO_str'].head().tolist()}")
+                self.logger.info(f"조인 전 - master DR_NO 샘플: {tag_location_master['DR_NO_str'].head().tolist()}")
+                
+                # 조인할 컬럼 확인
+                join_columns = ['DR_NO_str']
+                if '근무구역여부' in tag_location_master.columns:
+                    join_columns.append('근무구역여부')
+                if '근무' in tag_location_master.columns:
+                    join_columns.append('근무')
+                if '라벨링' in tag_location_master.columns:
+                    join_columns.append('라벨링')
+                
+                # DR_NO_str로 조인
+                daily_data = daily_data.merge(
+                    tag_location_master[join_columns],
+                    on='DR_NO_str',
+                    how='left',
+                    suffixes=('', '_master')
+                )
+                
+                # 조인 후 결과 확인
+                matched_count = daily_data['근무구역여부'].notna().sum()
+                self.logger.info(f"조인 결과: {matched_count}/{len(daily_data)} 매칭됨")
+                
+                # 마스터 데이터 적용
+                daily_data['work_area_type'] = daily_data['근무구역여부'].fillna('Y')
+                daily_data['work_status'] = daily_data['근무'].fillna('W')
+                daily_data['activity_label'] = daily_data['라벨링'].fillna('YW')
+                
+                # 라벨링 기반 활동 분류
+                # GM: 근무구역 중 1선게이트로 들어옴 (이동)
+                daily_data.loc[daily_data['activity_label'] == 'GM', 'activity_type'] = 'movement'
+                
+                # NM: 비근무구역에서 이동중
+                daily_data.loc[daily_data['activity_label'] == 'NM', 'activity_type'] = 'movement'
+                
+                # YW: 근무구역에서 근무중
+                daily_data.loc[daily_data['activity_label'] == 'YW', 'activity_type'] = 'work'
+                
+                # NN: 비근무구역에서 비근무중 (휴식)
+                daily_data.loc[daily_data['activity_label'] == 'NN', 'activity_type'] = 'rest'
+                
+                # YM: 근무구역에서 이동중
+                daily_data.loc[daily_data['activity_label'] == 'YM', 'activity_type'] = 'movement'
+            
+            # 식사시간 분류 (CAFETERIA 위치 + 시간대) - 이것은 우선순위가 높음
+            cafeteria_mask = daily_data['DR_NM'].str.contains('CAFETERIA|식당|구내식당', case=False, na=False)
             
             # 시간대별 식사 분류
             daily_data.loc[cafeteria_mask & (daily_data['datetime'].dt.hour.between(6, 9)), 'activity_type'] = 'breakfast'
@@ -177,17 +292,9 @@ class IndividualDashboard:
             daily_data.loc[cafeteria_mask & (daily_data['datetime'].dt.hour.between(17, 20)), 'activity_type'] = 'dinner'
             daily_data.loc[cafeteria_mask & ((daily_data['datetime'].dt.hour >= 23) | (daily_data['datetime'].dt.hour <= 1)), 'activity_type'] = 'midnight_meal'
             
-            # 회의실 활동
+            # 회의실 활동 (마스터 데이터보다 우선)
             meeting_mask = daily_data['DR_NM'].str.contains('MEETING|회의', case=False, na=False)
             daily_data.loc[meeting_mask, 'activity_type'] = 'meeting'
-            
-            # 이동 활동 (게이트, 복도 등)
-            movement_mask = daily_data['DR_NM'].str.contains('GATE|CORRIDOR|복도|출입구', case=False, na=False)
-            daily_data.loc[movement_mask, 'activity_type'] = 'movement'
-            
-            # 휴식 활동
-            rest_mask = daily_data['DR_NM'].str.contains('휴게|REST|LOUNGE', case=False, na=False)
-            daily_data.loc[rest_mask, 'activity_type'] = 'rest'
             
             # 체류시간 계산
             daily_data['next_time'] = daily_data['datetime'].shift(-1)
@@ -215,7 +322,12 @@ class IndividualDashboard:
             total_hours = (work_end - work_start).total_seconds() / 3600
             
             # 활동별 시간 집계
-            activity_summary = classified_data.groupby('activity_type')['duration_minutes'].sum()
+            if 'duration_minutes' in classified_data.columns:
+                activity_summary = classified_data.groupby('activity_type')['duration_minutes'].sum()
+            else:
+                # duration_minutes가 없으면 기본값 5분으로 가정
+                classified_data['duration_minutes'] = 5
+                activity_summary = classified_data.groupby('activity_type')['duration_minutes'].sum()
             
             # 구간별 활동 정리
             activity_segments = []
@@ -1037,7 +1149,11 @@ class IndividualDashboard:
         raw_data = analysis_result['raw_data']
         
         # 표시할 컬럼 선택
-        display_columns = ['datetime', 'DR_NO', 'DR_NM', 'INOUT_GB', 'activity_type', 'duration_minutes']
+        display_columns = ['datetime', 'DR_NO', 'DR_NM', 'INOUT_GB', 'activity_type', 
+                          'work_area_type', 'work_status', 'activity_label', 'duration_minutes']
+        
+        # 일부 컬럼이 없을 수 있으므로 확인
+        available_columns = [col for col in display_columns if col in raw_data.columns]
         
         # 컬럼명 한글화
         column_names = {
@@ -1046,13 +1162,27 @@ class IndividualDashboard:
             'DR_NM': '위치',
             'INOUT_GB': '입/출',
             'activity_type': '활동 분류',
+            'work_area_type': '구역',
+            'work_status': '상태',
+            'activity_label': '라벨',
             'duration_minutes': '체류시간(분)'
         }
         
         # 데이터프레임 준비
-        df_display = raw_data[display_columns].copy()
+        df_display = raw_data[available_columns].copy()
         df_display['datetime'] = df_display['datetime'].dt.strftime('%H:%M:%S')
         df_display['duration_minutes'] = df_display['duration_minutes'].round(1)
+        
+        # 구역 타입 한글 변환
+        if 'work_area_type' in df_display.columns:
+            area_type_map = {'Y': '근무구역', 'G': '1선게이트', 'N': '비근무구역'}
+            df_display['work_area_type'] = df_display['work_area_type'].map(area_type_map).fillna(df_display['work_area_type'])
+        
+        # 상태 한글 변환
+        if 'work_status' in df_display.columns:
+            status_map = {'W': '근무', 'M': '이동', 'N': '비근무'}
+            df_display['work_status'] = df_display['work_status'].map(status_map).fillna(df_display['work_status'])
+        
         df_display = df_display.rename(columns=column_names)
         
         # 필터링 옵션

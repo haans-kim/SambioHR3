@@ -23,9 +23,11 @@ class PickleManager:
         Args:
             base_path: pickle 파일 저장 기본 경로
         """
-        self.base_path = Path(base_path)
+        # 절대 경로로 변환
+        self.base_path = Path(base_path).resolve()
         self.base_path.mkdir(parents=True, exist_ok=True)
         self.logger = logging.getLogger(__name__)
+        self.logger.info(f"PickleManager 초기화 - base_path: {self.base_path}")
         
         # 메타데이터 파일 경로
         self.metadata_file = self.base_path / "metadata.json"
@@ -282,12 +284,38 @@ class PickleManager:
     
     def _find_file(self, name: str, version: str = None) -> Optional[Path]:
         """파일 경로 찾기"""
+        # 먼저 메타데이터에서 찾기
         matching_files = []
         
         for info in self.metadata.values():
             if info['name'] == name:
                 if version is None or info['version'] == version:
                     matching_files.append((info['created_at'], Path(info['file_path'])))
+        
+        # 메타데이터에 없으면 직접 파일 시스템에서 찾기
+        if not matching_files:
+            self.logger.info(f"메타데이터에서 {name} 파일을 찾을 수 없어 파일 시스템에서 검색")
+            self.logger.info(f"검색 경로: {self.base_path}")
+            
+            pattern = f"{name}_v*.pkl.gz" if version is None else f"{name}_v{version}.pkl.gz"
+            files = list(self.base_path.glob(pattern))
+            self.logger.info(f"패턴 '{pattern}'으로 찾은 파일: {len(files)}개")
+            
+            if not files:
+                # .pkl 파일도 확인
+                pattern = f"{name}_v*.pkl" if version is None else f"{name}_v{version}.pkl"
+                files = list(self.base_path.glob(pattern))
+                self.logger.info(f"패턴 '{pattern}'으로 찾은 파일: {len(files)}개")
+            
+            for file_path in files:
+                # 파일명에서 버전 추출
+                file_name = file_path.stem
+                if '_v' in file_name:
+                    file_version = file_name.split('_v')[-1]
+                    if version is None or file_version == version:
+                        # 파일 수정 시간을 기준으로 정렬하기 위해 사용
+                        matching_files.append((file_path.stat().st_mtime, file_path))
+                        self.logger.info(f"매칭된 파일: {file_path}")
         
         if not matching_files:
             return None
