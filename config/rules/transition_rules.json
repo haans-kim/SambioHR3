@@ -1,0 +1,14 @@
+[
+  {
+    "id": "근무_장비조작_20250721183219",
+    "from_state": "근무",
+    "to_state": "장비조작",
+    "base_probability": 0.5,
+    "conditions": [],
+    "confidence": 80,
+    "created_at": "2025-07-21T18:32:19.803945",
+    "modified_at": null,
+    "version": 1,
+    "is_active": true
+  }
+]

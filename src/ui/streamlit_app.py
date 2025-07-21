@@ -25,6 +25,7 @@ from src.ui.components.individual_dashboard import IndividualDashboard
 from src.ui.components.organization_dashboard import OrganizationDashboard
 from src.ui.components.data_upload import DataUploadComponent
 from src.ui.components.model_config import ModelConfigComponent
+from src.ui.components.transition_rule_editor import TransitionRuleEditor
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -59,6 +60,7 @@ class SambioHumanApp:
             self.organization_dashboard = OrganizationDashboard(self.organization_analyzer)
             self.data_upload = DataUploadComponent(self.db_manager)
             self.model_config = ModelConfigComponent(self.hmm_model)
+            self.transition_rule_editor = TransitionRuleEditor()
             
             logger.info("애플리케이션 컴포넌트 초기화 완료")
             
@@ -105,6 +107,9 @@ class SambioHumanApp:
                 
             if st.button("⚙️ 모델 설정", use_container_width=True):
                 st.session_state.current_page = "⚙️ 모델 설정"
+                
+            if st.button("🔄 전이 룰 관리", use_container_width=True):
+                st.session_state.current_page = "🔄 전이 룰 관리"
                 
             if st.button("📈 실시간 모니터링", use_container_width=True):
                 st.session_state.current_page = "📈 실시간 모니터링"
@@ -153,6 +158,8 @@ class SambioHumanApp:
             self.render_data_upload()
         elif current_page == '⚙️ 모델 설정':
             self.render_model_config()
+        elif current_page == '🔄 전이 룰 관리':
+            self.render_transition_rules()
         elif current_page == '📈 실시간 모니터링':
             self.render_real_time_monitoring()
     
@@ -381,6 +388,13 @@ class SambioHumanApp:
             self.model_config.render()
         else:
             st.error("모델 설정 컴포넌트가 초기화되지 않았습니다.")
+    
+    def render_transition_rules(self):
+        """전이 룰 관리 페이지 렌더링"""
+        if self.transition_rule_editor:
+            self.transition_rule_editor.render()
+        else:
+            st.error("전이 룰 에디터 컴포넌트가 초기화되지 않았습니다.")
     
     def render_real_time_monitoring(self):
         """실시간 모니터링 페이지 렌더링"""

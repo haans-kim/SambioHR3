@@ -11,7 +11,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, date
 import logging
+from pathlib import Path
+from typing import List, Dict, Any
 from .improved_gantt_chart import render_improved_gantt_chart
+from .hmm_classifier import HMMActivityClassifier
 
 from ...analysis import IndividualAnalyzer
 from ...config.activity_types import (
@@ -228,7 +231,7 @@ class IndividualDashboard:
             return None
     
     def classify_activities(self, daily_data: pd.DataFrame):
-        """활동 분류 수행 (확장된 활동 타입 적용)"""
+        """활동 분류 수행 (HMM 기반)"""
         try:
             # 태깅지점 마스터 데이터 로드
             tag_location_master = self.get_tag_location_master()
@@ -238,6 +241,7 @@ class IndividualDashboard:
             daily_data['work_area_type'] = 'Y'  # 기본값 (근무구역)
             daily_data['work_status'] = 'W'  # 기본값 (근무상태)
             daily_data['activity_label'] = 'YW'  # 기본값 (근무구역에서 근무중)
+            daily_data['confidence'] = 80  # 기본 신뢰도
             
             # 태깅지점 마스터 데이터와 조인
             if tag_location_master is not None and 'DR_NO' in tag_location_master.columns:
@@ -355,8 +359,15 @@ class IndividualDashboard:
                         # YM: 근무구역에서 이동중
                         daily_data.loc[daily_data['activity_label'] == 'YM', 'activity_code'] = 'MOVEMENT'
             
-            # 신뢰도 초기화
-            daily_data['confidence'] = 80  # 기본값
+            # HMM 분류기 사용
+            try:
+                hmm_classifier = HMMActivityClassifier()
+                daily_data = hmm_classifier.classify(daily_data, tag_location_master)
+                self.logger.info("HMM 분류 성공")
+            except Exception as hmm_error:
+                self.logger.warning(f"HMM 분류 실패, 규칙 기반으로 대체: {hmm_error}")
+                # 규칙 기반 분류로 폴백
+                daily_data = self._apply_rule_based_classification(daily_data, tag_location_master)
             
             # Tag_Code 기반 신뢰도 세분화
             if 'tag_code' in daily_data.columns:
@@ -486,7 +497,18 @@ class IndividualDashboard:
                 daily_data['activity_type'] = 'work'
             if 'duration_minutes' not in daily_data.columns:
                 daily_data['duration_minutes'] = 5
+            if 'confidence' not in daily_data.columns:
+                daily_data['confidence'] = 80
             return daily_data
+    
+    def _apply_rule_based_classification(self, daily_data: pd.DataFrame, tag_location_master: pd.DataFrame) -> pd.DataFrame:
+        """
+        규칙 기반 활동 분류 (HMM 실패 시 폴백)
+        """
+        # 기존 규칙 기반 로직을 여기에 구현
+        # 현재 코드에서는 이미 기본값이 설정되어 있으므로
+        # 추가적인 규칙 기반 분류는 필요시 구현
+        return daily_data
     
     def analyze_daily_data(self, employee_id: str, selected_date: date, classified_data: pd.DataFrame):
         """일일 데이터 분석"""
