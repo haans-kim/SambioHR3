@@ -147,8 +147,12 @@ class DataUploadComponent:
         save_config = {'upload_config': {}}
         for data_type, info in st.session_state.upload_config.items():
             save_info = info.copy()
-            # 파일 이름만 저장
-            save_info['file_names'] = [file_info['name'] for file_info in info.get('files', [])]
+            # 파일 이름 저장 - 이미 file_names가 있으면 그것을 사용
+            if 'file_names' in info and info['file_names']:
+                save_info['file_names'] = info['file_names']
+            else:
+                # files가 있으면 그것에서 파일명 추출
+                save_info['file_names'] = [file_info['name'] for file_info in info.get('files', [])]
             save_info['files'] = []  # UploadedFile 객체는 제외
             save_config['upload_config'][data_type] = save_info
         
@@ -247,6 +251,8 @@ class DataUploadComponent:
                 file_info = f"{current_files}개 등록 ({', '.join(current_file_names[:2])}{'...' if len(current_file_names) > 2 else ''})"
             elif saved_file_names:
                 # 저장된 파일명 표시
+                # 로깅 추가
+                self.logger.info(f"{data_type} saved_file_names: {saved_file_names}")
                 file_info = f"{len(saved_file_names)}개 ({', '.join(saved_file_names[:2])}{'...' if len(saved_file_names) > 2 else ''})"
             else:
                 file_info = "0개"
@@ -387,7 +393,7 @@ class DataUploadComponent:
         status_text.empty()
         detail_text.empty()
         
-        # 설정 저장
+        # 설정 저장 - 세션 상태가 이미 업데이트되어 있으므로 바로 저장
         self._save_upload_config()
         self.logger.info("데이터 로드 완료 - 설정 저장됨")
         
@@ -476,6 +482,9 @@ class DataUploadComponent:
                 config['dataframe_name'] = info['table_name']
                 config['row_count'] = len(processed_df)
                 config['last_modified'] = datetime.now().isoformat()
+                
+                # 디버깅용 로그
+                self.logger.info(f"{data_type} 파일명 수집 결과: {file_names}")
                 
                 # 세션 상태 업데이트
                 st.session_state.upload_config[data_type] = config

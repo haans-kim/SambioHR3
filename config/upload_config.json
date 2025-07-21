@@ -37,7 +37,7 @@
       "file_names": [],
       "pickle_exists": true,
       "dataframe_name": "tag_data",
-      "last_modified": "2025-07-21T12:55:43.079866",
+      "last_modified": "2025-07-21T12:55:43.079095",
       "row_count": 999999
     },
     "태깅지점": {
@@ -74,10 +74,12 @@
     },
     "ABC데이터": {
       "files": [],
-      "file_names": [],
+      "file_names": [
+        "data_ABC데이터 리스트_2506.xlsx"
+      ],
       "pickle_exists": true,
       "dataframe_name": "abc_data",
-      "last_modified": "2025-07-21T12:02:25.325636",
+      "last_modified": "2025-07-21T15:31:23.113584",
       "row_count": 14026
     }
   }

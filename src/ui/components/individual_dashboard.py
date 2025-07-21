@@ -13,6 +13,10 @@ from datetime import datetime, timedelta, date
 import logging
 
 from ...analysis import IndividualAnalyzer
+from ...config.activity_types import (
+    ACTIVITY_TYPES, get_activity_color, get_activity_name,
+    get_activity_type, ActivityType
+)
 
 class IndividualDashboard:
     """개인별 대시보드 컴포넌트"""
@@ -21,15 +25,24 @@ class IndividualDashboard:
         self.analyzer = individual_analyzer
         self.logger = logging.getLogger(__name__)
         
-        # 색상 팔레트 (UI 참조자료 기반)
-        self.colors = {
-            'work': '#2E86AB',      # 작업시간 - 파란색
-            'meeting': '#A23B72',    # 회의시간 - 보라색
-            'movement': '#F18F01',   # 이동시간 - 주황색
-            'meal': '#C73E1D',      # 식사시간 - 빨간색
-            'rest': '#4CAF50',      # 휴식시간 - 초록색
-            'low_confidence': '#E0E0E0'  # 낮은 신뢰도 - 회색
-        }
+        # 색상 팔레트 (activity_types.py에서 가져옴)
+        self.colors = {}
+        for code, activity in ACTIVITY_TYPES.items():
+            self.colors[code] = activity.color
+        
+        # 이전 버전과의 호환성을 위한 매핑
+        self.colors.update({
+            'work': '#2E86AB',
+            'meeting': '#A23B72',
+            'movement': '#F18F01',
+            'meal': '#C73E1D',
+            'breakfast': '#FF6B6B',
+            'lunch': '#4ECDC4',
+            'dinner': '#45B7D1',
+            'midnight_meal': '#96CEB4',
+            'rest': '#4CAF50',
+            'low_confidence': '#E0E0E0'
+        })
     
     def get_available_employees(self):
         """로드된 데이터에서 사용 가능한 직원 목록 가져오기"""
@@ -214,13 +227,13 @@ class IndividualDashboard:
             return None
     
     def classify_activities(self, daily_data: pd.DataFrame):
-        """활동 분류 수행 (태깅지점 마스터 데이터 활용)"""
+        """활동 분류 수행 (확장된 활동 타입 적용)"""
         try:
             # 태깅지점 마스터 데이터 로드
             tag_location_master = self.get_tag_location_master()
             
             # 기본 활동 분류
-            daily_data['activity_type'] = 'work'  # 기본값
+            daily_data['activity_code'] = 'WORK'  # 기본값
             daily_data['work_area_type'] = 'Y'  # 기본값 (근무구역)
             daily_data['work_status'] = 'W'  # 기본값 (근무상태)
             daily_data['activity_label'] = 'YW'  # 기본값 (근무구역에서 근무중)
@@ -228,7 +241,6 @@ class IndividualDashboard:
             # 태깅지점 마스터 데이터와 조인
             if tag_location_master is not None and 'DR_NO' in tag_location_master.columns:
                 # DR_NO 데이터 타입 맞추기
-                # 태그 데이터의 DR_NO 형식 변환 (예: '701-8-1-1' -> '701-8-1-1')
                 daily_data['DR_NO_str'] = daily_data['DR_NO'].astype(str).str.strip()
                 
                 # 마스터 데이터의 DR_NO가 숫자형이면 문자열로 변환
@@ -267,35 +279,79 @@ class IndividualDashboard:
                 daily_data['work_status'] = daily_data['근무'].fillna('W')
                 daily_data['activity_label'] = daily_data['라벨링'].fillna('YW')
                 
-                # 라벨링 기반 활동 분류
+                # 라벨링 기반 기본 활동 분류
                 # GM: 근무구역 중 1선게이트로 들어옴 (이동)
-                daily_data.loc[daily_data['activity_label'] == 'GM', 'activity_type'] = 'movement'
+                daily_data.loc[daily_data['activity_label'] == 'GM', 'activity_code'] = 'MOVEMENT'
                 
                 # NM: 비근무구역에서 이동중
-                daily_data.loc[daily_data['activity_label'] == 'NM', 'activity_type'] = 'movement'
+                daily_data.loc[daily_data['activity_label'] == 'NM', 'activity_code'] = 'MOVEMENT'
                 
                 # YW: 근무구역에서 근무중
-                daily_data.loc[daily_data['activity_label'] == 'YW', 'activity_type'] = 'work'
+                daily_data.loc[daily_data['activity_label'] == 'YW', 'activity_code'] = 'WORK'
                 
                 # NN: 비근무구역에서 비근무중 (휴식)
-                daily_data.loc[daily_data['activity_label'] == 'NN', 'activity_type'] = 'rest'
+                daily_data.loc[daily_data['activity_label'] == 'NN', 'activity_code'] = 'REST'
                 
                 # YM: 근무구역에서 이동중
-                daily_data.loc[daily_data['activity_label'] == 'YM', 'activity_type'] = 'movement'
+                daily_data.loc[daily_data['activity_label'] == 'YM', 'activity_code'] = 'MOVEMENT'
             
-            # 식사시간 분류 (CAFETERIA 위치 + 시간대) - 이것은 우선순위가 높음
+            # 우선순위 기반 상세 활동 분류
+            # 1. 출근/퇴근 체크 (가장 높은 우선순위)
+            first_record_idx = daily_data.index[0] if len(daily_data) > 0 else None
+            last_record_idx = daily_data.index[-1] if len(daily_data) > 0 else None
+            
+            if first_record_idx is not None:
+                # 첫 기록이 정문이고 시간대가 맞으면 출근
+                if (daily_data.loc[first_record_idx, 'DR_NM'].upper().find('GATE') >= 0 or 
+                    daily_data.loc[first_record_idx, 'DR_NM'].find('정문') >= 0):
+                    hour = daily_data.loc[first_record_idx, 'datetime'].hour
+                    if 6 <= hour <= 10 or 18 <= hour <= 22:  # 주간/야간 출근 시간
+                        daily_data.loc[first_record_idx, 'activity_code'] = 'COMMUTE_IN'
+            
+            if last_record_idx is not None:
+                # 마지막 기록이 정문이고 시간대가 맞으면 퇴근
+                if (daily_data.loc[last_record_idx, 'DR_NM'].upper().find('GATE') >= 0 or 
+                    daily_data.loc[last_record_idx, 'DR_NM'].find('정문') >= 0):
+                    hour = daily_data.loc[last_record_idx, 'datetime'].hour
+                    if 16 <= hour <= 20 or 4 <= hour <= 8:  # 주간/야간 퇴근 시간
+                        daily_data.loc[last_record_idx, 'activity_code'] = 'COMMUTE_OUT'
+            
+            # 2. 식사시간 분류 (CAFETERIA 위치 + 시간대)
             cafeteria_mask = daily_data['DR_NM'].str.contains('CAFETERIA|식당|구내식당', case=False, na=False)
             
-            # 시간대별 식사 분류
-            daily_data.loc[cafeteria_mask & (daily_data['datetime'].dt.hour.between(6, 9)), 'activity_type'] = 'breakfast'
-            daily_data.loc[cafeteria_mask & (daily_data['datetime'].dt.hour.between(11, 13)), 'activity_type'] = 'lunch'
-            daily_data.loc[cafeteria_mask & (daily_data['datetime'].dt.hour.between(17, 20)), 'activity_type'] = 'dinner'
-            daily_data.loc[cafeteria_mask & ((daily_data['datetime'].dt.hour >= 23) | (daily_data['datetime'].dt.hour <= 1)), 'activity_type'] = 'midnight_meal'
+            # 시간대별 식사 분류 (더 정확한 시간대)
+            breakfast_mask = cafeteria_mask & (daily_data['datetime'].dt.time >= pd.to_datetime('06:30').time()) & (daily_data['datetime'].dt.time <= pd.to_datetime('09:00').time())
+            lunch_mask = cafeteria_mask & (daily_data['datetime'].dt.time >= pd.to_datetime('11:20').time()) & (daily_data['datetime'].dt.time <= pd.to_datetime('13:20').time())
+            dinner_mask = cafeteria_mask & (daily_data['datetime'].dt.time >= pd.to_datetime('17:00').time()) & (daily_data['datetime'].dt.time <= pd.to_datetime('20:00').time())
+            midnight_mask = cafeteria_mask & ((daily_data['datetime'].dt.time >= pd.to_datetime('23:30').time()) | (daily_data['datetime'].dt.time <= pd.to_datetime('01:00').time()))
             
-            # 회의실 활동 (마스터 데이터보다 우선)
-            meeting_mask = daily_data['DR_NM'].str.contains('MEETING|회의', case=False, na=False)
-            daily_data.loc[meeting_mask, 'activity_type'] = 'meeting'
+            daily_data.loc[breakfast_mask, 'activity_code'] = 'BREAKFAST'
+            daily_data.loc[lunch_mask, 'activity_code'] = 'LUNCH'
+            daily_data.loc[dinner_mask, 'activity_code'] = 'DINNER'
+            daily_data.loc[midnight_mask, 'activity_code'] = 'MIDNIGHT_MEAL'
             
+            # 3. 특수 활동 분류
+            # 회의실
+            meeting_mask = daily_data['DR_NM'].str.contains('MEETING|회의|CONFERENCE', case=False, na=False)
+            daily_data.loc[meeting_mask, 'activity_code'] = 'MEETING'
+            
+            # 피트니스/운동실
+            fitness_mask = daily_data['DR_NM'].str.contains('FITNESS|GYM|체력단련|운동실', case=False, na=False)
+            daily_data.loc[fitness_mask, 'activity_code'] = 'FITNESS'
+            
+            # 장비실/기계실
+            equipment_mask = daily_data['DR_NM'].str.contains('EQUIPMENT|MACHINE|장비|기계실', case=False, na=False)
+            daily_data.loc[equipment_mask & (daily_data['activity_code'] == 'WORK'), 'activity_code'] = 'EQUIPMENT_OPERATION'
+            
+            # 작업준비실
+            prep_mask = daily_data['DR_NM'].str.contains('PREP|준비실|SETUP', case=False, na=False)
+            daily_data.loc[prep_mask & (daily_data['activity_code'] == 'WORK'), 'activity_code'] = 'WORK_PREPARATION'
+            
+            # 휴게실
+            rest_mask = daily_data['DR_NM'].str.contains('REST|LOUNGE|휴게실|탈의실', case=False, na=False)
+            daily_data.loc[rest_mask, 'activity_code'] = 'REST'
+            
+            # 4. 집중근무 판별 (같은 작업 위치에 30분 이상 체류)
             # 체류시간 계산
             daily_data['next_time'] = daily_data['datetime'].shift(-1)
             daily_data['duration_minutes'] = (daily_data['next_time'] - daily_data['datetime']).dt.total_seconds() / 60
@@ -307,10 +363,48 @@ class IndividualDashboard:
             if len(daily_data) > 0:
                 daily_data.loc[daily_data.index[-1], 'duration_minutes'] = 5
             
+            # 같은 위치에서 30분 이상 작업한 경우 집중근무로 분류
+            focused_work_mask = (
+                (daily_data['activity_code'] == 'WORK') & 
+                (daily_data['duration_minutes'] >= 30) &
+                (daily_data['DR_NM'].str.contains('WORK_AREA', case=False, na=False))
+            )
+            daily_data.loc[focused_work_mask, 'activity_code'] = 'FOCUSED_WORK'
+            
+            # 5. 활동 타입 매핑 (이전 버전과의 호환성)
+            activity_type_mapping = {
+                'WORK': 'work',
+                'FOCUSED_WORK': 'work',
+                'EQUIPMENT_OPERATION': 'work',
+                'WORK_PREPARATION': 'work',
+                'WORKING': 'work',
+                'MEETING': 'meeting',
+                'MOVEMENT': 'movement',
+                'COMMUTE_IN': 'movement',
+                'COMMUTE_OUT': 'movement',
+                'BREAKFAST': 'breakfast',
+                'LUNCH': 'lunch',
+                'DINNER': 'dinner',
+                'MIDNIGHT_MEAL': 'midnight_meal',
+                'REST': 'rest',
+                'FITNESS': 'rest',
+                'LEAVE': 'rest',
+                'IDLE': 'rest',
+                'UNKNOWN': 'work'
+            }
+            daily_data['activity_type'] = daily_data['activity_code'].map(activity_type_mapping).fillna('work')
+            
             return daily_data
             
         except Exception as e:
             self.logger.error(f"활동 분류 실패: {e}")
+            # 오류 시에도 기본값 설정
+            if 'activity_code' not in daily_data.columns:
+                daily_data['activity_code'] = 'WORK'
+            if 'activity_type' not in daily_data.columns:
+                daily_data['activity_type'] = 'work'
+            if 'duration_minutes' not in daily_data.columns:
+                daily_data['duration_minutes'] = 5
             return daily_data
     
     def analyze_daily_data(self, employee_id: str, selected_date: date, classified_data: pd.DataFrame):
@@ -321,13 +415,26 @@ class IndividualDashboard:
             work_end = classified_data['datetime'].max()
             total_hours = (work_end - work_start).total_seconds() / 3600
             
-            # 활동별 시간 집계
+            # 활동별 시간 집계 (새로운 activity_code 기준)
             if 'duration_minutes' in classified_data.columns:
-                activity_summary = classified_data.groupby('activity_type')['duration_minutes'].sum()
+                activity_summary = classified_data.groupby('activity_code')['duration_minutes'].sum()
+                activity_type_summary = classified_data.groupby('activity_type')['duration_minutes'].sum()
+                
+                # 근무구역별 시간 집계
+                if 'work_area_type' in classified_data.columns:
+                    area_summary = classified_data.groupby('work_area_type')['duration_minutes'].sum()
+                else:
+                    area_summary = pd.Series()
             else:
                 # duration_minutes가 없으면 기본값 5분으로 가정
                 classified_data['duration_minutes'] = 5
-                activity_summary = classified_data.groupby('activity_type')['duration_minutes'].sum()
+                activity_summary = classified_data.groupby('activity_code')['duration_minutes'].sum()
+                activity_type_summary = classified_data.groupby('activity_type')['duration_minutes'].sum()
+                
+                if 'work_area_type' in classified_data.columns:
+                    area_summary = classified_data.groupby('work_area_type')['duration_minutes'].sum()
+                else:
+                    area_summary = pd.Series()
             
             # 구간별 활동 정리
             activity_segments = []
@@ -341,6 +448,7 @@ class IndividualDashboard:
                     'start_time': row['datetime'],
                     'end_time': end_time,
                     'activity': row['activity_type'],
+                    'activity_code': row.get('activity_code', 'WORK'),
                     'location': row['DR_NM'],
                     'duration_minutes': row.get('duration_minutes', 5)
                 })
@@ -355,6 +463,7 @@ class IndividualDashboard:
                 'work_end': work_end,
                 'total_hours': total_hours,
                 'activity_summary': activity_summary.to_dict(),
+                'area_summary': area_summary.to_dict() if not area_summary.empty else {},
                 'activity_segments': activity_segments,
                 'raw_data': classified_data,
                 'total_records': len(classified_data),
@@ -580,9 +689,17 @@ class IndividualDashboard:
         st.markdown("### 📊 활동별 시간 분석")
         self.render_activity_summary(analysis_result)
         
+        # 구역별 체류 시간 분석
+        st.markdown("### 📍 구역별 체류 시간 분석")
+        self.render_area_summary(analysis_result)
+        
         # 시계열 타임라인
         st.markdown("### 📅 일일 활동 타임라인")
         self.render_timeline_view(analysis_result)
+        
+        # 상세 Gantt 차트
+        st.markdown("### 📊 활동 시퀀스 타임라인")
+        self.render_detailed_gantt_chart(analysis_result)
         
         # 상세 태그 기록
         st.markdown("### 📋 상세 태그 기록")
@@ -1004,7 +1121,56 @@ class IndividualDashboard:
         """활동별 시간 요약 렌더링"""
         activity_summary = analysis_result['activity_summary']
         
-        # 활동 타입 한글 매핑
+        # 데이터 준비
+        activities = []
+        for activity_code, minutes in activity_summary.items():
+            activities.append({
+                '활동': get_activity_name(activity_code, 'ko'),
+                '시간(분)': round(minutes, 1),
+                '시간': f"{int(minutes//60)}시간 {int(minutes%60)}분",
+                '비율(%)': round(minutes / sum(activity_summary.values()) * 100, 1),
+                'activity_code': activity_code  # 색상 매핑용
+            })
+        
+        df_activities = pd.DataFrame(activities)
+        
+        # 차트와 테이블 표시
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            # 파이 차트 - 새로운 색상 매핑
+            color_map = {}
+            for _, row in df_activities.iterrows():
+                activity_name = row['활동']
+                activity_code = row['activity_code']
+                color_map[activity_name] = get_activity_color(activity_code)
+            
+            fig = px.pie(df_activities, values='시간(분)', names='활동', 
+                        title='활동별 시간 분포',
+                        color_discrete_map=color_map)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # 요약 테이블
+            st.dataframe(df_activities[['활동', '시간', '비율(%)']], 
+                        use_container_width=True, hide_index=True)
+    
+    def render_timeline_view(self, analysis_result: dict):
+        """시계열 타임라인 뷰 렌더링 - Gantt 차트 형태"""
+        segments = analysis_result['activity_segments']
+        
+        # 활동별 색상 및 한글명
+        activity_colors = {
+            'work': self.colors['work'],
+            'meeting': self.colors['meeting'],
+            'movement': self.colors['movement'],
+            'breakfast': self.colors['meal'],
+            'lunch': self.colors['meal'],
+            'dinner': self.colors['meal'],
+            'midnight_meal': self.colors['meal'],
+            'rest': self.colors['rest']
+        }
+        
         activity_names = {
             'work': '업무',
             'meeting': '회의',
@@ -1016,48 +1182,105 @@ class IndividualDashboard:
             'rest': '휴식'
         }
         
-        # 데이터 준비
-        activities = []
-        for activity_type, minutes in activity_summary.items():
-            activities.append({
-                '활동': activity_names.get(activity_type, activity_type),
-                '시간(분)': round(minutes, 1),
-                '시간': f"{int(minutes//60)}시간 {int(minutes%60)}분",
-                '비율(%)': round(minutes / sum(activity_summary.values()) * 100, 1)
-            })
+        # Gantt 차트 데이터 준비
+        gantt_data = []
+        for i, segment in enumerate(segments):
+            # NaT 처리
+            if pd.notna(segment['start_time']) and pd.notna(segment['end_time']):
+                activity_code = segment.get('activity_code', 'WORK')
+                gantt_data.append({
+                    'Task': get_activity_name(activity_code, 'ko'),
+                    'Start': segment['start_time'],
+                    'Finish': segment['end_time'],
+                    'Resource': activity_code,
+                    'Location': segment['location'],
+                    'Duration': segment['duration_minutes']
+                })
         
-        df_activities = pd.DataFrame(activities)
+        if not gantt_data:
+            st.warning("타임라인 데이터가 없습니다.")
+            return
         
-        # 차트와 테이블 표시
-        col1, col2 = st.columns([2, 1])
+        # Gantt 차트 생성
+        df_gantt = pd.DataFrame(gantt_data)
         
-        with col1:
-            # 파이 차트
-            fig = px.pie(df_activities, values='시간(분)', names='활동', 
-                        title='활동별 시간 분포',
-                        color_discrete_map={
-                            '업무': self.colors['work'],
-                            '회의': self.colors['meeting'],
-                            '이동': self.colors['movement'],
-                            '조식': self.colors['meal'],
-                            '중식': self.colors['meal'],
-                            '석식': self.colors['meal'],
-                            '야식': self.colors['meal'],
-                            '휴식': self.colors['rest']
-                        })
-            st.plotly_chart(fig, use_container_width=True)
+        # 색상 매핑 생성
+        color_map = {}
+        for code in df_gantt['Resource'].unique():
+            color_map[code] = get_activity_color(code)
         
-        with col2:
-            # 요약 테이블
-            st.dataframe(df_activities[['활동', '시간', '비율(%)']], 
-                        use_container_width=True, hide_index=True)
+        fig = px.timeline(
+            df_gantt,
+            x_start="Start",
+            x_end="Finish",
+            y="Task",
+            color="Resource",
+            color_discrete_map=color_map,
+            hover_data={'Location': True, 'Duration': True},
+            title="일일 활동 타임라인 (Gantt Chart)"
+        )
+        
+        # 레이아웃 업데이트
+        # 범례를 한글로 표시
+        for trace in fig.data:
+            if trace.name in color_map:
+                # Resource 코드를 한글명으로 변환
+                korean_name = get_activity_name(trace.name, 'ko')
+                trace.name = korean_name
+        
+        fig.update_layout(
+            height=300,
+            xaxis_title="시간",
+            yaxis_title="활동",
+            showlegend=True,
+            legend_title_text="활동 유형",
+            hovermode='closest'
+        )
+        
+        # Y축을 카테고리별로 정렬 (출근 맨 위, 퇴근 맨 아래)
+        category_order = [
+            '출근',  # 맨 위
+            '집중근무', '근무', '작업중', '장비조작', '작업준비',  # 근무 관련
+            '회의',  # 회의
+            '조식', '중식', '석식', '야식',  # 식사
+            '피트니스', '휴식',  # 휴식
+            '이동',  # 이동
+            '대기', '미분류',  # 기타
+            '퇴근'  # 맨 아래
+        ]
+        # 실제 데이터에 있는 카테고리만 필터링하고 순서 유지
+        actual_categories = list(df_gantt['Task'].unique())
+        filtered_order = []
+        
+        # 정의된 순서대로 추가
+        for cat in category_order:
+            if cat in actual_categories:
+                filtered_order.append(cat)
+        
+        # 정의되지 않은 카테고리가 있으면 중간에 추가
+        for cat in actual_categories:
+            if cat not in filtered_order:
+                # 퇴근 바로 위에 추가
+                if '퇴근' in filtered_order:
+                    idx = filtered_order.index('퇴근')
+                    filtered_order.insert(idx, cat)
+                else:
+                    filtered_order.append(cat)
+        
+        fig.update_yaxes(categoryorder="array", categoryarray=filtered_order)
+        
+        # X축 시간 포맷 설정
+        fig.update_xaxes(
+            tickformat='%H:%M',
+            dtick=3600000,  # 1시간 간격
+            tickangle=0
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
     
-    def render_timeline_view(self, analysis_result: dict):
-        """시계열 타임라인 뷰 렌더링"""
+    def render_detailed_gantt_chart(self, analysis_result: dict):
+        """상세 Gantt 차트 렌더링 - 모든 활동을 한 줄에 표시"""
         segments = analysis_result['activity_segments']
-        
-        # 타임라인 차트 생성
-        fig = go.Figure()
         
         # 활동별 색상
         activity_colors = {
@@ -1071,51 +1294,97 @@ class IndividualDashboard:
             'rest': self.colors['rest']
         }
         
-        # 각 세그먼트를 막대로 표시
-        for segment in segments:
-            # 시간 포맷팅 (NaT 처리)
-            start_str = segment['start_time'].strftime('%H:%M') if pd.notna(segment['start_time']) else 'N/A'
-            end_str = segment['end_time'].strftime('%H:%M') if pd.notna(segment['end_time']) else 'N/A'
-            
-            fig.add_trace(go.Bar(
-                x=[segment['duration_minutes']],
-                y=[1],
-                name=segment['activity'],
-                orientation='h',
-                marker_color=activity_colors.get(segment['activity'], '#999999'),
-                hovertemplate=(
-                    f"<b>{segment['activity']}</b><br>" +
-                    f"시간: {start_str} - {end_str}<br>" +
+        # 활동 한글명
+        activity_names = {
+            'work': '업무',
+            'meeting': '회의',
+            'movement': '이동',
+            'breakfast': '조식',
+            'lunch': '중식',
+            'dinner': '석식',
+            'midnight_meal': '야식',
+            'rest': '휴식'
+        }
+        
+        # 작업 시작/종료 시간
+        work_start = analysis_result['work_start']
+        work_end = analysis_result['work_end']
+        
+        # 모든 활동을 하나의 타임라인에 표시
+        fig = go.Figure()
+        
+        for i, segment in enumerate(segments):
+            if pd.notna(segment['start_time']) and pd.notna(segment['end_time']):
+                activity_code = segment.get('activity_code', 'WORK')
+                
+                # 시간을 분 단위로 변환
+                start_minutes = (segment['start_time'] - work_start).total_seconds() / 60
+                duration = segment['duration_minutes']
+                
+                # hover 텍스트 생성
+                hover_text = (
+                    f"<b>{get_activity_name(activity_code, 'ko')}</b><br>" +
+                    f"시간: {segment['start_time'].strftime('%H:%M')} - {segment['end_time'].strftime('%H:%M')}<br>" +
                     f"위치: {segment['location']}<br>" +
-                    f"체류: {segment['duration_minutes']:.0f}분<br>" +
-                    "<extra></extra>"
-                ),
-                showlegend=False,
-                base=[(segment['start_time'] - analysis_result['work_start']).total_seconds() / 60]
-            ))
+                    f"체류: {duration:.0f}분"
+                )
+                
+                # 막대 추가
+                fig.add_trace(go.Bar(
+                    x=[duration],
+                    y=['활동'],
+                    orientation='h',
+                    base=start_minutes,
+                    marker_color=get_activity_color(activity_code),
+                    name=get_activity_name(activity_code, 'ko'),
+                    hovertemplate=hover_text + "<extra></extra>",
+                    showlegend=False,
+                    width=0.8
+                ))
+        
+        # 레전드를 위한 더미 트레이스 추가
+        added_legends = set()
+        # 실제 데이터에 있는 활동 코드만 레전드에 추가
+        activity_codes_in_data = set(seg.get('activity_code', 'WORK') for seg in segments)
+        
+        for activity_code in activity_codes_in_data:
+            if activity_code not in added_legends:
+                fig.add_trace(go.Scatter(
+                    x=[None],
+                    y=[None],
+                    mode='markers',
+                    marker=dict(color=get_activity_color(activity_code), size=10),
+                    name=get_activity_name(activity_code, 'ko'),
+                    showlegend=True
+                ))
+                added_legends.add(activity_code)
         
         # 레이아웃 설정
-        fig.update_layout(
-            title="일일 활동 타임라인",
-            xaxis_title="시간",
-            height=200,
-            barmode='stack',
-            showlegend=False,
-            yaxis=dict(showticklabels=False, range=[0, 2])
-        )
+        total_minutes = (work_end - work_start).total_seconds() / 60
         
-        # X축을 시간으로 변환
-        total_minutes = (analysis_result['work_end'] - analysis_result['work_start']).total_seconds() / 60
-        fig.update_xaxes(
-            tickmode='array',
-            tickvals=[0, total_minutes/4, total_minutes/2, total_minutes*3/4, total_minutes],
-            ticktext=[
-                analysis_result['work_start'].strftime('%H:%M'),
-                (analysis_result['work_start'] + timedelta(minutes=total_minutes/4)).strftime('%H:%M'),
-                (analysis_result['work_start'] + timedelta(minutes=total_minutes/2)).strftime('%H:%M'),
-                (analysis_result['work_start'] + timedelta(minutes=total_minutes*3/4)).strftime('%H:%M'),
-                analysis_result['work_end'].strftime('%H:%M')
-            ]
+        fig.update_layout(
+            title="하루 전체 활동 시퀀스",
+            height=250,
+            barmode='overlay',
+            xaxis=dict(
+                title="시간",
+                tickmode='array',
+                tickvals=[i * 60 for i in range(int(total_minutes // 60) + 2)],
+                ticktext=[(work_start + timedelta(hours=i)).strftime('%H:%M') 
+                         for i in range(int(total_minutes // 60) + 2)],
+                range=[0, total_minutes]
+            ),
+            yaxis=dict(
+                showticklabels=False,
+                range=[-0.5, 0.5]
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -1136,7 +1405,7 @@ class IndividualDashboard:
                 segment_data.append({
                     '시작': start_str,
                     '종료': end_str,
-                    '활동': seg['activity'],
+                    '활동': get_activity_name(seg.get('activity_code', 'WORK'), 'ko'),
                     '위치': seg['location'],
                     '체류시간': f"{int(seg['duration_minutes'])}분"
                 })
@@ -1149,7 +1418,7 @@ class IndividualDashboard:
         raw_data = analysis_result['raw_data']
         
         # 표시할 컬럼 선택
-        display_columns = ['datetime', 'DR_NO', 'DR_NM', 'INOUT_GB', 'activity_type', 
+        display_columns = ['datetime', 'DR_NO', 'DR_NM', 'INOUT_GB', 'activity_code', 'activity_type', 
                           'work_area_type', 'work_status', 'activity_label', 'duration_minutes']
         
         # 일부 컬럼이 없을 수 있으므로 확인
@@ -1161,6 +1430,7 @@ class IndividualDashboard:
             'DR_NO': '게이트 번호',
             'DR_NM': '위치',
             'INOUT_GB': '입/출',
+            'activity_code': '활동 코드',
             'activity_type': '활동 분류',
             'work_area_type': '구역',
             'work_status': '상태',
@@ -1172,6 +1442,12 @@ class IndividualDashboard:
         df_display = raw_data[available_columns].copy()
         df_display['datetime'] = df_display['datetime'].dt.strftime('%H:%M:%S')
         df_display['duration_minutes'] = df_display['duration_minutes'].round(1)
+        
+        # 활동 코드를 한글명으로 변환
+        if 'activity_code' in df_display.columns:
+            df_display['activity_code'] = df_display['activity_code'].apply(
+                lambda x: get_activity_name(x, 'ko')
+            )
         
         # 구역 타입 한글 변환
         if 'work_area_type' in df_display.columns:
@@ -1337,3 +1613,106 @@ class IndividualDashboard:
         )
         
         st.plotly_chart(fig, use_container_width=True)
+    
+    def render_area_summary(self, analysis_result: dict):
+        """구역별 체류 시간 분석 렌더링"""
+        area_summary = analysis_result.get('area_summary', {})
+        
+        if not area_summary:
+            st.info("구역별 데이터가 없습니다.")
+            return
+        
+        # 구역 한글명 매핑
+        area_names = {
+            'Y': '근무구역',
+            'G': '1선게이트',
+            'N': '비근무구역'
+        }
+        
+        # 전체 시간 계산
+        total_minutes = sum(area_summary.values())
+        
+        col1, col2, col3 = st.columns(3)
+        
+        # 근무구역 시간
+        work_area_minutes = area_summary.get('Y', 0)
+        work_area_hours = work_area_minutes / 60
+        work_area_percent = (work_area_minutes / total_minutes * 100) if total_minutes > 0 else 0
+        
+        with col1:
+            st.metric(
+                "근무구역 체류",
+                f"{work_area_hours:.1f}시간",
+                f"{work_area_percent:.1f}%"
+            )
+        
+        # 비근무구역 시간
+        non_work_minutes = area_summary.get('N', 0)
+        non_work_hours = non_work_minutes / 60
+        non_work_percent = (non_work_minutes / total_minutes * 100) if total_minutes > 0 else 0
+        
+        with col2:
+            st.metric(
+                "비근무구역 체류",
+                f"{non_work_hours:.1f}시간",
+                f"{non_work_percent:.1f}%",
+                delta_color="inverse"  # 비근무구역은 적을수록 좋음
+            )
+        
+        # 게이트 통과 시간
+        gate_minutes = area_summary.get('G', 0)
+        gate_percent = (gate_minutes / total_minutes * 100) if total_minutes > 0 else 0
+        
+        with col3:
+            st.metric(
+                "게이트 통과",
+                f"{gate_minutes:.0f}분",
+                f"{gate_percent:.1f}%"
+            )
+        
+        # 구역별 분포 차트
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            # 파이 차트
+            area_data = []
+            for area_code, minutes in area_summary.items():
+                area_data.append({
+                    '구역': area_names.get(area_code, area_code),
+                    '시간(분)': minutes,
+                    '비율(%)': round(minutes / total_minutes * 100, 1) if total_minutes > 0 else 0
+                })
+            
+            df_areas = pd.DataFrame(area_data)
+            
+            # 색상 설정
+            colors = {
+                '근무구역': '#2E86AB',  # 파란색
+                '비근무구역': '#FF6B6B',  # 빨간색
+                '1선게이트': '#FFD700'  # 금색
+            }
+            
+            fig = px.pie(
+                df_areas, 
+                values='시간(분)', 
+                names='구역',
+                title='구역별 체류 시간 분포',
+                color_discrete_map=colors
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # 요약 테이블
+            st.markdown("#### 구역별 상세")
+            for _, row in df_areas.iterrows():
+                st.write(f"**{row['구역']}**")
+                st.write(f"- 시간: {int(row['시간(분)']//60)}시간 {int(row['시간(분)']%60)}분")
+                st.write(f"- 비율: {row['비율(%)']}%")
+                st.write("")
+        
+        # 비근무구역 체류가 많은 경우 경고
+        if non_work_percent > 30:
+            st.warning(f"⚠️ 비근무구역 체류 시간이 {non_work_percent:.1f}%로 높습니다. 업무 효율성 개선이 필요할 수 있습니다.")
+        elif non_work_percent > 20:
+            st.info(f"ℹ️ 비근무구역 체류 시간: {non_work_percent:.1f}%")
