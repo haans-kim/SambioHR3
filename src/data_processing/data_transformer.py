@@ -57,8 +57,12 @@ class DataTransformer:
         # 4. 꼬리물기 현상 처리
         processed_df = self._handle_tailgating(processed_df)
         
-        # 5. 입문/출문 매칭 및 체류시간 계산
-        processed_df = self._calculate_stay_duration(processed_df)
+        # 5. 입문/출문 매칭 및 체류시간 계산 (대용량 데이터에서는 선택적)
+        if len(processed_df) < 100000:  # 10만 건 미만일 때만 체류시간 계산
+            processed_df = self._calculate_stay_duration(processed_df)
+        else:
+            self.logger.info(f"대용량 데이터({len(processed_df):,}행)로 체류시간 계산 생략")
+            processed_df['stay_duration'] = None
         
         # 6. 근무구역/비근무구역 분류
         processed_df = self._classify_work_areas(processed_df)
@@ -71,14 +75,27 @@ class DataTransformer:
         """시계열 정렬"""
         self.logger.info("시계열 정렬 수행")
         
-        # 날짜와 시간 결합
-        df['datetime'] = pd.to_datetime(df['ENTE_DT'].astype(str) + ' ' + df['출입시각'].astype(str).str.zfill(4), 
-                                       format='%Y%m%d %H%M', errors='coerce')
+        # 원본 데이터 샘플 로깅
+        self.logger.info(f"날짜 샘플: {df['ENTE_DT'].head()}")
+        self.logger.info(f"시간 샘플: {df['출입시각'].head()}")
+        
+        # 날짜와 시간 결합 - 다양한 시간 형식 시도
+        # 시간이 HHMM 형식이 아닐 수 있으므로 여러 형식 시도
+        df['datetime'] = pd.to_datetime(df['ENTE_DT'].astype(str) + ' ' + df['출입시각'].astype(str).str.zfill(6), 
+                                       format='%Y%m%d %H%M%S', errors='coerce')
+        
+        # 첫 번째 시도가 실패하면 다른 형식 시도
+        if df['datetime'].isnull().all():
+            df['datetime'] = pd.to_datetime(df['ENTE_DT'].astype(str) + ' ' + df['출입시각'].astype(str).str.zfill(4), 
+                                           format='%Y%m%d %H%M', errors='coerce')
         
         # 시간 변환에 실패한 행 처리
         invalid_time_mask = df['datetime'].isnull()
         if invalid_time_mask.any():
             self.logger.warning(f"잘못된 시간 형식 {invalid_time_mask.sum()}건 발견")
+            # 실패한 샘플 데이터 로깅
+            failed_samples = df[invalid_time_mask].head()
+            self.logger.warning(f"실패 샘플:\n{failed_samples[['ENTE_DT', '출입시각']]}")
             df = df[~invalid_time_mask].copy()
         
         # 사번별, 시간순 정렬
@@ -178,30 +195,53 @@ class DataTransformer:
         return df
     
     def _calculate_stay_duration(self, df: pd.DataFrame) -> pd.DataFrame:
-        """입문/출문 매칭 및 체류시간 계산"""
+        """입문/출문 매칭 및 체류시간 계산 (최적화된 버전)"""
         self.logger.info("체류시간 계산 시작")
         
-        # 입문/출문 매칭
+        # 체류시간 컬럼 초기화
         df['stay_duration'] = None
         
-        # 사번별로 그룹화하여 입문-출문 쌍 찾기
-        for emp_id in df['사번'].unique():
-            emp_mask = df['사번'] == emp_id
-            emp_data = df[emp_mask].copy()
+        # 전체 사번 수 확인
+        unique_employees = df['사번'].unique()
+        total_employees = len(unique_employees)
+        self.logger.info(f"처리할 사번 수: {total_employees:,}명")
+        
+        # 진행상황 표시를 위한 카운터
+        processed_employees = 0
+        
+        # 배치 처리로 성능 개선
+        batch_size = 100  # 한 번에 처리할 사번 수
+        
+        for i in range(0, total_employees, batch_size):
+            batch_employees = unique_employees[i:i+batch_size]
             
-            # 입문과 출문 분리
-            entry_data = emp_data[emp_data['INOUT_GB'] == '입문'].copy()
-            exit_data = emp_data[emp_data['INOUT_GB'] == '출문'].copy()
-            
-            # 입문 후 가장 가까운 출문 찾기
-            for idx, entry in entry_data.iterrows():
-                # 같은 날짜 또는 다음 날 출문 찾기
-                next_exits = exit_data[exit_data['datetime'] > entry['datetime']]
+            for emp_id in batch_employees:
+                emp_mask = df['사번'] == emp_id
+                emp_data = df[emp_mask]
                 
-                if not next_exits.empty:
-                    next_exit = next_exits.iloc[0]
-                    duration = (next_exit['datetime'] - entry['datetime']).total_seconds() / 3600  # 시간 단위
-                    df.loc[idx, 'stay_duration'] = duration
+                # 입문과 출문 분리
+                entry_indices = emp_data[emp_data['INOUT_GB'] == '입문'].index
+                
+                for idx in entry_indices:
+                    entry_time = df.loc[idx, 'datetime']
+                    
+                    # 같은 사번의 다음 출문 찾기
+                    next_exit_mask = (
+                        (df['사번'] == emp_id) & 
+                        (df['INOUT_GB'] == '출문') & 
+                        (df['datetime'] > entry_time)
+                    )
+                    
+                    next_exits = df[next_exit_mask]
+                    
+                    if not next_exits.empty:
+                        next_exit = next_exits.iloc[0]
+                        duration = (next_exit['datetime'] - entry_time).total_seconds() / 3600
+                        df.loc[idx, 'stay_duration'] = duration
+            
+            processed_employees += len(batch_employees)
+            if processed_employees % 1000 == 0:
+                self.logger.info(f"체류시간 계산 진행: {processed_employees:,}/{total_employees:,} 사번 ({processed_employees/total_employees*100:.1f}%)")
         
         duration_count = df['stay_duration'].notna().sum()
         self.logger.info(f"체류시간 계산 완료: {duration_count:,}건")

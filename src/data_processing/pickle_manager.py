@@ -149,6 +149,39 @@ class PickleManager:
         
         return pd.DataFrame(files_data)
     
+    def list_pickle_files(self, name: str = None) -> list:
+        """
+        저장된 pickle 파일 목록을 리스트로 반환
+        
+        Args:
+            name: 특정 파일명으로 필터링
+            
+        Returns:
+            list: 파일 정보 딕셔너리 리스트
+        """
+        if not self.metadata:
+            return []
+        
+        files_list = []
+        
+        for file_info in self.metadata.values():
+            if name is None or file_info['name'] == name:
+                files_list.append({
+                    'name': file_info['name'],
+                    'version': file_info['version'],
+                    'file_path': file_info['file_path'],
+                    'rows': file_info.get('rows', 0),
+                    'columns': file_info.get('columns', 0),
+                    'size_mb': file_info.get('size_mb', 0),
+                    'created_at': file_info.get('created_at', ''),
+                    'description': file_info.get('description', '')
+                })
+        
+        # 최신 순으로 정렬
+        files_list.sort(key=lambda x: x['created_at'], reverse=True)
+        
+        return files_list
+    
     def delete_file(self, name: str, version: str = None) -> bool:
         """
         파일 삭제
@@ -300,7 +333,7 @@ class PickleManager:
             'created_at': datetime.now().isoformat(),
             'data_hash': data_hash,
             'description': description or '',
-            'dtypes': df.dtypes.to_dict()
+            'dtypes': {str(k): str(v) for k, v in df.dtypes.to_dict().items()}
         }
         
         self._save_metadata()

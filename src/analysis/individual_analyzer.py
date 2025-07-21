@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..database import DatabaseManager, DailyWorkData, TagLogs, ClaimData, AbcActivityData
 from ..hmm import HMMModel, ViterbiAlgorithm
-from ..data_processing import DataTransformer
+from ..data_processing import DataTransformer, PickleManager
 
 class IndividualAnalyzer:
     """개인별 분석기 클래스"""
@@ -27,6 +27,7 @@ class IndividualAnalyzer:
         self.hmm_model = hmm_model
         self.viterbi = ViterbiAlgorithm(hmm_model)
         self.data_transformer = DataTransformer()
+        self.pickle_manager = PickleManager()
         self.logger = logging.getLogger(__name__)
         
         # 2교대 근무 설정
@@ -60,9 +61,9 @@ class IndividualAnalyzer:
         
         try:
             # 기본 데이터 수집
-            tag_data = self._get_tag_data(employee_id, start_date, end_date)
-            claim_data = self._get_claim_data(employee_id, start_date, end_date)
-            abc_data = self._get_abc_data(employee_id, start_date, end_date)
+            tag_data = self._get_data('tag_logs', employee_id, start_date, end_date)
+            claim_data = self._get_data('claim_data', employee_id, start_date, end_date)
+            abc_data = self._get_data('abc_activity_data', employee_id, start_date, end_date)
             
             # HMM 모델 적용
             hmm_results = self._apply_hmm_analysis(tag_data)
@@ -94,75 +95,40 @@ class IndividualAnalyzer:
         except Exception as e:
             self.logger.error(f"개인별 분석 실패: {employee_id}, 오류: {e}")
             raise
-    
-    def _get_tag_data(self, employee_id: str, start_date: datetime, 
-                     end_date: datetime) -> List[Dict[str, Any]]:
-        """태그 데이터 조회"""
-        with self.db_manager.get_session() as session:
-            tag_logs = session.query(TagLogs).filter(
-                TagLogs.employee_id == employee_id,
-                TagLogs.timestamp >= start_date,
-                TagLogs.timestamp <= end_date
-            ).order_by(TagLogs.timestamp).all()
-            
-            return [
-                {
-                    'timestamp': log.timestamp,
-                    'tag_location': log.tag_location,
-                    'gate_name': log.gate_name,
-                    'action_type': log.action_type,
-                    'work_area_type': log.work_area_type,
-                    'meal_type': log.meal_type,
-                    'is_tailgating': log.is_tailgating,
-                    'confidence_score': log.confidence_score
-                }
-                for log in tag_logs
-            ]
-    
-    def _get_claim_data(self, employee_id: str, start_date: datetime, 
-                       end_date: datetime) -> List[Dict[str, Any]]:
-        """Claim 데이터 조회"""
-        with self.db_manager.get_session() as session:
-            claim_logs = session.query(ClaimData).filter(
-                ClaimData.employee_id == employee_id,
-                ClaimData.work_date >= start_date,
-                ClaimData.work_date <= end_date
-            ).order_by(ClaimData.work_date).all()
-            
-            return [
-                {
-                    'work_date': log.work_date,
-                    'claimed_work_hours': log.claimed_work_hours,
-                    'start_time': log.start_time,
-                    'end_time': log.end_time,
-                    'actual_work_duration': log.actual_work_duration,
-                    'cross_day_work': log.cross_day_work,
-                    'exclude_time': log.exclude_time
-                }
-                for log in claim_logs
-            ]
-    
-    def _get_abc_data(self, employee_id: str, start_date: datetime, 
-                     end_date: datetime) -> List[Dict[str, Any]]:
-        """ABC 활동 데이터 조회"""
-        with self.db_manager.get_session() as session:
-            abc_logs = session.query(AbcActivityData).filter(
-                AbcActivityData.employee_id == employee_id,
-                AbcActivityData.work_date >= start_date,
-                AbcActivityData.work_date <= end_date
-            ).order_by(AbcActivityData.work_date, AbcActivityData.sequence).all()
-            
-            return [
-                {
-                    'work_date': log.work_date,
-                    'sequence': log.sequence,
-                    'activity_classification': log.activity_classification,
-                    'activity_target': log.activity_target,
-                    'duration_hours': log.duration_hours,
-                    'activity_hierarchy': log.activity_hierarchy
-                }
-                for log in abc_logs
-            ]
+
+    def _get_data(self, table_name: str, employee_id: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+        """데이터 조회 (캐시 우선)"""
+        pickle_name = f"{table_name}_{employee_id}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
+        
+        try:
+            # 1. Pickle 캐시에서 로드 시도
+            df = self.pickle_manager.load_dataframe(name=pickle_name)
+            self.logger.info(f"캐시에서 데이터 로드 성공: {pickle_name}")
+            return df
+        except FileNotFoundError:
+            self.logger.info(f"캐시 파일을 찾을 수 없음: {pickle_name}. 데이터베이스에서 조회합니다.")
+            # 2. 캐시 없으면 데이터베이스에서 조회
+            with self.db_manager.get_session() as session:
+                table_class = self.db_manager.get_table_class(table_name)
+                
+                # 날짜 컬럼 동적 결정
+                date_column = 'timestamp' if hasattr(table_class, 'timestamp') else 'work_date'
+                
+                query = session.query(table_class).filter(
+                    table_class.employee_id == employee_id,
+                    getattr(table_class, date_column) >= start_date,
+                    getattr(table_class, date_column) <= end_date
+                )
+                
+                df = pd.read_sql(query.statement, query.session.bind)
+                
+                # 3. 조회된 데이터를 다음을 위해 캐시에 저장
+                if not df.empty:
+                    self.pickle_manager.save_dataframe(df, name=pickle_name, description=f"{table_name} data for {employee_id}")
+                    self.logger.info(f"데이터베이스 조회 결과를 캐시에 저장: {pickle_name}")
+                
+                return df
+
     
     def _apply_hmm_analysis(self, tag_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """HMM 모델 적용"""

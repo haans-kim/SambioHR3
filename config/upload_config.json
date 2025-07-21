@@ -1,0 +1,84 @@
+{
+  "data_types": {
+    "Tagging Data": {
+      "table_name": "tag_data",
+      "display_name": "태깅 데이터",
+      "process_func_name": "process_tagging_data"
+    },
+    "태깅지점": {
+      "table_name": "tag_location_master",
+      "display_name": "태깅 지점 마스터",
+      "process_func_name": null
+    },
+    "근무시간_Claim": {
+      "table_name": "claim_data",
+      "display_name": "근무시간 Claim 데이터",
+      "process_func_name": "process_claim_data"
+    },
+    "근태사용": {
+      "table_name": "attendance_data",
+      "display_name": "근태 사용 데이터",
+      "process_func_name": null
+    },
+    "비근무시간": {
+      "table_name": "non_work_time",
+      "display_name": "비근무시간 데이터",
+      "process_func_name": null
+    },
+    "ABC데이터": {
+      "table_name": "abc_data",
+      "display_name": "ABC 활동 데이터",
+      "process_func_name": "process_abc_data"
+    }
+  },
+  "upload_config": {
+    "Tagging Data": {
+      "files": [],
+      "file_names": [],
+      "pickle_exists": true,
+      "dataframe_name": "tag_data",
+      "last_modified": "2025-07-21T12:55:43.079866",
+      "row_count": 999999
+    },
+    "태깅지점": {
+      "files": [],
+      "file_names": [],
+      "pickle_exists": true,
+      "dataframe_name": "tag_location_master",
+      "last_modified": "2025-07-21T11:42:58.838645",
+      "row_count": 3640
+    },
+    "근무시간_Claim": {
+      "files": [],
+      "file_names": [],
+      "pickle_exists": true,
+      "dataframe_name": "claim_data",
+      "last_modified": "2025-07-21T11:56:58.724956",
+      "row_count": 154849
+    },
+    "근태사용": {
+      "files": [],
+      "file_names": [],
+      "pickle_exists": true,
+      "dataframe_name": "attendance_data",
+      "last_modified": "2025-07-21T11:58:43.427930",
+      "row_count": 6450
+    },
+    "비근무시간": {
+      "files": [],
+      "file_names": [],
+      "pickle_exists": true,
+      "dataframe_name": "non_work_time",
+      "last_modified": "2025-07-21T12:00:00.181017",
+      "row_count": 201964
+    },
+    "ABC데이터": {
+      "files": [],
+      "file_names": [],
+      "pickle_exists": true,
+      "dataframe_name": "abc_data",
+      "last_modified": "2025-07-21T12:02:25.325636",
+      "row_count": 14026
+    }
+  }
+}

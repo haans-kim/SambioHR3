@@ -31,3 +31,4 @@ DataFrame 로드 실패: 파일을 찾을 수 없습니다: tag_data_24.6 (versi
 메타데이터 저장 실패: Object of type Int64DType is not JSON serializable
 DataFrame 로드 실패: 파일을 찾을 수 없습니다: tag_data_24.6 (version: None)
 메타데이터 저장 실패: Object of type Int64DType is not JSON serializable
+  Stopping...

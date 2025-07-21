@@ -201,16 +201,16 @@ class TagLocationMaster(Base):
     __tablename__ = 'tag_location_master'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    sort_no = Column(Integer, nullable=True)
-    source_file = Column(String(100), nullable=True)
-    location = Column(String(100), nullable=False)
-    device_number = Column(String(20), nullable=False, unique=True)
-    gate_name = Column(String(200), nullable=False)
-    display_name = Column(String(200), nullable=False)
-    inout_type = Column(String(10), nullable=True)  # IN, OUT
-    work_area_flag = Column(String(10), nullable=True)  # G(일반), W(근무구역)
-    work_classification = Column(String(10), nullable=True)  # M(근무), N(비근무)
-    labeling = Column(String(20), nullable=True)
+    정렬No = Column("정렬No.", Integer, nullable=True)
+    출처파일 = Column(String(100), nullable=True)
+    위치 = Column(String(100), nullable=False)
+    기기번호 = Column(String(20), nullable=False)
+    게이트명 = Column(String(200), nullable=False)
+    표기명 = Column(String(200), nullable=False)
+    입출구분 = Column(String(10), nullable=True)  # IN, OUT
+    근무구역여부 = Column(String(10), nullable=True)  # G(일반), Y(근무구역), N(비근무구역)
+    근무 = Column(String(10), nullable=True)  # M(근무)
+    라벨링 = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class OrganizationMapping(Base):

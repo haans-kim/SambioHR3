@@ -76,14 +76,10 @@ class SambioHumanApp:
             initial_sidebar_state="expanded"
         )
         
-        # 메인 타이틀
-        st.title("🏭 Sambio Human Analytics")
-        st.markdown("### 2교대 근무 시스템 실근무시간 분석 대시보드")
-        
         # 사이드바 네비게이션
         self.render_sidebar()
         
-        # 메인 콘텐츠 렌더링
+        # 메인 콘텐츠 렌더링 (타이틀은 각 페이지에서 처리)
         self.render_main_content()
     
     def render_sidebar(self):
@@ -91,21 +87,31 @@ class SambioHumanApp:
         with st.sidebar:
             st.header("📋 Navigation")
             
-            # 페이지 선택
-            page = st.selectbox(
-                "페이지 선택",
-                [
-                    "🏠 홈",
-                    "👤 개인 분석",
-                    "🏢 조직 분석",
-                    "📊 비교 분석",
-                    "📤 데이터 업로드",
-                    "⚙️ 모델 설정",
-                    "📈 실시간 모니터링"
-                ]
-            )
+            # 메뉴 버튼들을 직접 나열 (홈을 맨 위로)
+            if st.button("🏠 홈", use_container_width=True):
+                st.session_state.current_page = "🏠 홈"
+                
+            if st.button("📤 데이터 업로드", use_container_width=True):
+                st.session_state.current_page = "📤 데이터 업로드"
+                
+            if st.button("👤 개인 분석", use_container_width=True):
+                st.session_state.current_page = "👤 개인 분석"
+                
+            if st.button("🏢 조직 분석", use_container_width=True):
+                st.session_state.current_page = "🏢 조직 분석"
+                
+            if st.button("📊 비교 분석", use_container_width=True):
+                st.session_state.current_page = "📊 비교 분석"
+                
+            if st.button("⚙️ 모델 설정", use_container_width=True):
+                st.session_state.current_page = "⚙️ 모델 설정"
+                
+            if st.button("📈 실시간 모니터링", use_container_width=True):
+                st.session_state.current_page = "📈 실시간 모니터링"
             
-            st.session_state.current_page = page
+            # 현재 페이지가 없으면 홈으로 설정
+            if 'current_page' not in st.session_state:
+                st.session_state.current_page = "🏠 홈"
             
             # 시스템 정보
             st.markdown("---")
@@ -152,7 +158,8 @@ class SambioHumanApp:
     
     def render_home_page(self):
         """홈 페이지 렌더링"""
-        st.markdown("## 🏠 홈 대시보드")
+        st.title("🏭 Sambio Human Analytics")
+        st.markdown("---")
         
         # 주요 KPI 카드
         col1, col2, col3, col4 = st.columns(4)
@@ -361,8 +368,6 @@ class SambioHumanApp:
     
     def render_data_upload(self):
         """데이터 업로드 페이지 렌더링"""
-        st.markdown("## 📤 데이터 업로드")
-        
         if self.data_upload:
             self.data_upload.render()
         else:

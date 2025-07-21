@@ -52,9 +52,9 @@ class ExcelLoader:
             self.logger.info(f"시트 목록: {excel_file.sheet_names}")
             self.logger.info(f"로딩할 시트: {sheet_name}")
             
-            # 100MB 이상 파일의 경우 청크 단위 로딩
+            # 100MB 이상 파일의 경우 최적화된 로딩
             if file_size > 100:
-                self.logger.info(f"대용량 파일 감지 - 청크 단위 로딩 시작 (청크 크기: {self.chunk_size})")
+                self.logger.info(f"대용량 파일 감지 ({file_size:.1f}MB) - 최적화된 로딩 시작...")
                 df = self._load_large_file(file_path, sheet_name)
             else:
                 df = pd.read_excel(file_path, sheet_name=sheet_name)
@@ -71,29 +71,33 @@ class ExcelLoader:
     
     def _load_large_file(self, file_path: Path, sheet_name: str) -> pd.DataFrame:
         """대용량 파일을 청크 단위로 로딩"""
-        chunks = []
+        # pd.read_excel은 chunksize를 지원하지 않으므로 직접 로딩
+        self.logger.info("대용량 Excel 파일 로딩 시작...")
         
         try:
-            # 전체 행 수 확인 (샘플링으로 추정)
-            sample_df = pd.read_excel(file_path, sheet_name=sheet_name, nrows=1000)
+            # 진행상황 표시를 위해 먼저 행 수 추정
+            self.logger.info("파일 정보 확인 중...")
             
-            # 청크 단위로 읽기
-            for chunk in pd.read_excel(file_path, sheet_name=sheet_name, chunksize=self.chunk_size):
-                # 메모리 효율을 위한 데이터 타입 최적화
-                chunk = self._optimize_dtypes(chunk)
-                chunks.append(chunk)
-                
-                self.logger.info(f"청크 로딩 완료: {len(chunks) * self.chunk_size:,}행")
+            # 엑셀 파일 직접 로딩 (openpyxl 엔진 사용)
+            self.logger.info("데이터 로딩 중... (이 작업은 시간이 걸릴 수 있습니다)")
+            df = pd.read_excel(
+                file_path, 
+                sheet_name=sheet_name,
+                engine='openpyxl'  # 대용량 파일에 더 적합
+            )
             
-            # 모든 청크 합치기
-            df = pd.concat(chunks, ignore_index=True)
+            # 메모리 효율을 위한 데이터 타입 최적화
+            self.logger.info("데이터 타입 최적화 중...")
+            df = self._optimize_dtypes(df)
+            
+            return df
             
         except Exception as e:
-            self.logger.error(f"청크 로딩 실패: {e}")
-            # 일반 로딩으로 fallback
+            self.logger.error(f"대용량 파일 로딩 실패: {e}")
+            # 기본 엔진으로 재시도
+            self.logger.info("기본 엔진으로 재시도...")
             df = pd.read_excel(file_path, sheet_name=sheet_name)
-        
-        return df
+            return df
     
     def _optimize_dtypes(self, df: pd.DataFrame) -> pd.DataFrame:
         """데이터 타입 최적화로 메모리 사용량 줄이기"""

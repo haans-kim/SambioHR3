@@ -345,7 +345,7 @@ class DatabaseManager:
             self.logger.error(f"테이블 복원 실패: {e}")
             raise
     
-    def _get_table_class(self, table_name: str):
+    def get_table_class(self, table_name: str):
         """테이블명으로 SQLAlchemy 클래스 찾기"""
         from .schema import (
             DailyWorkData, ShiftWorkData, OrganizationSummary, TagLogs,
