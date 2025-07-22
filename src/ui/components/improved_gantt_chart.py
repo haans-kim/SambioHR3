@@ -36,6 +36,7 @@ def render_improved_gantt_chart(analysis_result: dict):
         'MIDNIGHT_MEAL': {'name': '야식', 'color': '#FF9800', 'y_pos': 2, 'category': 'meal'},
         'REST': {'name': '휴식', 'color': '#4CAF50', 'y_pos': 1, 'category': 'rest'},
         'FITNESS': {'name': '운동', 'color': '#4CAF50', 'y_pos': 1, 'category': 'rest'},
+        'NON_WORK': {'name': '비근무', 'color': '#FF6B6B', 'y_pos': 1, 'category': 'non_work'},
         'COMMUTE_OUT': {'name': '퇴근', 'color': '#F44336', 'y_pos': 0, 'category': 'commute'},
         'UNKNOWN': {'name': '기타', 'color': '#9E9E9E', 'y_pos': 3, 'category': 'other'}
     }
@@ -74,7 +75,7 @@ def render_improved_gantt_chart(analysis_result: dict):
             activity_code = segment.get('activity_code', 'UNKNOWN')
             
             # activity_type을 activity_code로 매핑 (필요시)
-            if activity_code in ['work', 'meeting', 'movement', 'rest', 'breakfast', 'lunch', 'dinner', 'midnight_meal', 'commute']:
+            if activity_code in ['work', 'meeting', 'movement', 'rest', 'breakfast', 'lunch', 'dinner', 'midnight_meal', 'commute', 'non_work']:
                 # activity_type을 activity_code로 변환
                 type_to_code = {
                     'work': 'WORK',
@@ -85,7 +86,8 @@ def render_improved_gantt_chart(analysis_result: dict):
                     'lunch': 'LUNCH',
                     'dinner': 'DINNER',
                     'midnight_meal': 'MIDNIGHT_MEAL',
-                    'commute': 'COMMUTE_IN'
+                    'commute': 'COMMUTE_IN',
+                    'non_work': 'NON_WORK'
                 }
                 activity_code = type_to_code.get(activity_code, activity_code)
             

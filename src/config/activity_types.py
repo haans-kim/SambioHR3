@@ -192,6 +192,16 @@ ACTIVITY_TYPES = {
         location_patterns=['FITNESS', 'GYM', '체력단련실', '운동실'],
         min_duration=20
     ),
+    'NON_WORK': ActivityType(
+        code='NON_WORK',
+        name_ko='비근무',
+        name_en='Non-Work',
+        category='absence',
+        color='#FF6B6B',  # 빨간색
+        priority=85,
+        keywords=['비근무', '외출', 'NON_WORK', 'OUT_OF_OFFICE'],
+        min_duration=10
+    ),
     'LEAVE': ActivityType(
         code='LEAVE',
         name_ko='연차',

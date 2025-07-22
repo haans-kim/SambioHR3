@@ -37,6 +37,7 @@ class ActivityState(Enum):
     FITNESS = "피트니스"
     
     # 비근무 상태
+    NON_WORK = "비근무"  # 외출/개인사유
     ANNUAL_LEAVE = "연차"
     MATERNITY_LEAVE = "배우자출산"
     SICK_LEAVE = "병가"
@@ -194,6 +195,9 @@ class HMMModel:
                 return 0.3
             elif to_state == ActivityState.BREAKFAST.value:
                 return 0.2
+            # 재입문 후 다른 상태로 빠른 전환
+            elif to_state == ActivityState.CLOCK_IN.value:
+                return 0.05  # 출근 상태 유지 확률 낮춤
         
         elif from_state == ActivityState.WORK.value:
             if to_state == ActivityState.FOCUSED_WORK.value:
@@ -204,6 +208,9 @@ class HMMModel:
                 return 0.1
             elif to_state == ActivityState.MOVEMENT.value:
                 return 0.2
+            # 점심시간대 외출 가능성
+            elif to_state == ActivityState.CLOCK_OUT.value:
+                return 0.1
         
         elif from_state == ActivityState.BREAKFAST.value:
             if to_state == ActivityState.WORK.value:
@@ -216,6 +223,8 @@ class HMMModel:
                 return 0.6
             elif to_state == ActivityState.REST.value:
                 return 0.2
+            elif to_state == ActivityState.CLOCK_IN.value:
+                return 0.1  # 점심 후 재입문
         
         elif from_state == ActivityState.DINNER.value:
             if to_state == ActivityState.WORK.value:
@@ -236,9 +245,21 @@ class HMMModel:
                             ActivityState.DINNER.value, ActivityState.MIDNIGHT_MEAL.value]:
                 return 0.1
         
+        # 퇴근 후 재입문 (점심시간 외출 등)
+        elif from_state == ActivityState.CLOCK_OUT.value:
+            if to_state == ActivityState.CLOCK_IN.value:
+                return 0.2  # 재입문 가능성
+            elif to_state == ActivityState.CLOCK_OUT.value:
+                return 0.7  # 퇴근 상태 유지
+            else:
+                return 0.05
+        
         # 같은 상태 유지 확률
         if from_state == to_state:
-            return 0.3
+            if from_state == ActivityState.CLOCK_IN.value:
+                return 0.1  # 출근 상태 유지 확률 낮춤
+            else:
+                return 0.3
         
         return base_prob
     
@@ -354,12 +375,13 @@ class HMMModel:
         """CAFETERIA 위치 여부 확인"""
         return 'CAFETERIA' in location_name.upper()
     
-    def predict_activity_sequence(self, observations: List[Dict[str, Any]]) -> List[str]:
+    def predict_activity_sequence(self, observations: List[Dict[str, Any]], tag_data: pd.DataFrame = None) -> List[str]:
         """
         관측값 시퀀스로부터 활동 상태 시퀀스 예측
         
         Args:
             observations: 관측값 시퀀스
+            tag_data: 원본 태그 데이터 (출문-재입문 패턴 감지용)
             
         Returns:
             List[str]: 예측된 활동 상태 시퀀스
@@ -370,7 +392,19 @@ class HMMModel:
         # 간단한 규칙 기반 예측 (Viterbi 알고리즘 구현 전)
         predicted_states = []
         
-        for obs in observations:
+        # 출문-재입문 패턴 감지 (점심시간 외출 등)
+        exit_reentry_indices = []
+        if tag_data is not None:
+            exit_reentry_indices = self._detect_exit_reentry_patterns(tag_data)
+        
+        for i, obs in enumerate(observations):
+            # 출문-재입문 패턴이 점심시간대에 발생한 경우
+            if i in exit_reentry_indices:
+                timestamp = tag_data.iloc[i]['datetime'] if tag_data is not None else None
+                if timestamp and self._is_lunch_time(timestamp):
+                    predicted_states.append(ActivityState.LUNCH.value)
+                    continue
+            
             # CAFETERIA 위치이고 식사시간대인 경우
             if obs.get(ObservationFeature.CAFETERIA_LOCATION.value):
                 meal_state = self._predict_meal_state(obs)
@@ -385,6 +419,33 @@ class HMMModel:
                 predicted_states.append(ActivityState.MOVEMENT.value)
         
         return predicted_states
+    
+    def _detect_exit_reentry_patterns(self, tag_data: pd.DataFrame) -> List[int]:
+        """출문-재입문 패턴 감지"""
+        exit_reentry_indices = []
+        
+        for i in range(1, len(tag_data)):
+            prev_row = tag_data.iloc[i-1]
+            curr_row = tag_data.iloc[i]
+            
+            # T3 (퇴근) 후 T2 (출근) 패턴 감지
+            if (prev_row.get('tag_code') == 'T3' and curr_row.get('tag_code') == 'T2'):
+                # 시간 차이가 2시간 이내인 경우 (점심/외출)
+                time_diff = (curr_row['datetime'] - prev_row['datetime']).total_seconds() / 3600
+                if 0 < time_diff < 2:
+                    exit_reentry_indices.extend([i-1, i])
+        
+        return exit_reentry_indices
+    
+    def _is_lunch_time(self, timestamp: datetime) -> bool:
+        """점심시간대 여부 확인"""
+        if timestamp is None:
+            return False
+        
+        current_time = timestamp.time()
+        lunch_start, lunch_end = self.meal_time_windows['lunch']
+        
+        return lunch_start <= current_time <= lunch_end
     
     def _predict_meal_state(self, obs: Dict[str, Any]) -> Optional[str]:
         """식사 상태 예측"""

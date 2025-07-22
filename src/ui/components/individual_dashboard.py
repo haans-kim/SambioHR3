@@ -9,7 +9,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, time
 import logging
 from pathlib import Path
 from typing import List, Dict, Any
@@ -109,17 +109,30 @@ class IndividualDashboard:
             # Claim 데이터 로드
             claim_data = pickle_manager.load_dataframe(name='claim_data')
             if claim_data is None:
+                self.logger.warning("Claim 데이터가 없습니다")
                 return None
+                
+            # 컬럼명 확인 (디버깅용)
+            self.logger.info(f"Claim 데이터 컬럼: {claim_data.columns.tolist()}")
             
-            # 날짜 형식 변환 (YYYYMMDD)
-            date_str = selected_date.strftime('%Y%m%d')
-            date_int = int(date_str)
-            
-            # 해당 직원과 날짜의 데이터 필터링
-            daily_claim = claim_data[
-                (claim_data['사번'] == employee_id) & 
-                (claim_data['근무일'] == date_int)
-            ]
+            # 날짜 형식 변환
+            # claim_data의 근무일이 Timestamp인 경우 처리
+            if not claim_data.empty and pd.api.types.is_datetime64_any_dtype(claim_data['근무일']):
+                # Timestamp를 date로 변환
+                claim_data['근무일_date'] = pd.to_datetime(claim_data['근무일']).dt.date
+                # 해당 직원과 날짜의 데이터 필터링
+                daily_claim = claim_data[
+                    (claim_data['사번'] == int(employee_id)) & 
+                    (claim_data['근무일_date'] == selected_date)
+                ]
+            else:
+                # 기존 방식 (정수형)
+                date_str = selected_date.strftime('%Y%m%d')
+                date_int = int(date_str)
+                daily_claim = claim_data[
+                    (claim_data['사번'] == employee_id) & 
+                    (claim_data['근무일'] == date_int)
+                ]
             
             if daily_claim.empty:
                 return None
@@ -127,13 +140,25 @@ class IndividualDashboard:
             # 필요한 정보 추출
             claim_info = {
                 'exists': True,
-                'claim_start': daily_claim.iloc[0].get('시작', 'N/A'),
-                'claim_end': daily_claim.iloc[0].get('종료', 'N/A'),
-                'claim_hours': daily_claim.iloc[0].get('근무시간', 0),
-                'claim_type': daily_claim.iloc[0].get('근무유형', 'N/A'),
-                'overtime': daily_claim.iloc[0].get('초과근무', 0),
+                'claim_start': daily_claim.iloc[0].get('시작', daily_claim.iloc[0].get('출근시간', 'N/A')),
+                'claim_end': daily_claim.iloc[0].get('종료', daily_claim.iloc[0].get('퇴근시간', 'N/A')),
+                'claim_hours': daily_claim.iloc[0].get('근무시간', daily_claim.iloc[0].get('근로시간', 8)),
+                'claim_type': daily_claim.iloc[0].get('WORKSCHDTYPNM', daily_claim.iloc[0].get('근무유형', '선택근무제')),
+                'overtime': daily_claim.iloc[0].get('초과근무', daily_claim.iloc[0].get('연장근무', 0)),
                 'raw_claim': daily_claim.iloc[0].to_dict()
             }
+            
+            # 근무시간이 문자열인 경우 숫자로 변환
+            if isinstance(claim_info['claim_hours'], str):
+                try:
+                    # "8:00" 형태인 경우
+                    if ':' in str(claim_info['claim_hours']):
+                        hours, minutes = claim_info['claim_hours'].split(':')
+                        claim_info['claim_hours'] = float(hours) + float(minutes) / 60
+                    else:
+                        claim_info['claim_hours'] = float(claim_info['claim_hours'])
+                except:
+                    claim_info['claim_hours'] = 8.0
             
             return claim_info
             
@@ -341,6 +366,20 @@ class IndividualDashboard:
                     
                     # T3: 출입포인트(OUT) -> 퇴근
                     daily_data.loc[daily_data['tag_code'] == 'T3', 'activity_code'] = 'COMMUTE_OUT'
+                    
+                    # 출근(T2) 후 다음 활동까지의 시간 제한
+                    # T2 이후 5분 이상 다른 태그가 없으면 MOVEMENT로 변경
+                    for i in range(len(daily_data) - 1):
+                        if daily_data.iloc[i]['tag_code'] == 'T2':
+                            # 다음 태그까지의 시간 차이
+                            time_diff = (daily_data.iloc[i+1]['datetime'] - 
+                                       daily_data.iloc[i]['datetime']).total_seconds() / 60  # 분 단위
+                            
+                            # 5분 이상 차이나면 출근 상태를 이동으로 변경
+                            if time_diff > 5:
+                                # 출근은 첫 1분만 유지
+                                daily_data.loc[daily_data.index[i], 'duration_minutes'] = 1
+                                # 나머지 시간은 MOVEMENT로 분류될 것임
                 else:
                     # 기존 라벨링 기반 분류 (호환성)
                     if 'activity_label' in daily_data.columns:
@@ -391,6 +430,11 @@ class IndividualDashboard:
             # 더 정확한 출퇴근 시간대 검증만 추가
             
             # 1. 식사시간 분류 (CAFETERIA 위치 + 시간대)
+            # 회사 지정 식사시간:
+            # - 조식: 06:30-09:00 + CAFETERIA
+            # - 중식: 11:20-13:20 + CAFETERIA  
+            # - 석식: 17:00-20:00 + CAFETERIA
+            # - 야식: 23:30-01:00 + CAFETERIA
             cafeteria_mask = daily_data['DR_NM'].str.contains('CAFETERIA|식당|구내식당', case=False, na=False)
             
             # 시간대별 식사 분류 (더 정확한 시간대)
@@ -482,9 +526,89 @@ class IndividualDashboard:
                 'FITNESS': 'rest',
                 'LEAVE': 'rest',
                 'IDLE': 'rest',
+                'NON_WORK': 'non_work',
                 'UNKNOWN': 'work'
             }
             daily_data['activity_type'] = daily_data['activity_code'].map(activity_type_mapping).fillna('work')
+            
+            # 출문-재입문 패턴 감지 및 분류
+            if 'tag_code' in daily_data.columns:
+                # 출문(T3) - 재입문(T2) 패턴 찾기
+                for i in range(1, len(daily_data)):
+                    if (daily_data.iloc[i-1]['tag_code'] == 'T3' and 
+                        daily_data.iloc[i]['tag_code'] == 'T2'):
+                        
+                        # 시간 차이 계산
+                        time_diff = (daily_data.iloc[i]['datetime'] - 
+                                   daily_data.iloc[i-1]['datetime']).total_seconds() / 3600
+                        
+                        exit_time = daily_data.iloc[i-1]['datetime'].time()
+                        entry_time = daily_data.iloc[i]['datetime'].time()
+                        
+                        # 식사시간대 체크 (회사 지정 시간)
+                        is_breakfast_time = time(6, 30) <= exit_time <= time(9, 0)
+                        is_lunch_time = time(11, 20) <= exit_time <= time(13, 20)
+                        is_dinner_time = time(17, 0) <= exit_time <= time(20, 0)
+                        is_midnight_meal_time = (time(23, 30) <= exit_time or exit_time <= time(1, 0))
+                        
+                        # 출문과 재입문 사이의 시간 분류
+                        if 0 < time_diff < 3:  # 3시간 이내의 외출
+                            if is_lunch_time and time_diff < 2:
+                                # 점심시간대 외출 -> 점심식사
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_code'] = 'LUNCH'
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'confidence'] = 95
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_type'] = 'meal'
+                                self.logger.info(f"점심시간 외출: {exit_time} - {entry_time}")
+                            elif is_breakfast_time and time_diff < 1:
+                                # 조식시간대 외출 -> 조식
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_code'] = 'BREAKFAST'
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'confidence'] = 95
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_type'] = 'meal'
+                            elif is_dinner_time and time_diff < 2:
+                                # 석식시간대 외출 -> 석식
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_code'] = 'DINNER'
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'confidence'] = 95
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_type'] = 'meal'
+                            else:
+                                # 식사시간대가 아닌 외출 -> 비근무
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_code'] = 'NON_WORK'
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'confidence'] = 90
+                                daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_type'] = 'non_work'
+                                self.logger.info(f"비근무 외출: {exit_time} - {entry_time} ({time_diff:.1f}시간)")
+                        else:
+                            # 3시간 이상의 장시간 외출 -> 비근무
+                            daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_code'] = 'NON_WORK'
+                            daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'confidence'] = 95
+                            daily_data.loc[daily_data.index[i-1]:daily_data.index[i], 'activity_type'] = 'non_work'
+                            self.logger.info(f"장시간 비근무: {exit_time} - {entry_time} ({time_diff:.1f}시간)")
+            
+            # 비근무지역에서 일정시간 이상 체류 시 비근무로 분류
+            if 'work_area_type' in daily_data.columns:
+                # 비근무지역(N) 태그를 그룹화
+                daily_data['group_id'] = (daily_data['work_area_type'] != daily_data['work_area_type'].shift()).cumsum()
+                
+                for group_id, group in daily_data.groupby('group_id'):
+                    if len(group) > 0 and group.iloc[0]['work_area_type'] == 'N':
+                        # 그룹의 첫번째와 마지막 시간 차이 계산
+                        if len(group) > 1:
+                            duration = (group.iloc[-1]['datetime'] - group.iloc[0]['datetime']).total_seconds() / 60
+                        else:
+                            # 다음 태그까지의 시간 확인
+                            next_idx = group.index[-1] + 1
+                            if next_idx < len(daily_data):
+                                duration = (daily_data.iloc[next_idx]['datetime'] - group.iloc[0]['datetime']).total_seconds() / 60
+                            else:
+                                duration = 5  # 기본값
+                        
+                        # 10분 이상 비근무지역에 체류한 경우 비근무로 분류
+                        if duration >= 10:
+                            daily_data.loc[group.index, 'activity_code'] = 'NON_WORK'
+                            daily_data.loc[group.index, 'confidence'] = 85
+                            daily_data.loc[group.index, 'activity_type'] = 'non_work'
+                            self.logger.info(f"비근무지역 체류: {group.iloc[0]['datetime']} ({duration:.0f}분)")
+                
+                # 임시 컬럼 제거
+                daily_data.drop('group_id', axis=1, inplace=True)
             
             return daily_data
             
@@ -510,9 +634,68 @@ class IndividualDashboard:
         # 추가적인 규칙 기반 분류는 필요시 구현
         return daily_data
     
+    def _fill_time_gaps(self, data: pd.DataFrame) -> pd.DataFrame:
+        """태그 사이의 시간 간격을 채워서 연속적인 활동 데이터 생성"""
+        if data.empty:
+            return data
+            
+        # 결과를 저장할 리스트
+        filled_data = []
+        
+        # 시간순으로 정렬
+        data = data.sort_values('datetime').reset_index(drop=True)
+        
+        for i in range(len(data)):
+            current_row = data.iloc[i].copy()
+            
+            # 다음 태그까지의 시간 계산
+            if i < len(data) - 1:
+                next_time = data.iloc[i + 1]['datetime']
+                duration = (next_time - current_row['datetime']).total_seconds() / 60
+            else:
+                # 마지막 태그는 5분으로 설정
+                duration = 5
+            
+            current_row['duration_minutes'] = duration
+            filled_data.append(current_row)
+            
+            # 출문(T3) 후 재입문(T2) 사이의 시간을 채우기
+            if (i < len(data) - 1 and 
+                'tag_code' in data.columns and
+                current_row['tag_code'] == 'T3' and 
+                data.iloc[i + 1]['tag_code'] == 'T2'):
+                
+                # 출문과 재입문 사이의 전체 시간
+                gap_start = current_row['datetime']
+                gap_end = data.iloc[i + 1]['datetime']
+                gap_duration = (gap_end - gap_start).total_seconds() / 60
+                
+                # 5분 이상의 간격이 있으면 비근무 시간으로 채우기
+                if gap_duration > 5:
+                    # 출문 시간을 5분으로 제한
+                    filled_data[-1]['duration_minutes'] = 5
+                    
+                    # 나머지 시간을 비근무로 채우기
+                    gap_row = current_row.copy()
+                    gap_row['datetime'] = gap_start + pd.Timedelta(minutes=5)
+                    gap_row['duration_minutes'] = gap_duration - 10  # 출문 5분, 재입문 5분 제외
+                    
+                    # 이미 활동이 분류된 경우 (점심 등) 그대로 유지
+                    if data.iloc[i + 1].get('activity_code') not in ['LUNCH', 'BREAKFAST', 'DINNER', 'MIDNIGHT_MEAL']:
+                        gap_row['activity_code'] = 'NON_WORK'
+                        gap_row['activity_type'] = 'non_work'
+                        gap_row['confidence'] = 90
+                    
+                    filled_data.append(gap_row)
+        
+        return pd.DataFrame(filled_data)
+    
     def analyze_daily_data(self, employee_id: str, selected_date: date, classified_data: pd.DataFrame):
         """일일 데이터 분석"""
         try:
+            # 시간 간격 채우기 (태그 사이의 빈 시간을 활동으로 채움)
+            classified_data = self._fill_time_gaps(classified_data)
+            
             # 근무시간 계산
             work_start = classified_data['datetime'].min()
             work_end = classified_data['datetime'].max()
@@ -1293,162 +1476,358 @@ class IndividualDashboard:
         st.write(f"• 평균 일일 활동 수: {trend_data['activity_count'].mean():.1f}개")
     
     def render_activity_summary(self, analysis_result: dict):
-        """활동별 시간 요약 렌더링"""
+        """활동별 시간 요약 패널 렌더링"""
         activity_summary = analysis_result['activity_summary']
+        claim_data = analysis_result.get('claim_data', {})
         
-        # 데이터 준비
-        activities = []
-        for activity_code, minutes in activity_summary.items():
-            activities.append({
-                '활동': get_activity_name(activity_code, 'ko'),
-                '시간(분)': round(minutes, 1),
-                '시간': f"{int(minutes//60)}시간 {int(minutes%60)}분",
-                '비율(%)': round(minutes / sum(activity_summary.values()) * 100, 1),
-                'activity_code': activity_code  # 색상 매핑용
-            })
+        # 주요 지표 계산
+        total_minutes = sum(activity_summary.values())
         
-        df_activities = pd.DataFrame(activities)
+        # 작업시간 (근무 관련 활동들)
+        work_codes = ['WORK', 'FOCUSED_WORK', 'EQUIPMENT_OPERATION', 'WORK_PREPARATION', 
+                     'WORKING', 'MEETING', 'TRAINING']
+        work_minutes = sum(activity_summary.get(code, 0) for code in work_codes)
         
-        # 차트와 테이블 표시
-        col1, col2 = st.columns([2, 1])
+        # 회의시간
+        meeting_minutes = activity_summary.get('MEETING', 0)
+        
+        # 이동시간 (출퇴근 제외)
+        movement_minutes = activity_summary.get('MOVEMENT', 0)
+        
+        # 비업무시간 (비근무 + 휴식)
+        non_work_minutes = activity_summary.get('NON_WORK', 0) + activity_summary.get('REST', 0)
+        
+        # Claim 시간
+        if claim_data:
+            claim_hours = claim_data.get('claim_hours', 0)
+            claim_minutes = claim_hours * 60
+        else:
+            claim_hours = 0
+            claim_minutes = 0
+        
+        # 실제 업무시간
+        actual_work_hours = work_minutes / 60
+        
+        # 업무 효율성 (실제 업무시간 / Claim 시간)
+        efficiency = (work_minutes / claim_minutes * 100) if claim_minutes > 0 else 0
+        
+        # 일일 활동 요약 스타일
+        st.markdown("""
+        <style>
+        .summary-panel {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .summary-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .summary-main {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .summary-bar {
+            flex: 1;
+            height: 40px;
+            background: linear-gradient(to right, #2196F3 0%, #4CAF50 100%);
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .summary-bar-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+        .summary-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .metric-percent {
+            font-size: 12px;
+            color: #999;
+        }
+        .non-work-section {
+            background-color: #ffebee;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #f44336;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Summary Panel
+        st.markdown('<div class="summary-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="summary-title">일일 활동 요약</div>', unsafe_allow_html=True)
+        
+        # 메인 진행 바
+        col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
         
         with col1:
-            # 파이 차트 - 새로운 색상 매핑
-            color_map = {}
-            for _, row in df_activities.iterrows():
-                activity_name = row['활동']
-                activity_code = row['activity_code']
-                color_map[activity_name] = get_activity_color(activity_code)
-            
-            fig = px.pie(df_activities, values='시간(분)', names='활동', 
-                        title='활동별 시간 분포',
-                        color_discrete_map=color_map)
-            st.plotly_chart(fig, use_container_width=True)
+            if claim_hours > 0:
+                st.markdown(f"**Claim 시간:** {claim_hours:.1f}h")
+            else:
+                st.markdown("**Claim 시간:** 데이터 없음")
         
         with col2:
-            # 요약 테이블
-            st.dataframe(df_activities[['활동', '시간', '비율(%)']], 
-                        use_container_width=True, hide_index=True)
+            # 진행 바 HTML
+            bar_html = f"""
+            <div class="summary-bar">
+                <div class="summary-bar-fill" style="width: {min(efficiency, 100):.1f}%"></div>
+            </div>
+            """
+            st.markdown(bar_html, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"**실제 업무시간:** <span style='color: #2196F3; font-weight: bold;'>{actual_work_hours:.1f}h</span>", 
+                       unsafe_allow_html=True)
+        
+        with col4:
+            if claim_minutes > 0:
+                color = '#4CAF50' if efficiency >= 80 else '#FF9800' if efficiency >= 60 else '#F44336'
+                st.markdown(f"**업무 효율성:** <span style='color: {color}; font-weight: bold;'>{efficiency:.1f}%</span>", 
+                           unsafe_allow_html=True)
+            else:
+                st.markdown("**업무 효율성:** -", unsafe_allow_html=True)
+        
+        # 주요 지표들
+        st.markdown("<div class='summary-metrics'>", unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            work_percent = (work_minutes / total_minutes * 100) if total_minutes > 0 else 0
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #2196F3;">{work_minutes/60:.1f}h</div>
+                    <div class="metric-label">작업시간</div>
+                    <div class="metric-percent">{work_percent:.1f}%</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            meeting_percent = (meeting_minutes / total_minutes * 100) if total_minutes > 0 else 0
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #9C27B0;">{meeting_minutes/60:.1f}h</div>
+                    <div class="metric-label">회의시간</div>
+                    <div class="metric-percent">{meeting_percent:.1f}%</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            movement_percent = (movement_minutes / total_minutes * 100) if total_minutes > 0 else 0
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #FF9800;">{movement_minutes/60:.1f}h</div>
+                    <div class="metric-label">이동시간</div>
+                    <div class="metric-percent">{movement_percent:.1f}%</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            data_hours = total_minutes / 60
+            if claim_hours > 0:
+                data_percent = (data_hours / claim_hours * 100)
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-value" style="color: #4CAF50;">{data_percent:.0f}%</div>
+                        <div class="metric-label">데이터 신뢰도</div>
+                        <div class="metric-percent">추정 포함</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-value" style="color: #4CAF50;">{data_hours:.1f}h</div>
+                        <div class="metric-label">총 기록시간</div>
+                        <div class="metric-percent">태그 데이터</div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # 비업무시간 섹션
+        if non_work_minutes > 0:
+            st.markdown(f"""
+                <div class="non-work-section">
+                    <strong style="color: #f44336;">비업무시간 ({non_work_minutes/60:.1f}h)</strong><br>
+                    점심시간: {activity_summary.get('LUNCH', 0)/60:.1f}h | 
+                    휴게시간: {activity_summary.get('REST', 0)/60:.1f}h | 
+                    개인용무: {activity_summary.get('NON_WORK', 0)/60:.1f}h
+                </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
     
     def render_timeline_view(self, analysis_result: dict):
         """시계열 타임라인 뷰 렌더링 - Gantt 차트 형태"""
         segments = analysis_result['activity_segments']
         
-        # 활동별 색상 및 한글명
-        activity_colors = {
-            'work': self.colors['work'],
-            'meeting': self.colors['meeting'],
-            'movement': self.colors['movement'],
-            'breakfast': self.colors['meal'],
-            'lunch': self.colors['meal'],
-            'dinner': self.colors['meal'],
-            'midnight_meal': self.colors['meal'],
-            'rest': self.colors['rest']
+        # Y축 레이블 (improved_gantt_chart와 동일)
+        y_labels = ['퇴근', '휴게', '식사', '회의', '이동', '작업', '준비', '출근']
+        
+        # 활동 코드를 Y축 위치로 매핑
+        activity_to_y_pos = {
+            'COMMUTE_IN': 7,  # 출근
+            'WORK_PREPARATION': 6,  # 준비
+            'WORK': 5,  # 작업
+            'FOCUSED_WORK': 5,
+            'EQUIPMENT_OPERATION': 5,
+            'WORKING': 5,
+            'MOVEMENT': 4,  # 이동
+            'MEETING': 3,  # 회의
+            'BREAKFAST': 2,  # 식사
+            'LUNCH': 2,
+            'DINNER': 2,
+            'MIDNIGHT_MEAL': 2,
+            'REST': 1,  # 휴게
+            'FITNESS': 1,
+            'NON_WORK': 1,
+            'COMMUTE_OUT': 0,  # 퇴근
+            'UNKNOWN': 4  # 기타는 이동과 같은 레벨
         }
         
-        activity_names = {
-            'work': '업무',
-            'meeting': '회의',
-            'movement': '이동',
-            'breakfast': '조식',
-            'lunch': '중식',
-            'dinner': '석식',
-            'midnight_meal': '야식',
-            'rest': '휴식'
-        }
+        # Gantt 차트를 위한 Figure 생성
+        fig = go.Figure()
         
-        # Gantt 차트 데이터 준비
-        gantt_data = []
-        for i, segment in enumerate(segments):
-            # NaT 처리
+        # 시간 범위 설정
+        work_start = analysis_result['work_start']
+        work_end = analysis_result['work_end']
+        
+        # 각 세그먼트를 막대로 추가
+        for segment in segments:
             if pd.notna(segment['start_time']) and pd.notna(segment['end_time']):
-                activity_code = segment.get('activity_code', 'WORK')
-                gantt_data.append({
-                    'Task': get_activity_name(activity_code, 'ko'),
-                    'Start': segment['start_time'],
-                    'Finish': segment['end_time'],
-                    'Resource': activity_code,
-                    'Location': segment['location'],
-                    'Duration': segment['duration_minutes']
-                })
+                activity_code = segment.get('activity_code', 'UNKNOWN')
+                
+                # activity_type을 activity_code로 변환 (필요시)
+                if activity_code in ['work', 'meeting', 'movement', 'rest', 'breakfast', 'lunch', 'dinner', 'midnight_meal', 'commute', 'non_work']:
+                    type_to_code = {
+                        'work': 'WORK',
+                        'meeting': 'MEETING',
+                        'movement': 'MOVEMENT',
+                        'rest': 'REST',
+                        'breakfast': 'BREAKFAST',
+                        'lunch': 'LUNCH',
+                        'dinner': 'DINNER',
+                        'midnight_meal': 'MIDNIGHT_MEAL',
+                        'commute': 'COMMUTE_IN',
+                        'non_work': 'NON_WORK'
+                    }
+                    activity_code = type_to_code.get(activity_code, activity_code)
+                
+                # Y축 위치 결정
+                y_pos = activity_to_y_pos.get(activity_code, 4)
+                
+                # 색상 결정
+                color = get_activity_color(activity_code)
+                
+                # 호버 텍스트
+                hover_text = (
+                    f"<b>{get_activity_name(activity_code, 'ko')}</b><br>" +
+                    f"시간: {segment['start_time'].strftime('%H:%M')} - {segment['end_time'].strftime('%H:%M')}<br>" +
+                    f"위치: {segment.get('location', 'N/A')}<br>" +
+                    f"지속: {segment['duration_minutes']:.0f}분"
+                )
+                
+                # 막대 추가
+                fig.add_trace(go.Scatter(
+                    x=[segment['start_time'], segment['end_time']],
+                    y=[y_pos, y_pos],
+                    mode='lines',
+                    line=dict(color=color, width=15),
+                    hovertemplate=hover_text + "<extra></extra>",
+                    showlegend=False
+                ))
         
-        if not gantt_data:
-            st.warning("타임라인 데이터가 없습니다.")
-            return
+        # 레전드 추가 (실제 데이터에 있는 활동만)
+        legend_added = set()
+        for segment in segments:
+            activity_code = segment.get('activity_code', 'UNKNOWN')
+            if activity_code not in legend_added and pd.notna(segment['start_time']):
+                # activity_type 변환
+                if activity_code in ['work', 'meeting', 'movement', 'rest', 'breakfast', 'lunch', 'dinner', 'midnight_meal', 'commute', 'non_work']:
+                    type_to_code = {
+                        'work': 'WORK',
+                        'meeting': 'MEETING',
+                        'movement': 'MOVEMENT',
+                        'rest': 'REST',
+                        'breakfast': 'BREAKFAST',
+                        'lunch': 'LUNCH',
+                        'dinner': 'DINNER',
+                        'midnight_meal': 'MIDNIGHT_MEAL',
+                        'commute': 'COMMUTE_IN',
+                        'non_work': 'NON_WORK'
+                    }
+                    activity_code = type_to_code.get(activity_code, activity_code)
+                
+                fig.add_trace(go.Scatter(
+                    x=[None],
+                    y=[None],
+                    mode='markers',
+                    marker=dict(size=10, color=get_activity_color(activity_code)),
+                    name=get_activity_name(activity_code, 'ko'),
+                    showlegend=True
+                ))
+                legend_added.add(activity_code)
         
-        # Gantt 차트 생성
-        df_gantt = pd.DataFrame(gantt_data)
-        
-        # 색상 매핑 생성
-        color_map = {}
-        for code in df_gantt['Resource'].unique():
-            color_map[code] = get_activity_color(code)
-        
-        fig = px.timeline(
-            df_gantt,
-            x_start="Start",
-            x_end="Finish",
-            y="Task",
-            color="Resource",
-            color_discrete_map=color_map,
-            hover_data={'Location': True, 'Duration': True},
-            title="일일 활동 타임라인 (Gantt Chart)"
-        )
-        
-        # 레이아웃 업데이트
-        # 범례를 한글로 표시
-        for trace in fig.data:
-            if trace.name in color_map:
-                # Resource 코드를 한글명으로 변환
-                korean_name = get_activity_name(trace.name, 'ko')
-                trace.name = korean_name
-        
+        # 레이아웃 설정
         fig.update_layout(
-            height=300,
-            xaxis_title="시간",
-            yaxis_title="활동",
+            title="일일 활동 타임라인 (Gantt Chart)",
+            height=600,
+            xaxis=dict(
+                title="시간",
+                tickformat='%H:%M',
+                dtick=3600000,  # 1시간 간격
+                range=[work_start - timedelta(minutes=30), work_end + timedelta(minutes=30)],
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.15)',  # 더 흐린 회색
+                gridwidth=0.5
+            ),
+            yaxis=dict(
+                title="",
+                tickmode='array',
+                tickvals=list(range(len(y_labels))),
+                ticktext=y_labels,
+                range=[-0.5, 7.5],
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.2)',  # 매우 흐린 회색
+                gridwidth=0.5
+            ),
+            plot_bgcolor='white',
             showlegend=True,
-            legend_title_text="활동 유형",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.3,
+                xanchor="center",
+                x=0.5
+            ),
             hovermode='closest'
-        )
-        
-        # Y축을 카테고리별로 정렬 (출근 맨 위, 퇴근 맨 아래)
-        category_order = [
-            '출근',  # 맨 위
-            '집중근무', '근무', '작업중', '장비조작', '작업준비',  # 근무 관련
-            '회의',  # 회의
-            '조식', '중식', '석식', '야식',  # 식사
-            '피트니스', '휴식',  # 휴식
-            '이동',  # 이동
-            '대기', '미분류',  # 기타
-            '퇴근'  # 맨 아래
-        ]
-        # 실제 데이터에 있는 카테고리만 필터링하고 순서 유지
-        actual_categories = list(df_gantt['Task'].unique())
-        filtered_order = []
-        
-        # 정의된 순서대로 추가
-        for cat in category_order:
-            if cat in actual_categories:
-                filtered_order.append(cat)
-        
-        # 정의되지 않은 카테고리가 있으면 중간에 추가
-        for cat in actual_categories:
-            if cat not in filtered_order:
-                # 퇴근 바로 위에 추가
-                if '퇴근' in filtered_order:
-                    idx = filtered_order.index('퇴근')
-                    filtered_order.insert(idx, cat)
-                else:
-                    filtered_order.append(cat)
-        
-        fig.update_yaxes(categoryorder="array", categoryarray=filtered_order)
-        
-        # X축 시간 포맷 설정
-        fig.update_xaxes(
-            tickformat='%H:%M',
-            dtick=3600000,  # 1시간 간격
-            tickangle=0
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -1466,7 +1845,8 @@ class IndividualDashboard:
             'lunch': self.colors['meal'],
             'dinner': self.colors['meal'],
             'midnight_meal': self.colors['meal'],
-            'rest': self.colors['rest']
+            'rest': self.colors['rest'],
+            'non_work': '#FF6B6B'  # 빨간색 계열로 비근무 표시
         }
         
         # 활동 한글명
@@ -1478,7 +1858,8 @@ class IndividualDashboard:
             'lunch': '중식',
             'dinner': '석식',
             'midnight_meal': '야식',
-            'rest': '휴식'
+            'rest': '휴식',
+            'non_work': '비근무'
         }
         
         # 작업 시작/종료 시간
@@ -1669,50 +2050,46 @@ class IndividualDashboard:
         """Claim 데이터와 실제 근무시간 비교"""
         claim_data = analysis_result['claim_data']
         
+        # 근무시간을 HH:MM 형식으로 변환
+        def format_hours_to_hhmm(hours):
+            """시간을 HH:MM 형식으로 변환"""
+            if isinstance(hours, (int, float)):
+                h = int(hours)
+                m = int((hours - h) * 60)
+                return f"{h:02d}:{m:02d}"
+            return str(hours)
+        
         # 실제 근무시간과 Claim 시간 비교
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
             st.markdown("**🏷️ Claim 데이터**")
             st.write(f"• 신고 출근: {claim_data['claim_start']}")
             st.write(f"• 신고 퇴근: {claim_data['claim_end']}")
-            st.write(f"• 신고 근무시간: {claim_data['claim_hours']}시간")
-            st.write(f"• 근무유형: {claim_data['claim_type']}")
-            if claim_data['overtime'] > 0:
-                st.write(f"• 초과근무: {claim_data['overtime']}시간")
+            st.write(f"• 신고 근무시간: {format_hours_to_hhmm(claim_data['claim_hours'])}")
+            
+            # 근무유형 표시 (WORKSCHDTYPNM 직접 사용)
+            st.write(f"• 근무유형: {claim_data.get('claim_type', '선택근무제')}")
+            
+            if claim_data.get('overtime', 0) > 0:
+                st.write(f"• 초과근무: {format_hours_to_hhmm(claim_data['overtime'])}")
         
         with col2:
             st.markdown("**📍 실제 태그 데이터**")
             st.write(f"• 실제 출근: {analysis_result['work_start'].strftime('%H:%M')}")
             st.write(f"• 실제 퇴근: {analysis_result['work_end'].strftime('%H:%M')}")
-            st.write(f"• 실제 근무시간: {analysis_result['total_hours']:.1f}시간")
+            st.write(f"• 실제 체류시간: {format_hours_to_hhmm(analysis_result['total_hours'])}")
             
             # 실제 활동 시간 계산
             activity_summary = analysis_result['activity_summary']
-            work_activities = ['work', 'meeting']
-            actual_work_time = sum(activity_summary.get(act, 0) for act in work_activities) / 60
-            st.write(f"• 순수 업무시간: {actual_work_time:.1f}시간")
+            work_codes = ['WORK', 'FOCUSED_WORK', 'EQUIPMENT_OPERATION', 'WORK_PREPARATION', 
+                         'WORKING', 'MEETING', 'TRAINING']
+            actual_work_minutes = sum(activity_summary.get(code, 0) for code in work_codes)
+            actual_work_hours = actual_work_minutes / 60
+            st.write(f"• 순수 업무시간: {format_hours_to_hhmm(actual_work_hours)}")
         
-        with col3:
-            st.markdown("**📊 차이 분석**")
-            
-            # 시간 차이 계산
-            time_diff = analysis_result['total_hours'] - claim_data['claim_hours']
-            
-            if abs(time_diff) < 0.5:
-                st.success(f"✅ 거의 일치 (차이: {abs(time_diff):.1f}시간)")
-            elif time_diff > 0:
-                st.warning(f"⚠️ 실제가 더 김 (+{time_diff:.1f}시간)")
-            else:
-                st.info(f"ℹ️ 신고가 더 김 ({time_diff:.1f}시간)")
-            
-            # 효율성 계산
-            if claim_data['claim_hours'] > 0:
-                efficiency = (actual_work_time / claim_data['claim_hours']) * 100
-                st.write(f"• 업무 효율성: {efficiency:.1f}%")
-        
-        # 시각적 비교
-        st.markdown("#### 📈 시간대별 비교")
+        # 시간대별 비교 차트
+        st.markdown("**📈 시간대별 비교**")
         self.render_time_comparison_chart(analysis_result, claim_data)
     
     def render_time_comparison_chart(self, analysis_result: dict, claim_data: dict):
