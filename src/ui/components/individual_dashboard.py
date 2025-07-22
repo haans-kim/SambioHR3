@@ -452,6 +452,35 @@ class IndividualDashboard:
             self.logger.warning(f"태깅지점 마스터 데이터 로드 실패: {e}")
             return None
     
+    def get_employee_work_type(self, employee_id: str, selected_date: date):
+        """직원의 근무제 유형 확인"""
+        try:
+            from ...data_processing import PickleManager
+            pickle_manager = PickleManager()
+            
+            # Claim 데이터에서 근무제 유형 확인
+            claim_data = pickle_manager.load_dataframe(name='claim_data')
+            if claim_data is not None and '사번' in claim_data.columns:
+                # 날짜 형식 맞추기
+                date_int = int(selected_date.strftime('%Y%m%d'))
+                emp_claim = claim_data[
+                    (claim_data['사번'] == employee_id) & 
+                    (claim_data['근무일'] == date_int)
+                ]
+                
+                if not emp_claim.empty and 'WORKSCHDTYPNM' in emp_claim.columns:
+                    work_type = emp_claim.iloc[0]['WORKSCHDTYPNM']
+                    if '탄력' in str(work_type):
+                        return 'flexible'
+                    elif '선택' in str(work_type):
+                        return 'selective'
+            
+            return 'standard'  # 기본값
+            
+        except Exception as e:
+            self.logger.warning(f"근무제 유형 확인 실패: {e}")
+            return 'standard'
+    
     def get_daily_tag_data(self, employee_id: str, selected_date: date):
         """특정 직원의 특정 날짜 태깅 데이터 가져오기"""
         try:
@@ -463,21 +492,35 @@ class IndividualDashboard:
             if tag_data is None:
                 return None
             
+            # 근무제 유형 확인
+            work_type = self.get_employee_work_type(employee_id, selected_date)
+            
             # 날짜 형식 변환 (YYYYMMDD)
             date_str = selected_date.strftime('%Y%m%d')
             date_int = int(date_str)
             
             # 사번 형식 확인 및 변환
-            # employee_id가 문자열로 들어올 수 있으므로 숫자로 변환 시도
             try:
-                # 태그 데이터의 사번이 int32이므로 employee_id도 int로 변환
                 emp_id_int = int(employee_id)
                 
-                # 해당 직원과 날짜의 데이터 필터링
-                daily_data = tag_data[
-                    (tag_data['사번'] == emp_id_int) & 
-                    (tag_data['ENTE_DT'] == date_int)
-                ].copy()
+                # 탄력적 근무제의 경우 야간 근무 고려
+                if work_type == 'flexible':
+                    # 전날 야간 근무 데이터도 포함
+                    prev_date = selected_date - timedelta(days=1)
+                    prev_date_int = int(prev_date.strftime('%Y%m%d'))
+                    
+                    # 당일 + 전날 데이터 가져오기
+                    daily_data = tag_data[
+                        (tag_data['사번'] == emp_id_int) & 
+                        ((tag_data['ENTE_DT'] == date_int) | (tag_data['ENTE_DT'] == prev_date_int))
+                    ].copy()
+                else:
+                    # 일반 근무제는 당일 데이터만
+                    daily_data = tag_data[
+                        (tag_data['사번'] == emp_id_int) & 
+                        (tag_data['ENTE_DT'] == date_int)
+                    ].copy()
+                    
             except ValueError:
                 # 숫자 변환 실패 시 문자열로 비교
                 tag_data['사번'] = tag_data['사번'].astype(str)
@@ -497,11 +540,95 @@ class IndividualDashboard:
             )
             daily_data = daily_data.sort_values('datetime')
             
+            # 탄력적 근무제의 경우 야간 근무 시간대 필터링
+            if work_type == 'flexible':
+                # 전날 20:00 이후 또는 당일 20:30까지의 데이터만 유지
+                start_time = datetime.combine(selected_date - timedelta(days=1), time(20, 0))
+                end_time = datetime.combine(selected_date, time(20, 30))
+                
+                # 첫 출근 태그 찾기
+                first_work_in = daily_data[daily_data['INOUT_GB'] == 'T2'].iloc[0]['datetime'] if len(daily_data[daily_data['INOUT_GB'] == 'T2']) > 0 else None
+                
+                if first_work_in:
+                    # 야간 근무인 경우
+                    if first_work_in.hour >= 19 or first_work_in.hour <= 9:
+                        # 첫 출근 시간부터 12시간 30분까지의 데이터만 유지
+                        daily_data = daily_data[
+                            (daily_data['datetime'] >= first_work_in) & 
+                            (daily_data['datetime'] <= first_work_in + timedelta(hours=12, minutes=30))
+                        ]
+            
             return daily_data
             
         except Exception as e:
             self.logger.error(f"일일 태그 데이터 로드 실패: {e}")
             return None
+    
+    def check_work_hour_compliance(self, employee_id: str, selected_date: date, work_hours: float):
+        """근무제별 근무시간 준수 여부 확인"""
+        work_type = self.get_employee_work_type(employee_id, selected_date)
+        
+        compliance = {
+            'work_type': work_type,
+            'work_type_name': '',
+            'is_compliant': True,
+            'violations': [],
+            'details': {}
+        }
+        
+        if work_type == 'selective':
+            compliance['work_type_name'] = '선택적 근로시간제'
+            
+            # 월 단위 계산을 위한 데이터 필요
+            month_start = selected_date.replace(day=1)
+            month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            days_in_month = (month_end - month_start).days + 1
+            weekdays_in_month = sum(1 for i in range(days_in_month) 
+                                   if (month_start + timedelta(days=i)).weekday() < 5)
+            
+            # 의무근무시간 계산
+            mandatory_hours_1 = weekdays_in_month * 8  # 평일수 × 8시간
+            mandatory_hours_2 = (40 / 7) * days_in_month  # 40hr/7일 × 월일수
+            mandatory_hours = max(mandatory_hours_1, mandatory_hours_2)  # 더 유리한 기준
+            
+            # 최대근무시간 계산
+            max_hours = (52 / 7) * days_in_month
+            
+            compliance['details'] = {
+                'mandatory_hours': round(mandatory_hours, 2),
+                'max_hours': round(max_hours, 2),
+                'current_month_days': days_in_month,
+                'current_month_weekdays': weekdays_in_month
+            }
+            
+            # 일 최소 1분 이상 체크
+            if work_hours < 0.017:  # 1분 = 0.017시간
+                compliance['is_compliant'] = False
+                compliance['violations'].append("일 최소 1분 이상 근무 필요")
+                
+        elif work_type == 'flexible':
+            compliance['work_type_name'] = '탄력적 근로시간제'
+            
+            # 의무 근무시간: 1일 11시간
+            mandatory_hours = 11
+            
+            compliance['details'] = {
+                'mandatory_hours': mandatory_hours,
+                'schedule_type': '주간(08:00-20:30) 또는 야간(20:00-08:30)'
+            }
+            
+            # 11시간 근무 체크
+            if work_hours < mandatory_hours:
+                compliance['is_compliant'] = False
+                compliance['violations'].append(f"의무 근무시간(11시간) 미달: {work_hours:.1f}시간")
+                
+        else:
+            compliance['work_type_name'] = '표준 근로시간제'
+            compliance['details'] = {
+                'standard_hours': 8
+            }
+        
+        return compliance
     
     def classify_activities(self, daily_data: pd.DataFrame):
         """활동 분류 수행 (HMM 기반)"""
@@ -1013,6 +1140,9 @@ class IndividualDashboard:
             for activity_type, minutes in activity_type_summary.items():
                 work_time_analysis['work_breakdown'][activity_type] = minutes / 60
             
+            # 근무제 유형 추가
+            work_type = self.get_employee_work_type(employee_id, selected_date)
+            
             return {
                 'employee_id': employee_id,
                 'analysis_date': selected_date,
@@ -1026,7 +1156,8 @@ class IndividualDashboard:
                 'total_records': len(classified_data),
                 'claim_data': claim_data,
                 'data_quality': data_quality,
-                'work_time_analysis': work_time_analysis
+                'work_time_analysis': work_time_analysis,
+                'work_type': work_type
             }
             
         except Exception as e:
@@ -1841,6 +1972,22 @@ class IndividualDashboard:
         # Summary Panel
         st.markdown('<div class="summary-panel">', unsafe_allow_html=True)
         st.markdown('<div class="summary-title">일일 활동 요약</div>', unsafe_allow_html=True)
+        
+        # 근무제 정보 및 컴플라이언스 체크
+        work_compliance = self.check_work_hour_compliance(
+            analysis_result['employee_id'], 
+            analysis_result['analysis_date'], 
+            actual_work_hours
+        )
+        
+        # 근무제 정보 표시
+        work_type_color = '#4CAF50' if work_compliance['is_compliant'] else '#F44336'
+        st.markdown(f"""
+            <div style="background: {work_type_color}22; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
+                <strong>근무제:</strong> {work_compliance['work_type_name']}
+                {' ✅' if work_compliance['is_compliant'] else ' ⚠️ ' + ', '.join(work_compliance['violations'])}
+            </div>
+        """, unsafe_allow_html=True)
         
         # 메인 진행 바
         col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
