@@ -29,6 +29,11 @@
       "table_name": "abc_data",
       "display_name": "ABC 활동 데이터",
       "process_func_name": "process_abc_data"
+    },
+    "조직현황 자료": {
+      "table_name": "organization_data",
+      "display_name": "조직현황",
+      "process_func_name": "process_organization_data"
     }
   },
   "upload_config": {
@@ -91,6 +96,16 @@
       "dataframe_name": "abc_data",
       "last_modified": "2025-07-21T15:31:23.111884",
       "row_count": 14026
+    },
+    "조직현황 자료": {
+      "files": [],
+      "file_names": [
+        "25년 6월말 인원현황.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "organization_data",
+      "last_modified": "2025-07-22T11:02:53.643340",
+      "row_count": 5142
     }
   }
 }

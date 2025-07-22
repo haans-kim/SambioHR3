@@ -213,6 +213,37 @@ class TagLocationMaster(Base):
     라벨링 = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class OrganizationData(Base):
+    """조직현황 데이터"""
+    __tablename__ = 'organization_data'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    employee_no = Column(String(20), nullable=False, index=True)  # 사번
+    name = Column(String(50), nullable=False)  # 성명
+    gender = Column(String(10), nullable=True)  # 성별
+    hire_year = Column(Integer, nullable=True)  # 입사년도
+    nationality = Column(String(20), nullable=True)  # 국적
+    position_name = Column(String(100), nullable=True)  # 직급명
+    position_level = Column(String(20), nullable=True)  # 직급2
+    hire_type = Column(String(50), nullable=True)  # 입사경위
+    group_hire_date = Column(DateTime, nullable=True)  # 그룹입사일
+    company_hire_date = Column(DateTime, nullable=True)  # 당사입사일
+    dept_code = Column(String(50), nullable=True)  # 부서코드
+    dept_name = Column(String(100), nullable=True)  # 부서명
+    center = Column(String(100), nullable=True)  # 센터
+    bu = Column(String(100), nullable=True)  # BU
+    team = Column(String(100), nullable=True)  # 팀
+    group_name = Column(String(100), nullable=True)  # 그룹
+    part = Column(String(100), nullable=True)  # 파트
+    employment_status = Column(String(20), nullable=True)  # 재직상태
+    employment_type = Column(String(50), nullable=True)  # 인력유형
+    job_title = Column(String(50), nullable=True)  # 직책명
+    job_role = Column(String(100), nullable=True)  # 직무
+    email = Column(String(200), nullable=True)  # 녹스메일
+    org_path = Column(String(500), nullable=True)  # 조직경로
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class OrganizationMapping(Base):
     """조직 매핑"""
     __tablename__ = 'organization_mapping'

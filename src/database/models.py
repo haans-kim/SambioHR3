@@ -13,7 +13,7 @@ import logging
 from .schema import (
     DailyWorkData, ShiftWorkData, OrganizationSummary, TagLogs,
     AbcActivityData, ClaimData, AttendanceData, NonWorkTimeData,
-    EmployeeInfo, TagLocationMaster, OrganizationMapping,
+    EmployeeInfo, TagLocationMaster, OrganizationData, OrganizationMapping,
     HmmModelConfig, ProcessingLog
 )
 

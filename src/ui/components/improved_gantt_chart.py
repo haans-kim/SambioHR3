@@ -60,12 +60,21 @@ def render_improved_gantt_chart(analysis_result: dict):
     total_hours = int((work_end - work_start).total_seconds() / 3600) + 1
     for i in range(total_hours + 1):
         hour_time = work_start + timedelta(hours=i)
-        fig.add_vline(
-            x=hour_time, 
-            line_dash="dot", 
-            line_color="lightgray",
-            line_width=1
-        )
+        # 정시는 실선으로, 나머지는 점선으로
+        if hour_time.hour % 2 == 0:  # 2시간마다 실선
+            fig.add_vline(
+                x=hour_time, 
+                line_dash="solid", 
+                line_color="rgba(0, 0, 0, 0.15)",
+                line_width=1
+            )
+        else:  # 홀수 시간은 점선
+            fig.add_vline(
+                x=hour_time, 
+                line_dash="dot", 
+                line_color="rgba(0, 0, 0, 0.1)",
+                line_width=1
+            )
     
     # 각 세그먼트를 원과 연결선으로 표시
     prev_segment = None
@@ -157,20 +166,37 @@ def render_improved_gantt_chart(analysis_result: dict):
                     activity_info['UNKNOWN']
                 )
                 
-                # 연결선
-                fig.add_trace(go.Scatter(
-                    x=[prev_segment['end_time'], segment['start_time']],
-                    y=[prev_activity['y_pos'], activity['y_pos']],
-                    mode='lines',
-                    line=dict(
-                        color='gray',
-                        width=1,
-                        dash='dot'
-                    ),
-                    opacity=0.5,
-                    hoverinfo='skip',
-                    showlegend=False
-                ))
+                # 같은 Y축 위치의 활동이면 수평선으로 연결
+                if prev_activity['y_pos'] == activity['y_pos']:
+                    fig.add_trace(go.Scatter(
+                        x=[prev_segment['end_time'], segment['start_time']],
+                        y=[activity['y_pos'], activity['y_pos']],
+                        mode='lines',
+                        line=dict(
+                            color=activity['color'],
+                            width=2,
+                            dash='solid'
+                        ),
+                        opacity=0.8,
+                        hoverinfo='skip',
+                        showlegend=False
+                    ))
+                else:
+                    # 다른 Y축 위치의 활동이면 수직선으로 연결
+                    # 수직선은 이전 활동의 끝 시간에 그림
+                    fig.add_trace(go.Scatter(
+                        x=[prev_segment['end_time'], prev_segment['end_time']],
+                        y=[prev_activity['y_pos'], activity['y_pos']],
+                        mode='lines',
+                        line=dict(
+                            color='gray',
+                            width=1,
+                            dash='solid'
+                        ),
+                        opacity=0.5,
+                        hoverinfo='skip',
+                        showlegend=False
+                    ))
             
             prev_segment = segment
     
@@ -211,8 +237,11 @@ def render_improved_gantt_chart(analysis_result: dict):
             ticktext=y_labels,
             range=[-0.5, 7.5],
             showgrid=True,
-            gridcolor='lightgray',
-            gridwidth=0.5
+            gridcolor='rgba(0, 0, 0, 0.2)',  # 더 진한 회색 가로선
+            gridwidth=1,
+            zeroline=True,
+            zerolinecolor='rgba(0, 0, 0, 0.3)',
+            zerolinewidth=1
         ),
         height=600,
         plot_bgcolor='white',

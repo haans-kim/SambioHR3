@@ -323,6 +323,90 @@ class DataTransformer:
         
         return processed_df
     
+    def process_organization_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """조직현황 데이터 처리"""
+        self.logger.info("조직현황 데이터 처리 시작")
+        
+        processed_df = df.copy()
+        
+        # 컬럼명 정리 (공백 제거)
+        processed_df.columns = processed_df.columns.str.strip()
+        
+        # 필수 컬럼 확인
+        required_columns = ['사번', '성명', '부서명', '센터', 'BU', '팀', '그룹', '파트']
+        existing_columns = [col for col in required_columns if col in processed_df.columns]
+        
+        if not existing_columns:
+            self.logger.warning("조직현황 데이터에 필수 컬럼이 없습니다.")
+            return processed_df
+        
+        # 재직상태가 '재직'인 직원만 필터링 (재직상태 컬럼이 있는 경우)
+        if '재직상태' in processed_df.columns:
+            processed_df = processed_df[processed_df['재직상태'] == '재직'].copy()
+        
+        # 날짜 형식 변환
+        date_columns = ['그룹입사일', '당사입사일']
+        for col in date_columns:
+            if col in processed_df.columns:
+                processed_df[col] = pd.to_datetime(processed_df[col], format='%Y%m%d', errors='coerce')
+        
+        # 입사년도 숫자로 변환
+        if '입사년도' in processed_df.columns:
+            processed_df['입사년도'] = processed_df['입사년도'].str.extract('(\d{4})').astype(float)
+        
+        # 조직 계층 구조 생성 (센터 > BU > 팀 > 그룹 > 파트)
+        org_hierarchy_cols = ['센터', 'BU', '팀', '그룹', '파트']
+        existing_hierarchy = [col for col in org_hierarchy_cols if col in processed_df.columns]
+        
+        if existing_hierarchy:
+            # 조직 전체 경로 생성
+            processed_df['조직경로'] = processed_df[existing_hierarchy].apply(
+                lambda x: ' > '.join([str(val) for val in x if pd.notna(val) and str(val) != '-']), 
+                axis=1
+            )
+        
+        # 직급 정보 정리
+        if '직급명' in processed_df.columns:
+            processed_df['직급명'] = processed_df['직급명'].str.strip()
+        
+        # 데이터베이스 컬럼명으로 매핑
+        column_mapping = {
+            '사번': 'employee_no',
+            '성명': 'name',
+            '성별': 'gender',
+            '입사년도': 'hire_year',
+            '국적': 'nationality',
+            '직급명': 'position_name',
+            '직급2*': 'position_level',
+            '입사경위1': 'hire_type',
+            '그룹입사일': 'group_hire_date',
+            '당사입사일': 'company_hire_date',
+            '부서코드': 'dept_code',
+            '부서명': 'dept_name',
+            '센터': 'center',
+            'BU': 'bu',
+            '팀': 'team',
+            '그룹': 'group_name',
+            '파트': 'part',
+            '재직상태': 'employment_status',
+            '인력유형': 'employment_type',
+            '직책명': 'job_title',
+            '직무': 'job_role',
+            '녹스메일': 'email',
+            '조직경로': 'org_path'
+        }
+        
+        # 매핑 적용
+        processed_df = processed_df.rename(columns=column_mapping)
+        
+        # 필요한 컬럼만 선택 (매핑된 컬럼 중에서)
+        available_columns = [col for col in column_mapping.values() if col in processed_df.columns]
+        processed_df = processed_df[available_columns]
+        
+        self.logger.info(f"조직현황 데이터 처리 완료: {len(processed_df):,}행")
+        
+        return processed_df
+    
     def get_processing_summary(self, original_df: pd.DataFrame, processed_df: pd.DataFrame) -> Dict:
         """처리 결과 요약 정보"""
         summary = {

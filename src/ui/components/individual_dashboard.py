@@ -55,22 +55,257 @@ class IndividualDashboard:
             from ...data_processing import PickleManager
             pickle_manager = PickleManager()
             
+            # 조직현황 데이터에서 직원 목록 우선 추출 (전체 직원 정보)
+            org_data = pickle_manager.load_dataframe(name='organization_data')
+            if org_data is not None and '사번' in org_data.columns:
+                # 사번과 이름을 함께 표시
+                employees = []
+                for _, row in org_data.iterrows():
+                    employee_display = f"{row['사번']} - {row['성명']}"
+                    employees.append(employee_display)
+                return sorted(employees)
+            
             # 태깅 데이터에서 직원 목록 추출
             tag_data = pickle_manager.load_dataframe(name='tag_data')
             if tag_data is not None and '사번' in tag_data.columns:
                 employees = sorted(tag_data['사번'].unique().tolist())
-                return employees[:100]  # 최대 100명까지만 표시
+                return employees  # 전체 직원 표시
             
             # 다른 데이터 소스 시도
             claim_data = pickle_manager.load_dataframe(name='claim_data')
             if claim_data is not None and '사번' in claim_data.columns:
                 employees = sorted(claim_data['사번'].unique().tolist())
-                return employees[:100]
+                return employees
             
             return []
         except Exception as e:
             self.logger.warning(f"직원 목록 로드 실패: {e}")
             return []
+    
+    def get_organization_hierarchy(self):
+        """조직 계층 구조 데이터 가져오기"""
+        try:
+            from ...data_processing import PickleManager
+            pickle_manager = PickleManager()
+            
+            # 조직현황 데이터 로드
+            org_data = pickle_manager.load_dataframe(name='organization_data')
+            if org_data is None:
+                return None
+            
+            # 조직 계층 구조 생성
+            hierarchy = {
+                'centers': sorted(org_data['센터'].dropna().unique().tolist()),
+                'by_center': {}
+            }
+            
+            # 센터별로 하위 조직 구조 생성
+            for center in hierarchy['centers']:
+                center_data = org_data[org_data['센터'] == center]
+                
+                hierarchy['by_center'][center] = {
+                    'bus': sorted(center_data['BU'].dropna().unique().tolist()),
+                    'by_bu': {}
+                }
+                
+                # BU별로 하위 조직 구조 생성
+                for bu in hierarchy['by_center'][center]['bus']:
+                    bu_data = center_data[center_data['BU'] == bu]
+                    
+                    hierarchy['by_center'][center]['by_bu'][bu] = {
+                        'teams': sorted(bu_data['팀'].dropna().unique().tolist()),
+                        'by_team': {}
+                    }
+                    
+                    # 팀별로 하위 조직 구조 생성
+                    for team in hierarchy['by_center'][center]['by_bu'][bu]['teams']:
+                        team_data = bu_data[bu_data['팀'] == team]
+                        
+                        hierarchy['by_center'][center]['by_bu'][bu]['by_team'][team] = {
+                            'groups': sorted(team_data['그룹'].dropna().unique().tolist()),
+                            'by_group': {}
+                        }
+                        
+                        # 그룹별로 파트 구조 생성
+                        for group in hierarchy['by_center'][center]['by_bu'][bu]['by_team'][team]['groups']:
+                            group_data = team_data[team_data['그룹'] == group]
+                            
+                            hierarchy['by_center'][center]['by_bu'][bu]['by_team'][team]['by_group'][group] = {
+                                'parts': sorted(group_data['파트'].dropna().unique().tolist()),
+                                'employees': {}
+                            }
+                            
+                            # 파트별로 직원 목록 생성
+                            for part in hierarchy['by_center'][center]['by_bu'][bu]['by_team'][team]['by_group'][group]['parts']:
+                                part_data = group_data[group_data['파트'] == part]
+                                employees = part_data[['사번', '성명', '직급명']].to_dict('records')
+                                hierarchy['by_center'][center]['by_bu'][bu]['by_team'][team]['by_group'][group]['employees'][part] = employees
+            
+            return hierarchy
+            
+        except Exception as e:
+            self.logger.warning(f"조직 계층 구조 로드 실패: {e}")
+            return None
+    
+    def get_employees_by_organization(self, center=None, bu=None, team=None, group=None, part=None):
+        """조직 단위별 직원 목록 가져오기"""
+        try:
+            from ...data_processing import PickleManager
+            pickle_manager = PickleManager()
+            
+            # 조직현황 데이터 로드
+            org_data = pickle_manager.load_dataframe(name='organization_data')
+            if org_data is None:
+                return []
+            
+            # 필터링
+            filtered_data = org_data
+            
+            if center and center != "전체":
+                filtered_data = filtered_data[filtered_data['센터'] == center]
+            
+            if bu and bu != "전체":
+                filtered_data = filtered_data[filtered_data['BU'] == bu]
+            
+            if team and team != "전체":
+                filtered_data = filtered_data[filtered_data['팀'] == team]
+            
+            if group and group != "전체":
+                filtered_data = filtered_data[filtered_data['그룹'] == group]
+            
+            if part and part != "전체":
+                filtered_data = filtered_data[filtered_data['파트'] == part]
+            
+            # 직원 목록 생성
+            employees = []
+            for _, row in filtered_data.iterrows():
+                employees.append({
+                    'id': row['사번'],
+                    'name': row['성명'],
+                    'position': row.get('직급명', ''),
+                    'display': f"{row['사번']} - {row['성명']} ({row.get('직급명', '')})"
+                })
+            
+            return sorted(employees, key=lambda x: x['id'])
+            
+        except Exception as e:
+            self.logger.warning(f"조직별 직원 목록 로드 실패: {e}")
+            return []
+    
+    def render_organization_selection(self):
+        """조직 계층 구조 기반 직원 선택 UI"""
+        try:
+            from ...data_processing import PickleManager
+            pickle_manager = PickleManager()
+            
+            # 조직현황 데이터 로드
+            org_data = pickle_manager.load_dataframe(name='organization_data')
+            if org_data is None:
+                st.warning("조직 데이터가 없습니다.")
+                return None
+            
+            # 센터 선택
+            centers = ["전체"] + sorted(org_data['센터'].dropna().unique().tolist())
+            selected_center = st.selectbox(
+                "센터 선택",
+                centers,
+                key="org_center_select"
+            )
+            
+            # BU 선택
+            if selected_center != "전체":
+                filtered_data = org_data[org_data['센터'] == selected_center]
+                bus = ["전체"] + sorted(filtered_data['BU'].dropna().unique().tolist())
+            else:
+                bus = ["전체"]
+            
+            selected_bu = st.selectbox(
+                "BU 선택",
+                bus,
+                key="org_bu_select"
+            )
+            
+            # 팀 선택
+            if selected_bu != "전체" and selected_center != "전체":
+                filtered_data = org_data[
+                    (org_data['센터'] == selected_center) & 
+                    (org_data['BU'] == selected_bu)
+                ]
+                teams = ["전체"] + sorted(filtered_data['팀'].dropna().unique().tolist())
+            else:
+                teams = ["전체"]
+            
+            selected_team = st.selectbox(
+                "팀 선택",
+                teams,
+                key="org_team_select"
+            )
+            
+            # 그룹 선택
+            if selected_team != "전체" and selected_bu != "전체" and selected_center != "전체":
+                filtered_data = org_data[
+                    (org_data['센터'] == selected_center) & 
+                    (org_data['BU'] == selected_bu) &
+                    (org_data['팀'] == selected_team)
+                ]
+                groups = ["전체"] + sorted(filtered_data['그룹'].dropna().unique().tolist())
+            else:
+                groups = ["전체"]
+            
+            selected_group = st.selectbox(
+                "그룹 선택",
+                groups,
+                key="org_group_select"
+            )
+            
+            # 파트 선택
+            if selected_group != "전체" and selected_team != "전체" and selected_bu != "전체" and selected_center != "전체":
+                filtered_data = org_data[
+                    (org_data['센터'] == selected_center) & 
+                    (org_data['BU'] == selected_bu) &
+                    (org_data['팀'] == selected_team) &
+                    (org_data['그룹'] == selected_group)
+                ]
+                parts = ["전체"] + sorted(filtered_data['파트'].dropna().unique().tolist())
+            else:
+                parts = ["전체"]
+            
+            selected_part = st.selectbox(
+                "파트 선택",
+                parts,
+                key="org_part_select"
+            )
+            
+            # 직원 목록 가져오기
+            employees = self.get_employees_by_organization(
+                center=selected_center if selected_center != "전체" else None,
+                bu=selected_bu if selected_bu != "전체" else None,
+                team=selected_team if selected_team != "전체" else None,
+                group=selected_group if selected_group != "전체" else None,
+                part=selected_part if selected_part != "전체" else None
+            )
+            
+            # 직원 선택
+            if employees:
+                employee_options = [emp['display'] for emp in employees]
+                selected_employee_display = st.selectbox(
+                    f"직원 선택 ({len(employees)}명)",
+                    employee_options,
+                    key="org_employee_select"
+                )
+                
+                # 선택된 직원의 ID 반환
+                for emp in employees:
+                    if emp['display'] == selected_employee_display:
+                        return emp['id']
+            else:
+                st.info("선택한 조직에 직원이 없습니다.")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"조직 기반 선택 오류: {e}")
+            st.error(f"조직 선택 중 오류 발생: {e}")
+            return None
     
     def get_available_date_range(self):
         """로드된 데이터에서 사용 가능한 날짜 범위 가져오기"""
@@ -232,11 +467,24 @@ class IndividualDashboard:
             date_str = selected_date.strftime('%Y%m%d')
             date_int = int(date_str)
             
-            # 해당 직원과 날짜의 데이터 필터링
-            daily_data = tag_data[
-                (tag_data['사번'] == employee_id) & 
-                (tag_data['ENTE_DT'] == date_int)
-            ].copy()
+            # 사번 형식 확인 및 변환
+            # employee_id가 문자열로 들어올 수 있으므로 숫자로 변환 시도
+            try:
+                # 태그 데이터의 사번이 int32이므로 employee_id도 int로 변환
+                emp_id_int = int(employee_id)
+                
+                # 해당 직원과 날짜의 데이터 필터링
+                daily_data = tag_data[
+                    (tag_data['사번'] == emp_id_int) & 
+                    (tag_data['ENTE_DT'] == date_int)
+                ].copy()
+            except ValueError:
+                # 숫자 변환 실패 시 문자열로 비교
+                tag_data['사번'] = tag_data['사번'].astype(str)
+                daily_data = tag_data[
+                    (tag_data['사번'] == str(employee_id)) & 
+                    (tag_data['ENTE_DT'] == date_int)
+                ].copy()
             
             if daily_data.empty:
                 return None
@@ -849,20 +1097,30 @@ class IndividualDashboard:
             # 직원 선택 방식
             selection_method = st.radio(
                 "직원 선택 방식",
-                ["목록에서 선택", "직접 입력"],
+                ["목록에서 선택", "조직에서 선택", "직접 입력"],
                 key="employee_selection_method"
             )
             
             if selection_method == "목록에서 선택":
                 if employee_list:
-                    employee_id = st.selectbox(
-                        "직원 선택",
+                    selected_employee = st.selectbox(
+                        f"직원 선택 (총 {len(employee_list)}명)",
                         employee_list,
                         key="individual_employee_select"
                     )
+                    # "사번 - 이름" 형식에서 사번만 추출
+                    if " - " in selected_employee:
+                        employee_id = selected_employee.split(" - ")[0]
+                    else:
+                        employee_id = selected_employee
                 else:
                     st.warning("로드된 직원 데이터가 없습니다.")
                     employee_id = st.text_input("직원 ID 입력", key="manual_employee_input")
+            
+            elif selection_method == "조직에서 선택":
+                # 조직 계층 구조 기반 선택
+                employee_id = self.render_organization_selection()
+            
             else:
                 employee_id = st.text_input(
                     "직원 ID 입력",
@@ -2034,8 +2292,16 @@ class IndividualDashboard:
         if location_filter:
             filtered_df = filtered_df[filtered_df['위치'].str.contains(location_filter, case=False, na=False)]
         
-        # 데이터 표시 (height 제거하여 전체 표시)
-        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+        # 데이터 개수에 따라 높이 동적 설정 (행당 35px + 헤더 50px)
+        dynamic_height = min(35 * len(filtered_df) + 50, 2000)  # 최대 2000px로 제한
+        
+        # 데이터 표시 (동적 높이 적용)
+        st.dataframe(
+            filtered_df, 
+            use_container_width=True, 
+            hide_index=True,
+            height=dynamic_height
+        )
         
         # 다운로드 버튼
         csv = filtered_df.to_csv(index=False).encode('utf-8-sig')
