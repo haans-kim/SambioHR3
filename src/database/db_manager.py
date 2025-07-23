@@ -25,6 +25,12 @@ class DatabaseManager:
             database_url: 데이터베이스 연결 URL
         """
         self.database_url = database_url
+        # SQLite URL에서 경로 추출
+        if database_url.startswith("sqlite:///"):
+            self.db_path = database_url.replace("sqlite:///", "")
+        else:
+            self.db_path = "data/sambio_human.db"  # 기본값
+        
         self.engine = create_engine(database_url, echo=False)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self.logger = logging.getLogger(__name__)

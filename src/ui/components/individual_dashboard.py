@@ -13,10 +13,13 @@ from datetime import datetime, timedelta, date, time
 import logging
 from pathlib import Path
 from typing import List, Dict, Any
+import matplotlib.pyplot as plt
+import sqlite3
 from .improved_gantt_chart import render_improved_gantt_chart
 from .hmm_classifier import HMMActivityClassifier
 
 from ...analysis import IndividualAnalyzer
+from ...analysis.network_analyzer import NetworkAnalyzer
 from ...config.activity_types import (
     ACTIVITY_TYPES, get_activity_color, get_activity_name,
     get_activity_type, ActivityType
@@ -1448,6 +1451,10 @@ class IndividualDashboard:
             # fallback to original chart
             self.render_detailed_gantt_chart(analysis_result)
         
+        # 네트워크 분석 (이동 경로)
+        st.markdown("### 🔄 Movement Path Network Analysis")
+        self.render_network_analysis(analysis_result)
+        
         # 상세 태그 기록
         st.markdown("### 📋 상세 태그 기록")
         self.render_detailed_records(analysis_result)
@@ -2681,3 +2688,124 @@ class IndividualDashboard:
             st.warning(f"⚠️ 비근무구역 체류 시간이 {non_work_percent:.1f}%로 높습니다. 업무 효율성 개선이 필요할 수 있습니다.")
         elif non_work_percent > 20:
             st.info(f"ℹ️ 비근무구역 체류 시간: {non_work_percent:.1f}%")
+    
+    def render_network_analysis(self, analysis_result: dict):
+        """이동 경로 네트워크 분석 렌더링"""
+        try:
+            # NetworkAnalyzer 초기화
+            # 데이터베이스 경로 직접 지정
+            db_path = "data/sambio_human.db"
+            network_analyzer = NetworkAnalyzer(db_path)
+            
+            # 분석 파라미터 가져오기
+            employee_id = st.session_state.get('selected_employee', '')
+            selected_date = st.session_state.get('selected_date', date.today())
+            employee_name = analysis_result.get('employee_info', {}).get('name', employee_id)
+            
+            # analysis_result의 raw_data 사용
+            raw_data = analysis_result.get('raw_data', pd.DataFrame())
+            
+            if raw_data.empty:
+                st.info("No tag data available for analysis.")
+                return
+            
+            # raw_data를 movements_df 형식으로 변환
+            movements_df = pd.DataFrame({
+                'timestamp': raw_data['datetime'].values,
+                'tag_location': raw_data['DR_NM'].values,
+                'gate_name': raw_data.get('DR_NO', pd.Series(index=raw_data.index)).fillna('').values,
+                'work_area_type': raw_data.get('work_area_type', pd.Series(['Y'] * len(raw_data), index=raw_data.index)).values
+            })
+            
+            # 건물 매핑 추가
+            movements_df['building'] = movements_df['tag_location'].apply(
+                network_analyzer.mapper.get_building_from_location
+            )
+            
+            # 디버깅 정보 표시 (축소)
+            with st.expander("Data Check", expanded=False):
+                st.write(f"Total records: {len(movements_df)}")
+                
+                if not movements_df.empty:
+                    # 샘플 데이터 표시
+                    st.write("Sample data (first 5):")
+                    display_df = movements_df[['timestamp', 'tag_location', 'building']].head()
+                    st.dataframe(display_df)
+                    
+                    # 건물 매핑 확인
+                    building_mapping = movements_df[['tag_location', 'building']].drop_duplicates()
+                    st.write("Location-Building Mapping:")
+                    st.dataframe(building_mapping)
+            
+            # 이동 패턴 분석
+            movement_analysis = network_analyzer.analyze_movement_patterns(movements_df)
+            
+            if not movement_analysis:
+                st.info("No analyzable movement patterns found.")
+                return
+            
+            # 분석 결과 표시
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Total Transitions", movement_analysis.get('total_transitions', 0))
+            
+            with col2:
+                building_count = len(movement_analysis.get('building_visits', {}))
+                st.metric("Buildings Visited", building_count)
+            
+            with col3:
+                # 가장 많이 방문한 건물
+                visits = movement_analysis.get('building_visits', {})
+                if visits:
+                    most_visited = max(visits.items(), key=lambda x: x[1]['visit_count'])
+                    st.metric("Most Visited", f"{most_visited[0]} ({most_visited[1]['visit_count']})")
+            
+            # 네트워크 시각화
+            facility_image_path = Path(__file__).parent.parent.parent.parent / 'data' / 'Sambio.png'
+            
+            fig = network_analyzer.visualize_movement_network(
+                movement_analysis,
+                employee_name,
+                selected_date.strftime('%Y-%m-%d'),
+                str(facility_image_path)
+            )
+            
+            # use_container_width로 전체 너비 사용
+            st.pyplot(fig, use_container_width=True)
+            plt.close()
+            
+            # 주요 이동 경로
+            st.subheader("📍 Frequent Movement Paths")
+            frequent_paths = network_analyzer.get_frequent_paths(movement_analysis, top_n=5)
+            
+            if frequent_paths:
+                path_df = pd.DataFrame(frequent_paths)
+                st.dataframe(path_df, use_container_width=True)
+            else:
+                st.info("No frequent paths found.")
+            
+            # 건물별 체류 시간
+            st.subheader("🏢 Time Spent by Building")
+            time_spent = movement_analysis.get('time_spent', {})
+            
+            if time_spent:
+                building_time_data = []
+                for building, minutes in time_spent.items():
+                    hours = minutes / 60
+                    building_time_data.append({
+                        'Building': building,
+                        'Time Spent': f"{int(hours)}h {int(minutes % 60)}m",
+                        'Percentage(%)': round(minutes / sum(time_spent.values()) * 100, 1)
+                    })
+                
+                df_building_time = pd.DataFrame(building_time_data)
+                st.dataframe(df_building_time, use_container_width=True)
+            
+        except Exception as e:
+            import traceback
+            self.logger.error(f"네트워크 분석 렌더링 중 오류: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            st.error(f"네트워크 분석 중 오류가 발생했습니다: {str(e)}")
+            with st.expander("오류 상세 정보"):
+                st.code(traceback.format_exc())
