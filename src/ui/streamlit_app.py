@@ -26,6 +26,7 @@ from src.ui.components.organization_dashboard import OrganizationDashboard
 from src.ui.components.data_upload import DataUploadComponent
 from src.ui.components.model_config import ModelConfigComponent
 from src.ui.components.transition_rule_editor import TransitionRuleEditor
+from src.ui.components.network_analysis_dashboard import NetworkAnalysisDashboard
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -61,6 +62,7 @@ class SambioHumanApp:
             self.data_upload = DataUploadComponent(self.db_manager)
             self.model_config = ModelConfigComponent(self.hmm_model)
             self.transition_rule_editor = TransitionRuleEditor()
+            self.network_analysis_dashboard = NetworkAnalysisDashboard(self.db_manager)
             
             logger.info("애플리케이션 컴포넌트 초기화 완료")
             
@@ -111,6 +113,9 @@ class SambioHumanApp:
             if st.button("🔄 전이 룰 관리", use_container_width=True):
                 st.session_state.current_page = "🔄 전이 룰 관리"
                 
+            if st.button("🌐 네트워크 분석", use_container_width=True):
+                st.session_state.current_page = "🌐 네트워크 분석"
+                
             if st.button("📈 실시간 모니터링", use_container_width=True):
                 st.session_state.current_page = "📈 실시간 모니터링"
             
@@ -160,6 +165,8 @@ class SambioHumanApp:
             self.render_model_config()
         elif current_page == '🔄 전이 룰 관리':
             self.render_transition_rules()
+        elif current_page == '🌐 네트워크 분석':
+            self.render_network_analysis()
         elif current_page == '📈 실시간 모니터링':
             self.render_real_time_monitoring()
     
@@ -395,6 +402,15 @@ class SambioHumanApp:
             self.transition_rule_editor.render()
         else:
             st.error("전이 룰 에디터 컴포넌트가 초기화되지 않았습니다.")
+    
+    def render_network_analysis(self):
+        """네트워크 분석 페이지 렌더링"""
+        st.markdown("## 🌐 네트워크 분석")
+        
+        if self.network_analysis_dashboard:
+            self.network_analysis_dashboard.render()
+        else:
+            st.error("네트워크 분석 컴포넌트가 초기화되지 않았습니다.")
     
     def render_real_time_monitoring(self):
         """실시간 모니터링 페이지 렌더링"""

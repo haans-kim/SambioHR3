@@ -1,442 +1,181 @@
-"""
-데이터 모델 및 비즈니스 로직
-데이터베이스 모델과 관련된 비즈니스 로직을 정의합니다.
-"""
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Date, ForeignKey, Text, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+from datetime import datetime
 
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_, desc, asc
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
-import pandas as pd
-import logging
+Base = declarative_base()
 
-from .schema import (
-    DailyWorkData, ShiftWorkData, OrganizationSummary, TagLogs,
-    AbcActivityData, ClaimData, AttendanceData, NonWorkTimeData,
-    EmployeeInfo, TagLocationMaster, OrganizationData, OrganizationMapping,
-    HmmModelConfig, ProcessingLog
-)
 
-class WorkDataModel:
-    """근무 데이터 관련 모델"""
+class Employee(Base):
+    """직원 정보 테이블"""
+    __tablename__ = 'employees'
     
-    def __init__(self, session: Session):
-        self.session = session
-        self.logger = logging.getLogger(__name__)
+    employee_id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    department = Column(String)
+    position = Column(String)
+    start_date = Column(Date)
     
-    def get_daily_work_data(self, employee_id: str, start_date: datetime, 
-                          end_date: datetime) -> List[DailyWorkData]:
-        """개인별 일간 근무 데이터 조회"""
-        return self.session.query(DailyWorkData).filter(
-            and_(
-                DailyWorkData.employee_id == employee_id,
-                DailyWorkData.work_date >= start_date,
-                DailyWorkData.work_date <= end_date
-            )
-        ).order_by(DailyWorkData.work_date).all()
+    # Relationships
+    daily_summaries = relationship("DailyWorkSummary", back_populates="employee")
+    processed_tags = relationship("ProcessedTagData", back_populates="employee")
     
-    def get_shift_work_summary(self, employee_id: str, month: int, year: int) -> Dict[str, Any]:
-        """월별 교대근무 요약"""
-        start_date = datetime(year, month, 1)
-        if month == 12:
-            end_date = datetime(year + 1, 1, 1) - timedelta(days=1)
-        else:
-            end_date = datetime(year, month + 1, 1) - timedelta(days=1)
-        
-        # 교대별 근무 통계
-        shift_stats = self.session.query(
-            DailyWorkData.shift_type,
-            func.count(DailyWorkData.id).label('work_days'),
-            func.avg(DailyWorkData.actual_work_time).label('avg_work_time'),
-            func.sum(DailyWorkData.actual_work_time).label('total_work_time')
-        ).filter(
-            and_(
-                DailyWorkData.employee_id == employee_id,
-                DailyWorkData.work_date >= start_date,
-                DailyWorkData.work_date <= end_date
-            )
-        ).group_by(DailyWorkData.shift_type).all()
-        
-        # 식사시간 통계
-        meal_stats = self.session.query(
-            func.avg(DailyWorkData.breakfast_time).label('avg_breakfast'),
-            func.avg(DailyWorkData.lunch_time).label('avg_lunch'),
-            func.avg(DailyWorkData.dinner_time).label('avg_dinner'),
-            func.avg(DailyWorkData.midnight_meal_time).label('avg_midnight_meal'),
-            func.avg(DailyWorkData.meal_time).label('avg_total_meal')
-        ).filter(
-            and_(
-                DailyWorkData.employee_id == employee_id,
-                DailyWorkData.work_date >= start_date,
-                DailyWorkData.work_date <= end_date
-            )
-        ).first()
-        
-        return {
-            'period': f"{year}-{month:02d}",
-            'shift_stats': [
-                {
-                    'shift_type': stat.shift_type,
-                    'work_days': stat.work_days,
-                    'avg_work_time': round(stat.avg_work_time or 0, 2),
-                    'total_work_time': round(stat.total_work_time or 0, 2)
-                }
-                for stat in shift_stats
-            ],
-            'meal_stats': {
-                'avg_breakfast': round(meal_stats.avg_breakfast or 0, 2),
-                'avg_lunch': round(meal_stats.avg_lunch or 0, 2),
-                'avg_dinner': round(meal_stats.avg_dinner or 0, 2),
-                'avg_midnight_meal': round(meal_stats.avg_midnight_meal or 0, 2),
-                'avg_total_meal': round(meal_stats.avg_total_meal or 0, 2)
-            }
-        }
-    
-    def get_efficiency_comparison(self, employee_id: str, start_date: datetime, 
-                                end_date: datetime) -> Dict[str, Any]:
-        """근무 효율성 비교 (Claim vs 실제)"""
-        # 일간 데이터와 Claim 데이터 조인
-        comparison_data = self.session.query(
-            DailyWorkData.work_date,
-            DailyWorkData.actual_work_time,
-            DailyWorkData.efficiency_ratio,
-            ClaimData.claimed_work_hours,
-            ClaimData.actual_work_duration
-        ).join(
-            ClaimData,
-            and_(
-                DailyWorkData.employee_id == ClaimData.employee_id,
-                DailyWorkData.work_date == ClaimData.work_date
-            )
-        ).filter(
-            and_(
-                DailyWorkData.employee_id == employee_id,
-                DailyWorkData.work_date >= start_date,
-                DailyWorkData.work_date <= end_date
-            )
-        ).all()
-        
-        if not comparison_data:
-            return {'error': '데이터가 없습니다.'}
-        
-        # 통계 계산
-        total_actual = sum(row.actual_work_time or 0 for row in comparison_data)
-        total_claimed = sum(row.actual_work_duration or 0 for row in comparison_data)
-        avg_efficiency = sum(row.efficiency_ratio or 0 for row in comparison_data) / len(comparison_data)
-        
-        return {
-            'period': f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
-            'total_actual_hours': round(total_actual, 2),
-            'total_claimed_hours': round(total_claimed, 2),
-            'difference_hours': round(total_actual - total_claimed, 2),
-            'efficiency_ratio': round(avg_efficiency, 2),
-            'accuracy_ratio': round((total_actual / total_claimed * 100) if total_claimed > 0 else 0, 2),
-            'daily_data': [
-                {
-                    'date': row.work_date.strftime('%Y-%m-%d'),
-                    'actual_hours': round(row.actual_work_time or 0, 2),
-                    'claimed_hours': round(row.actual_work_duration or 0, 2),
-                    'efficiency': round(row.efficiency_ratio or 0, 2)
-                }
-                for row in comparison_data
-            ]
-        }
+    def __repr__(self):
+        return f"<Employee(id={self.employee_id}, name={self.name})>"
 
-class TagDataModel:
-    """태그 데이터 관련 모델"""
-    
-    def __init__(self, session: Session):
-        self.session = session
-        self.logger = logging.getLogger(__name__)
-    
-    def get_daily_timeline(self, employee_id: str, date: datetime) -> List[Dict[str, Any]]:
-        """일일 활동 타임라인 조회"""
-        tag_logs = self.session.query(TagLogs).filter(
-            and_(
-                TagLogs.employee_id == employee_id,
-                func.date(TagLogs.timestamp) == date.date()
-            )
-        ).order_by(TagLogs.timestamp).all()
-        
-        timeline = []
-        for log in tag_logs:
-            timeline.append({
-                'timestamp': log.timestamp,
-                'location': log.tag_location,
-                'gate_name': log.gate_name,
-                'action': log.action_type,
-                'work_area_type': log.work_area_type,
-                'meal_type': log.meal_type,
-                'is_tailgating': log.is_tailgating,
-                'confidence': log.confidence_score
-            })
-        
-        return timeline
-    
-    def get_meal_time_analysis(self, employee_id: str, start_date: datetime, 
-                             end_date: datetime) -> Dict[str, Any]:
-        """식사시간 분석"""
-        meal_data = self.session.query(
-            TagLogs.meal_type,
-            func.count(TagLogs.id).label('frequency'),
-            func.avg(
-                func.julianday(TagLogs.timestamp) * 24 * 60
-            ).label('avg_time_minutes')
-        ).filter(
-            and_(
-                TagLogs.employee_id == employee_id,
-                TagLogs.meal_type.isnot(None),
-                TagLogs.timestamp >= start_date,
-                TagLogs.timestamp <= end_date
-            )
-        ).group_by(TagLogs.meal_type).all()
-        
-        meal_stats = {}
-        for meal in meal_data:
-            meal_stats[meal.meal_type] = {
-                'frequency': meal.frequency,
-                'avg_time': f"{int(meal.avg_time_minutes // 60):02d}:{int(meal.avg_time_minutes % 60):02d}"
-            }
-        
-        return {
-            'period': f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
-            'meal_stats': meal_stats,
-            'total_meal_events': sum(meal.frequency for meal in meal_data)
-        }
-    
-    def get_location_frequency(self, employee_id: str, start_date: datetime, 
-                             end_date: datetime) -> List[Dict[str, Any]]:
-        """위치별 방문 빈도"""
-        location_stats = self.session.query(
-            TagLogs.tag_location,
-            TagLogs.work_area_type,
-            func.count(TagLogs.id).label('visit_count'),
-            func.count(func.distinct(func.date(TagLogs.timestamp))).label('visit_days')
-        ).filter(
-            and_(
-                TagLogs.employee_id == employee_id,
-                TagLogs.timestamp >= start_date,
-                TagLogs.timestamp <= end_date
-            )
-        ).group_by(TagLogs.tag_location, TagLogs.work_area_type).all()
-        
-        return [
-            {
-                'location': stat.tag_location,
-                'work_area_type': stat.work_area_type,
-                'visit_count': stat.visit_count,
-                'visit_days': stat.visit_days,
-                'avg_visits_per_day': round(stat.visit_count / stat.visit_days, 2)
-            }
-            for stat in location_stats
-        ]
 
-class OrganizationModel:
-    """조직 관련 모델"""
+class DailyWorkSummary(Base):
+    """일일 근무 요약 테이블"""
+    __tablename__ = 'daily_work_summary'
     
-    def __init__(self, session: Session):
-        self.session = session
-        self.logger = logging.getLogger(__name__)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    employee_id = Column(String, ForeignKey('employees.employee_id'))
+    date = Column(Date, nullable=False)
+    total_time = Column(Integer)  # 총 시간 (분)
+    work_time = Column(Integer)  # 근무 시간
+    focused_work_time = Column(Integer)  # 집중근무 시간
+    rest_time = Column(Integer)  # 휴식 시간
+    movement_time = Column(Integer)  # 이동 시간
+    meal_time = Column(Integer)  # 식사 시간
+    meeting_time = Column(Integer)  # 회의 시간
+    equipment_time = Column(Integer)  # 장비조작 시간
+    utilization_rate = Column(Float)  # 가동률
+    created_at = Column(DateTime, default=datetime.now)
     
-    def get_organization_summary(self, org_id: str, start_date: datetime, 
-                               end_date: datetime) -> Dict[str, Any]:
-        """조직별 요약 데이터"""
-        org_data = self.session.query(OrganizationSummary).filter(
-            and_(
-                OrganizationSummary.org_id == org_id,
-                OrganizationSummary.date >= start_date,
-                OrganizationSummary.date <= end_date
-            )
-        ).order_by(OrganizationSummary.date).all()
-        
-        if not org_data:
-            return {'error': '조직 데이터가 없습니다.'}
-        
-        # 평균 통계 계산
-        avg_work_time = sum(data.avg_work_time or 0 for data in org_data) / len(org_data)
-        avg_efficiency = sum(data.avg_efficiency_ratio or 0 for data in org_data) / len(org_data)
-        avg_operation_rate = sum(data.operation_rate or 0 for data in org_data) / len(org_data)
-        
-        return {
-            'org_id': org_id,
-            'org_name': org_data[0].org_name,
-            'period': f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
-            'avg_work_time': round(avg_work_time, 2),
-            'avg_efficiency_ratio': round(avg_efficiency, 2),
-            'avg_operation_rate': round(avg_operation_rate, 2),
-            'total_employees': org_data[-1].total_employees,
-            'daily_data': [
-                {
-                    'date': data.date.strftime('%Y-%m-%d'),
-                    'avg_work_time': round(data.avg_work_time or 0, 2),
-                    'efficiency_ratio': round(data.avg_efficiency_ratio or 0, 2),
-                    'operation_rate': round(data.operation_rate or 0, 2),
-                    'day_shift_count': data.day_shift_count,
-                    'night_shift_count': data.night_shift_count
-                }
-                for data in org_data
-            ]
-        }
+    # Relationships
+    employee = relationship("Employee", back_populates="daily_summaries")
     
-    def get_organization_ranking(self, metric: str, start_date: datetime, 
-                               end_date: datetime, limit: int = 10) -> List[Dict[str, Any]]:
-        """조직별 순위 (특정 지표 기준)"""
-        valid_metrics = ['avg_work_time', 'avg_efficiency_ratio', 'operation_rate']
-        if metric not in valid_metrics:
-            raise ValueError(f"잘못된 지표: {metric}")
-        
-        # 기간별 평균 계산
-        ranking_data = self.session.query(
-            OrganizationSummary.org_id,
-            OrganizationSummary.org_name,
-            func.avg(getattr(OrganizationSummary, metric)).label('avg_metric'),
-            func.sum(OrganizationSummary.total_employees).label('total_employees')
-        ).filter(
-            and_(
-                OrganizationSummary.date >= start_date,
-                OrganizationSummary.date <= end_date
-            )
-        ).group_by(
-            OrganizationSummary.org_id,
-            OrganizationSummary.org_name
-        ).order_by(desc('avg_metric')).limit(limit).all()
-        
-        return [
-            {
-                'rank': idx + 1,
-                'org_id': data.org_id,
-                'org_name': data.org_name,
-                'metric_value': round(data.avg_metric or 0, 2),
-                'total_employees': data.total_employees
-            }
-            for idx, data in enumerate(ranking_data)
-        ]
+    def __repr__(self):
+        return f"<DailyWorkSummary(employee={self.employee_id}, date={self.date})>"
 
-class EmployeeModel:
-    """직원 관련 모델"""
-    
-    def __init__(self, session: Session):
-        self.session = session
-        self.logger = logging.getLogger(__name__)
-    
-    def get_employee_info(self, employee_id: str) -> Optional[Dict[str, Any]]:
-        """직원 정보 조회"""
-        employee = self.session.query(EmployeeInfo).filter(
-            EmployeeInfo.employee_id == employee_id
-        ).first()
-        
-        if not employee:
-            return None
-        
-        return {
-            'employee_id': employee.employee_id,
-            'employee_name': employee.employee_name,
-            'department': employee.department_name,
-            'position': employee.position_name,
-            'center': employee.center,
-            'bu': employee.bu,
-            'team': employee.team,
-            'group': employee.group_name,
-            'part': employee.part,
-            'join_date': employee.company_join_date,
-            'employment_status': employee.employment_status,
-            'employee_type': employee.employee_type
-        }
-    
-    def search_employees(self, keyword: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """직원 검색"""
-        employees = self.session.query(EmployeeInfo).filter(
-            or_(
-                EmployeeInfo.employee_name.contains(keyword),
-                EmployeeInfo.employee_id.contains(keyword),
-                EmployeeInfo.department_name.contains(keyword)
-            )
-        ).limit(limit).all()
-        
-        return [
-            {
-                'employee_id': emp.employee_id,
-                'employee_name': emp.employee_name,
-                'department': emp.department_name,
-                'position': emp.position_name,
-                'center': emp.center
-            }
-            for emp in employees
-        ]
-    
-    def get_department_employees(self, department_name: str) -> List[Dict[str, Any]]:
-        """부서별 직원 목록"""
-        employees = self.session.query(EmployeeInfo).filter(
-            EmployeeInfo.department_name == department_name
-        ).order_by(EmployeeInfo.employee_name).all()
-        
-        return [
-            {
-                'employee_id': emp.employee_id,
-                'employee_name': emp.employee_name,
-                'position': emp.position_name,
-                'employment_status': emp.employment_status
-            }
-            for emp in employees
-        ]
 
-class HmmModelManager:
-    """HMM 모델 관리"""
+class OrgSummary(Base):
+    """조직 요약 데이터 테이블"""
+    __tablename__ = 'org_summary'
     
-    def __init__(self, session: Session):
-        self.session = session
-        self.logger = logging.getLogger(__name__)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    org_id = Column(String, nullable=False)
+    date = Column(Date, nullable=False)
+    avg_work_time = Column(Float)
+    avg_utilization_rate = Column(Float)
+    total_employees = Column(Integer)
+    created_at = Column(DateTime, default=datetime.now)
     
-    def save_model_config(self, model_name: str, version: str, 
-                         config_data: Dict[str, Any]) -> int:
-        """HMM 모델 설정 저장"""
-        import json
-        
-        model_config = HmmModelConfig(
-            model_name=model_name,
-            model_version=version,
-            states=json.dumps(config_data['states']),
-            transition_matrix=json.dumps(config_data['transition_matrix']),
-            emission_matrix=json.dumps(config_data['emission_matrix']),
-            initial_probabilities=json.dumps(config_data['initial_probabilities']),
-            model_parameters=json.dumps(config_data.get('parameters', {})),
-            training_accuracy=config_data.get('training_accuracy'),
-            validation_accuracy=config_data.get('validation_accuracy')
-        )
-        
-        self.session.add(model_config)
-        self.session.commit()
-        
-        self.logger.info(f"HMM 모델 설정 저장 완료: {model_name} v{version}")
-        return model_config.id
+    def __repr__(self):
+        return f"<OrgSummary(org={self.org_id}, date={self.date})>"
+
+
+class ProcessedTagData(Base):
+    """전처리된 태그 데이터 테이블"""
+    __tablename__ = 'processed_tag_data'
     
-    def get_model_config(self, model_name: str, version: str = None) -> Optional[Dict[str, Any]]:
-        """HMM 모델 설정 조회"""
-        query = self.session.query(HmmModelConfig).filter(
-            HmmModelConfig.model_name == model_name
-        )
-        
-        if version:
-            query = query.filter(HmmModelConfig.model_version == version)
-        else:
-            query = query.filter(HmmModelConfig.is_active == True)
-        
-        model_config = query.order_by(desc(HmmModelConfig.created_at)).first()
-        
-        if not model_config:
-            return None
-        
-        import json
-        
-        return {
-            'model_name': model_config.model_name,
-            'model_version': model_config.model_version,
-            'states': json.loads(model_config.states),
-            'transition_matrix': json.loads(model_config.transition_matrix),
-            'emission_matrix': json.loads(model_config.emission_matrix),
-            'initial_probabilities': json.loads(model_config.initial_probabilities),
-            'parameters': json.loads(model_config.model_parameters or '{}'),
-            'training_accuracy': model_config.training_accuracy,
-            'validation_accuracy': model_config.validation_accuracy,
-            'created_at': model_config.created_at
-        }
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    employee_id = Column(String, ForeignKey('employees.employee_id'))
+    timestamp = Column(DateTime, nullable=False)
+    location = Column(String)
+    activity_state = Column(String)
+    confidence_score = Column(Float)
+    duration_minutes = Column(Float)
+    is_interpolated = Column(Boolean, default=False)
+    
+    # Relationships
+    employee = relationship("Employee", back_populates="processed_tags")
+    
+    def __repr__(self):
+        return f"<ProcessedTagData(employee={self.employee_id}, time={self.timestamp})>"
+
+
+class HMMModel(Base):
+    """HMM 모델 설정 테이블"""
+    __tablename__ = 'hmm_models'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    model_name = Column(String, unique=True, nullable=False)
+    transition_matrix = Column(Text)  # JSON 형태
+    emission_matrix = Column(Text)  # JSON 형태
+    states = Column(Text)  # JSON 형태
+    observations = Column(Text)  # JSON 형태
+    version = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    def __repr__(self):
+        return f"<HMMModel(name={self.model_name}, version={self.version})>"
+
+
+class InteractionNetwork(Base):
+    """네트워크 분석 데이터 테이블"""
+    __tablename__ = 'interaction_networks'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False)
+    time_window = Column(String)  # morning, afternoon, evening, night
+    employee1_id = Column(String, ForeignKey('employees.employee_id'))
+    employee2_id = Column(String, ForeignKey('employees.employee_id'))
+    interaction_type = Column(String)  # co-location, meeting, collaboration
+    duration = Column(Integer)  # 상호작용 시간 (분)
+    location = Column(String)
+    created_at = Column(DateTime, default=datetime.now)
+    
+    def __repr__(self):
+        return f"<InteractionNetwork({self.employee1_id}<->{self.employee2_id})>"
+
+
+class MovementNetwork(Base):
+    """공간 이동 네트워크 테이블"""
+    __tablename__ = 'movement_networks'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    employee_id = Column(String, ForeignKey('employees.employee_id'))
+    date = Column(Date, nullable=False)
+    from_location = Column(String)
+    to_location = Column(String)
+    movement_time = Column(DateTime)
+    transition_count = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.now)
+    
+    def __repr__(self):
+        return f"<MovementNetwork({self.from_location}->{self.to_location})>"
+
+
+class DailyActivity(Base):
+    """일일 활동 상세 테이블"""
+    __tablename__ = 'daily_activities'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    employee_id = Column(String, ForeignKey('employees.employee_id'))
+    date = Column(Date, nullable=False)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
+    activity_type = Column(String, nullable=False)
+    location = Column(String)
+    duration_minutes = Column(Float)
+    created_at = Column(DateTime, default=datetime.now)
+    
+    def __repr__(self):
+        return f"<DailyActivity({self.employee_id}, {self.activity_type})>"
+
+
+# 활동 상태 상수
+ACTIVITY_STATES = {
+    'WORK': '근무',
+    'FOCUSED_WORK': '집중근무',
+    'MOVEMENT': '이동',
+    'MEAL': '식사',
+    'FITNESS': '피트니스',
+    'COMMUTE': '출근/퇴근',
+    'LEAVE': '연차',
+    'EQUIPMENT': '장비조작',
+    'MEETING': '회의',
+    'REST': '휴식',
+    'WORK_PREP': '작업준비',
+    'ACTIVE_WORK': '작업중'
+}
+
+# 시간대 구분
+TIME_WINDOWS = {
+    'MORNING': (6, 12),
+    'AFTERNOON': (12, 18),
+    'EVENING': (18, 22),
+    'NIGHT': (22, 6)
+}

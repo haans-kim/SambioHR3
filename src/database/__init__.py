@@ -14,8 +14,9 @@ from .schema import (
 )
 from .db_manager import DatabaseManager
 from .models import (
-    WorkDataModel, TagDataModel, OrganizationModel, 
-    EmployeeModel, HmmModelManager
+    Employee, DailyWorkSummary, OrgSummary,
+    ProcessedTagData, HMMModel, InteractionNetwork,
+    MovementNetwork, DailyActivity, ACTIVITY_STATES, TIME_WINDOWS
 )
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     'DatabaseManager',
     
     # Models
-    'WorkDataModel', 'TagDataModel', 'OrganizationModel',
-    'EmployeeModel', 'HmmModelManager'
+    'Employee', 'DailyWorkSummary', 'OrgSummary',
+    'ProcessedTagData', 'HMMModel', 'InteractionNetwork',
+    'MovementNetwork', 'DailyActivity', 'ACTIVITY_STATES', 'TIME_WINDOWS'
 ]

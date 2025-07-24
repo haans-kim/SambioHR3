@@ -119,22 +119,37 @@ class BuildingMapper:
             
         location_upper = location.upper()
         
-        # 먼저 정확한 매칭 시도
-        for building, patterns in cls.TAG_TO_BUILDING_PATTERNS.items():
-            for pattern in patterns:
-                if pattern.upper() in location_upper:
-                    return building
-        
-        # P5나 다른 건물을 못 찾은 경우, 숫자 패턴으로 재시도
         import re
-        # P 다음에 숫자가 오는 패턴 찾기 (예: P5, P-5, P 5 등)
-        p_pattern = re.search(r'P[\s\-_]*(\d+)', location_upper)
-        if p_pattern:
-            building_num = p_pattern.group(1)
+        
+        # P + 숫자 패턴을 먼저 찾기 (가장 구체적인 패턴)
+        # P4_생산동, P3_생산동, P2_DP동, P1-BP2 등의 패턴 매칭
+        p_building_pattern = re.search(r'P(\d)[\s\-_]', location_upper)
+        if p_building_pattern:
+            building_num = p_building_pattern.group(1)
             building_code = f'P{building_num}'
-            if building_code in cls.BUILDING_COORDS:
+            if building_code in cls.BUILDING_COORDS_PCT:
+                # P1-BP2 같은 경우 BP가 포함되어 있으면 P 건물로 인식
+                if '-BP' in location_upper:
+                    return building_code
+                # 일반적인 P 건물
                 return building_code
         
+        # BP 체크 (P 건물 패턴이 없는 경우)
+        if 'BP' in location_upper or 'B-P' in location_upper or '바이오프라자' in location_upper:
+            return 'BP'
+        
+        # 정문 체크
+        if '정문동' in location_upper and 'GATE' in location_upper:
+            return 'GATE'
+        elif '정문' in location_upper and not any(f'P{i}' in location_upper for i in range(1, 6)):
+            # P 건물의 정문이 아닌 경우만 GATE로 인식
+            return 'GATE'
+        
+        # H동 체크
+        if 'H동' in location_upper or 'H-' in location_upper:
+            return 'H'
+        
+        # W1, W2 등은 현재 매핑이 없으므로 None 반환
         return None
     
     @classmethod
