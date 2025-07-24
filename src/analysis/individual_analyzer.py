@@ -233,19 +233,28 @@ class IndividualAnalyzer:
         timeline = hmm_results.get('timeline', [])
         
         meal_analysis = {
-            '조식': {'frequency': 0, 'avg_duration': 0, 'times': []},
-            '중식': {'frequency': 0, 'avg_duration': 0, 'times': []},
-            '석식': {'frequency': 0, 'avg_duration': 0, 'times': []},
-            '야식': {'frequency': 0, 'avg_duration': 0, 'times': []}
+            '조식': {'frequency': 0, 'avg_duration': 0, 'times': [], 'actual_count': 0},
+            '중식': {'frequency': 0, 'avg_duration': 0, 'times': [], 'actual_count': 0},
+            '석식': {'frequency': 0, 'avg_duration': 0, 'times': [], 'actual_count': 0},
+            '야식': {'frequency': 0, 'avg_duration': 0, 'times': [], 'actual_count': 0}
         }
         
         meal_states = ['조식', '중식', '석식', '야식']
+        actual_meal_count = 0
+        estimated_meal_count = 0
         
         for i, entry in enumerate(timeline):
             if entry['predicted_state'] in meal_states:
                 meal_type = entry['predicted_state']
                 meal_analysis[meal_type]['frequency'] += 1
                 meal_analysis[meal_type]['times'].append(entry['timestamp'].time())
+                
+                # 실제 식사 데이터인지 확인
+                if entry.get('is_actual_meal', False):
+                    meal_analysis[meal_type]['actual_count'] += 1
+                    actual_meal_count += 1
+                else:
+                    estimated_meal_count += 1
                 
                 # 식사 지속 시간 계산
                 if i + 1 < len(timeline):
@@ -271,7 +280,9 @@ class IndividualAnalyzer:
         return {
             'meal_patterns': meal_analysis,
             'total_meal_time': sum(m['avg_duration'] * m['frequency'] for m in meal_analysis.values()),
-            'meal_regularity': self._calculate_meal_regularity(meal_analysis)
+            'meal_regularity': self._calculate_meal_regularity(meal_analysis),
+            'actual_meal_count': actual_meal_count,
+            'estimated_meal_count': estimated_meal_count
         }
     
     def _analyze_activities(self, hmm_results: Dict[str, Any], 

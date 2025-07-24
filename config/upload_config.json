@@ -30,6 +30,11 @@
       "display_name": "ABC 활동 데이터",
       "process_func_name": "process_abc_data"
     },
+    "식사 데이터": {
+      "table_name": "meal_data",
+      "display_name": "식사 태그 데이터",
+      "process_func_name": "process_meal_data"
+    },
     "조직현황 자료": {
       "table_name": "organization_data",
       "display_name": "조직현황",
@@ -96,6 +101,16 @@
       "dataframe_name": "abc_data",
       "last_modified": "2025-07-21T15:31:23.111884",
       "row_count": 14026
+    },
+    "식사 데이터": {
+      "files": [],
+      "file_names": [
+        "식사 250401-0630.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "meal_data",
+      "last_modified": "2025-07-24T10:34:00.899685",
+      "row_count": 710583
     },
     "조직현황 자료": {
       "files": [],

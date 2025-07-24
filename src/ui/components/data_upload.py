@@ -69,6 +69,11 @@ class DataUploadComponent:
                 "table_name": "abc_data",
                 "display_name": "ABC 활동 데이터",
                 "process_func_name": "process_abc_data"
+            },
+            "식사 데이터": {
+                "table_name": "meal_data",
+                "display_name": "식사 태그 데이터",
+                "process_func_name": "process_meal_data"
             }
         }
         

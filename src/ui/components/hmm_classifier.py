@@ -115,24 +115,30 @@ class HMMActivityClassifier:
                 'day_of_week': row['datetime'].weekday(),
             }
             
-            # 시간대별 특징
+            # 시간대별 특징 - 실제 식사 태그가 있는 경우에만 식사로 분류
             hour = row['datetime'].hour
-            if 6 <= hour < 9:
-                obs['time_period'] = 'morning'
-            elif 11 <= hour < 14:
-                obs['time_period'] = 'lunch'
-            elif 17 <= hour < 20:
-                obs['time_period'] = 'dinner'
-            elif hour >= 23 or hour < 1:
-                obs['time_period'] = 'midnight'
+            
+            # 실제 식사 여부 확인 (is_actual_meal 플래그 사용)
+            is_actual_meal = row.get('is_actual_meal', False)
+            
+            if is_actual_meal:
+                # 실제 식사 태그가 있는 경우에만 식사 시간대 구분
+                if 6 <= hour < 9:
+                    obs['time_period'] = 'morning'
+                elif 11 <= hour < 14:
+                    obs['time_period'] = 'lunch'
+                elif 17 <= hour < 20:
+                    obs['time_period'] = 'dinner'
+                elif hour >= 23 or hour < 1:
+                    obs['time_period'] = 'midnight'
+                else:
+                    obs['time_period'] = 'work'
             else:
+                # 식사 태그가 없는 경우는 항상 work
                 obs['time_period'] = 'work'
             
             # 식당 위치 확인
-            if 'CAFETERIA' in row.get('DR_NM', '').upper() or '식당' in row.get('DR_NM', ''):
-                obs['is_cafeteria'] = True
-            else:
-                obs['is_cafeteria'] = False
+            obs['is_cafeteria'] = 'CAFETERIA' in row.get('DR_NM', '').upper() or '식당' in row.get('DR_NM', '')
             
             observations.append(obs)
         
@@ -174,6 +180,11 @@ class HMMActivityClassifier:
         # 예측 결과 적용
         for i, (state, probs) in enumerate(zip(states, state_probabilities)):
             if i < len(daily_data):
+                # 기존 confidence가 95 이상인 경우는 HMM이 덮어쓰지 않음 (사전 처리된 데이터 보존)
+                existing_confidence = daily_data.iloc[i]['confidence'] if 'confidence' in daily_data.columns else 0
+                if existing_confidence >= 95:
+                    continue
+                    
                 # 활동 코드 설정
                 activity_code = state_to_code.get(state, 'WORK')
                 daily_data.iloc[i, daily_data.columns.get_loc('activity_code')] = activity_code

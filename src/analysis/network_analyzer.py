@@ -89,13 +89,22 @@ class BuildingMapper:
     # 실제 이미지의 건물 위치에 맞게 조정 (백분율로 표시)
     BUILDING_COORDS_PCT = {
         'P1': (0.30, 0.55),   # P1 건물 중앙
-        'P2': (0.30, 0.35),   # P2 건물 중앙  
-        'P3': (0.75, 0.25),   # P3 건물 중앙
-        'P4': (0.75, 0.50),   # P4 건물 중앙
-        'P5': (0.75, 0.65),   # P4 아래쪽 (가상)
-        'BP': (0.45, 0.55),   # BP 건물 
-        'GATE': (0.45, 0.75), # 정문 (BP 아래)
-        'H': (0.45, 0.25),    # H 건물
+        'P2': (0.30, 0.30),   # P2 건물 중앙 (위쪽으로 조정)
+        'P3': (0.78, 0.15),   # P3 건물 중앙 (우상단)
+        'P4': (0.78, 0.45),   # P4 건물 중앙 (우측)
+        'P3_GATE': (0.80, 0.15),  # P3-정문 (P3 우측)
+        'P4_GATE': (0.88, 0.85),  # P4-정문 (우하단, 위치 조정)
+        'MAIN_GATE': (0.20, 0.90), # 정문동 (좌하단, 왼쪽으로 이동)
+        'P1_GATE': (0.30, 0.65),  # P1-정문 (P1 아래)
+        'P2_GATE': (0.30, 0.20),  # P2-정문 (P2 위)
+        'P5_GATE': (0.95, 0.75),  # P5-정문 (P5 우측)
+        'P5': (0.88, 0.75),   # P5 건물 (우하단)
+        'BP': (0.45, 0.50),   # BP 건물 (중앙)
+        'GATE': (0.20, 0.90), # 정문동 (호환성 위해, MAIN_GATE와 동일)
+        'HARMONY': (0.55, 0.15), # Harmony동 (상단 중앙)
+        '연구동': (0.25, 0.75),  # 연구동 (좌하단)
+        'UTIL': (0.92, 0.20),    # Util동 (우상단)
+        'COMMUNITY': (0.65, 0.80), # 커뮤니티동 (하단)
     }
     
     # Tag location to building mapping patterns
@@ -105,10 +114,14 @@ class BuildingMapper:
         'P2': ['P2', '2동', '2F', '2층', 'P2_', 'P-2'],
         'P3': ['P3', '3동', '3F', '3층', 'P3_', 'P-3'],
         'P4': ['P4', '4동', '4F', '4층', 'P4_', 'P-4'],
-        'P5': ['P5', '5동', '5F', '5층', 'P5_', 'P-5'],
-        'BP': ['BP', 'B동', '본관', 'B-P'],
+        'P4_GATE': ['P4_스피드게이트', 'P4 스피드게이트', 'P4_SPEED', 'P4_게이트', 'P4-GATE', 'P4_GATE', 'P4-게이트', 'P4 GATE', 'P4_생산동_2층브릿지', 'P4_브릿지', 'P4_BRIDGE'],
+        'P5': ['P5', '5동', '5F', '5층', 'P5_', 'P-5', '임시식당'],
+        'BP': ['BP', 'B동', '본관', 'B-P', 'BP2_2F', '바이오프라자'],
         'GATE': ['정문', '게이트', 'GATE', '출입구', '출입', '입구'],
-        'H': ['H동', 'H-', '병원', 'HOSPITAL', 'H '],
+        'HARMONY': ['HARMONY', 'Harmony', 'harmony', '하모니'],
+        '연구동': ['연구동', '연구', 'RESEARCH', 'R동'],
+        'UTIL': ['UTIL', 'Util', 'util', '유틸'],
+        'COMMUNITY': ['COMMUNITY', 'Community', '커뮤니티', '투썸'],
     }
     
     @classmethod
@@ -121,29 +134,81 @@ class BuildingMapper:
         
         import re
         
-        # P + 숫자 패턴을 먼저 찾기 (가장 구체적인 패턴)
-        # P4_생산동, P3_생산동, P2_DP동, P1-BP2 등의 패턴 매칭
-        p_building_pattern = re.search(r'P(\d)[\s\-_]', location_upper)
-        if p_building_pattern:
-            building_num = p_building_pattern.group(1)
-            building_code = f'P{building_num}'
-            if building_code in cls.BUILDING_COORDS_PCT:
-                # P1-BP2 같은 경우 BP가 포함되어 있으면 P 건물로 인식
-                if '-BP' in location_upper:
-                    return building_code
-                # 일반적인 P 건물
-                return building_code
+        # 디버깅: P4_생산동_2층브릿지 확인
+        if 'P4_생산동' in location and '2층브릿지' in location:
+            print(f"DEBUG: P4 2층브릿지 발견: {location}")
+            return 'P4_GATE'
         
-        # BP 체크 (P 건물 패턴이 없는 경우)
+        # 정문 체크를 먼저 수행 - 정문이 포함된 경우 체크
+        if '정문' in location:
+            # P3 정문 패턴 - SPEED GATE 포함 처리
+            if 'P3' in location:
+                return 'P3_GATE'
+            # P4 정문 패턴 - SPEED GATE 포함 처리
+            elif 'P4' in location:
+                return 'P4_GATE'
+            # P2 정문 패턴
+            elif 'P2' in location:
+                return 'P2_GATE'
+            # P1 정문 패턴
+            elif 'P1' in location:
+                return 'P1_GATE'
+            # P5 정문 패턴
+            elif 'P5' in location:
+                return 'P5_GATE'
+            # 정문동 패턴
+            elif '정문동' in location:
+                return 'MAIN_GATE'
+            # P 건물이 명시되지 않은 정문은 정문동으로
+            else:
+                return 'MAIN_GATE'
+        
+        # P4 스피드 게이트 체크 - 다양한 패턴 인식 (정문이 아닌 경우)
+        if 'P4' in location_upper:
+            # SPEED GATE는 공백이 있으므로 별도 확인
+            if 'SPEED' in location_upper and 'GATE' in location_upper:
+                return 'P4_GATE'
+            elif any(keyword in location_upper for keyword in ['스피드게이트', '스피드 게이트', '-GATE', '_GATE', '브릿지', 'BRIDGE', '2층브릿지']):
+                return 'P4_GATE'
+        elif 'P4-GATE' in location_upper or 'P4_GATE' in location_upper:
+            return 'P4_GATE'
+        elif 'P4_생산동' in location and ('SPEED' in location_upper and 'GATE' in location_upper):
+            return 'P4_GATE'
+        
+        # P + 숫자 패턴을 찾기 (가장 구체적인 패턴)
+        # P4_생산동, P3_생산동, P2_DP동, P1-BP2 등의 패턴 매칭
+        # 단, SPEED GATE나 브릿지가 포함된 경우는 제외 (위에서 이미 처리)
+        if not any(keyword in location_upper for keyword in ['SPEED GATE', '브릿지', 'BRIDGE']):
+            p_building_pattern = re.search(r'P(\d)[\s\-_]', location_upper)
+            if p_building_pattern:
+                building_num = p_building_pattern.group(1)
+                building_code = f'P{building_num}'
+                if building_code in cls.BUILDING_COORDS_PCT:
+                    # P1-BP2 같은 경우 BP가 포함되어 있으면 P 건물로 인식
+                    if '-BP' in location_upper:
+                        return building_code
+                    # 일반적인 P 건물
+                    return building_code
+        
+        # BP 체크 (P 건물 패턴이 없는 경우) - BP2_2F도 BP로 매핑
         if 'BP' in location_upper or 'B-P' in location_upper or '바이오프라자' in location_upper:
             return 'BP'
         
-        # 정문 체크
-        if '정문동' in location_upper and 'GATE' in location_upper:
-            return 'GATE'
-        elif '정문' in location_upper and not any(f'P{i}' in location_upper for i in range(1, 6)):
-            # P 건물의 정문이 아닌 경우만 GATE로 인식
-            return 'GATE'
+        # 가상 이동 경로 처리
+        if 'MOVEMENT_TO_BP' in location_upper:
+            return 'BP'
+        elif 'BP_CAFETERIA' in location_upper:
+            return 'BP'
+        
+        # 특정 건물 체크
+        if 'HARMONY' in location_upper or '하모니' in location:
+            return 'HARMONY'
+        elif '연구동' in location or 'RESEARCH' in location_upper:
+            return '연구동'
+        elif 'UTIL' in location_upper or '유틸' in location:
+            return 'UTIL'
+        elif 'COMMUNITY' in location_upper or '커뮤니티' in location or '투썸' in location:
+            return 'COMMUNITY'
         
         # H동 체크
         if 'H동' in location_upper or 'H-' in location_upper:
@@ -168,50 +233,200 @@ class NetworkAnalyzer:
         self.db_path = db_path
         self.mapper = BuildingMapper()
         
-    def get_employee_movements(self, employee_id: str, start_date: str, end_date: str) -> pd.DataFrame:
+    def get_employee_movements(self, employee_id: str, start_date: str, end_date: str, include_meal_data: bool = True) -> pd.DataFrame:
         """Get movement data for an employee within date range."""
         # 먼저 individual_dashboard에서 사용하는 daily_tag_data 메서드 사용
         # 이것이 실제 태그 데이터를 가져오는 방법인 것으로 보임
         try:
-            # 먼저 tag_logs 테이블 시도
-            query = """
-            SELECT 
-                tl.timestamp,
-                tl.tag_location,
-                tl.gate_name,
-                tl.work_area_type
-            FROM tag_logs tl
-            WHERE tl.employee_id = ?
-            AND DATE(tl.timestamp) BETWEEN ? AND ?
-            ORDER BY tl.timestamp
-            """
+            # 식사 데이터 로드하여 BP 이동 추가
+            from pathlib import Path
+            import sys
+            # src 경로 추가
+            src_path = Path(__file__).parent.parent
+            if str(src_path) not in sys.path:
+                sys.path.append(str(src_path))
             
-            with sqlite3.connect(self.db_path) as conn:
-                df = pd.read_sql_query(query, conn, params=(employee_id, start_date, end_date))
+            from data_processing import PickleManager
+            pickle_manager = PickleManager()
+            
+            # 태그 데이터 가져오기 (pickle에서)
+            tag_data = pickle_manager.load_dataframe(name='tag_data')
+            df = pd.DataFrame()
+            
+            if tag_data is not None and not tag_data.empty:
+                # 사번 처리
+                if ' - ' in str(employee_id):
+                    employee_id = employee_id.split(' - ')[0].strip()
                 
-                # tag_logs가 비어있으면 daily_logs 테이블 시도
-                if df.empty:
-                    # daily_logs 테이블에서 태그 정보 가져오기
-                    query = """
-                    SELECT 
-                        dl.log_time as timestamp,
-                        dl.place as tag_location,
-                        dl.access_point as gate_name,
-                        'Y' as work_area_type
-                    FROM daily_logs dl
-                    WHERE dl.employee_id = ?
-                    AND DATE(dl.log_time) BETWEEN ? AND ?
-                    ORDER BY dl.log_time
-                    """
-                    df = pd.read_sql_query(query, conn, params=(employee_id, start_date, end_date))
+                # 날짜 필터링
+                start_dt = pd.to_datetime(start_date)
+                end_dt = pd.to_datetime(end_date)
+                
+                # ENTE_DT를 날짜로 변환
+                tag_data['date'] = pd.to_datetime(tag_data['ENTE_DT'].astype(str), format='%Y%m%d', errors='coerce')
+                
+                # 사번과 날짜로 필터링
+                try:
+                    emp_id_int = int(employee_id)
+                    tag_data['사번'] = pd.to_numeric(tag_data['사번'], errors='coerce')
+                    filtered_data = tag_data[
+                        (tag_data['사번'] == emp_id_int) & 
+                        (tag_data['date'] >= start_dt) & 
+                        (tag_data['date'] <= end_dt)
+                    ].copy()
+                except:
+                    tag_data['사번'] = tag_data['사번'].astype(str)
+                    filtered_data = tag_data[
+                        (tag_data['사번'] == str(employee_id)) & 
+                        (tag_data['date'] >= start_dt) & 
+                        (tag_data['date'] <= end_dt)
+                    ].copy()
+                
+                if not filtered_data.empty:
+                    # timestamp 생성
+                    filtered_data['time_str'] = filtered_data['출입시각'].astype(str).str.zfill(6)
+                    filtered_data['timestamp'] = pd.to_datetime(
+                        filtered_data['ENTE_DT'].astype(str) + ' ' + filtered_data['time_str'],
+                        format='%Y%m%d %H%M%S',
+                        errors='coerce'
+                    )
+                    
+                    # 필요한 컬럼만 선택
+                    df = filtered_data[['timestamp', 'DR_NM', 'DR_NO', 'INOUT_GB']].copy()
+                    df.columns = ['timestamp', 'tag_location', 'gate_name', 'work_area_type']
+                    df['work_area_type'] = 'Y'  # 기본값
+            
+            # 식사 데이터 추가
+            meal_movements = pd.DataFrame()
+            
+            if include_meal_data:
+                # 식사 데이터 가져오기
+                meal_data = pickle_manager.load_dataframe(name='meal_data')
+                
+                if meal_data is not None and not meal_data.empty:
+                    # 날짜 필터링
+                    date_column = 'meal_datetime' if 'meal_datetime' in meal_data.columns else '취식일시'
+                    if date_column in meal_data.columns:
+                        if not pd.api.types.is_datetime64_any_dtype(meal_data[date_column]):
+                            meal_data[date_column] = pd.to_datetime(meal_data[date_column])
+                        
+                        # 사번과 날짜로 필터링
+                        emp_id_column = 'employee_id' if 'employee_id' in meal_data.columns else '사번'
+                        
+                        # 날짜 범위로 필터링
+                        start_dt = pd.to_datetime(start_date)
+                        end_dt = pd.to_datetime(end_date)
+                        
+                        try:
+                            emp_id_int = int(employee_id)
+                            meal_data[emp_id_column] = pd.to_numeric(meal_data[emp_id_column], errors='coerce')
+                            daily_meals = meal_data[
+                                (meal_data[emp_id_column] == emp_id_int) & 
+                                (meal_data[date_column] >= start_dt) & 
+                                (meal_data[date_column] <= end_dt)
+                            ].copy()
+                        except:
+                            meal_data[emp_id_column] = meal_data[emp_id_column].astype(str)
+                            daily_meals = meal_data[
+                                (meal_data[emp_id_column] == str(employee_id)) & 
+                                (meal_data[date_column] >= start_dt) & 
+                                (meal_data[date_column] <= end_dt)
+                            ].copy()
+                        
+                        if not daily_meals.empty:
+                            # 식당명으로 건물 매핑
+                            restaurant_mapping = {
+                                'SBL 2단지 임시 식당': 'P5_CAFETERIA',
+                                'SBL 바이오프라자2 식당': 'BP2_2F',
+                                'SBL 바이오프라자2 푸드코트': 'BP2_2F',
+                                '삼성바이오로직스 커뮤니티동 투썸플레이스': 'COMMUNITY_CAFETERIA'
+                            }
+                            
+                            # 식사 데이터를 이동 데이터로 변환
+                            restaurant_column = '식당명' if '식당명' in daily_meals.columns else 'restaurant'
+                            meal_movements = pd.DataFrame({
+                                'timestamp': daily_meals[date_column],
+                                'tag_location': daily_meals[restaurant_column].map(restaurant_mapping).fillna('BP2_2F'),
+                                'gate_name': daily_meals[restaurant_column],
+                                'work_area_type': 'N',
+                                'is_meal': True
+                            })
+                            
+                            # 식사 5분 전에 BP로 이동한 것으로 가상 태그 추가
+                            virtual_movements = []
+                            for _, meal in meal_movements.iterrows():
+                                virtual_movements.append({
+                                    'timestamp': meal['timestamp'] - pd.Timedelta(minutes=5),
+                                    'tag_location': 'MOVEMENT_TO_BP',
+                                    'gate_name': 'Virtual Movement',
+                                    'work_area_type': 'N',
+                                    'is_meal': False
+                                })
+                            
+                            if virtual_movements:
+                                virtual_df = pd.DataFrame(virtual_movements)
+                                meal_movements = pd.concat([virtual_df, meal_movements], ignore_index=True)
                 
         except Exception as e:
-            print(f"Error querying database: {e}")
+            print(f"Error loading data: {e}")
             df = pd.DataFrame()
+            meal_movements = pd.DataFrame()
+            
+        # 데이터 병합
+        if not df.empty and not meal_movements.empty:
+            # 병합
+            df = pd.concat([df, meal_movements], ignore_index=True)
+            df = df.sort_values('timestamp').reset_index(drop=True)
+        elif meal_movements.empty and df.empty:
+            # 둘 다 비어있으면 빈 데이터프레임 반환
+            df = pd.DataFrame()
+        elif df.empty and not meal_movements.empty:
+            # 태그 데이터만 비어있으면 식사 데이터만 사용
+            df = meal_movements
             
         if not df.empty:
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df['building'] = df['tag_location'].apply(self.mapper.get_building_from_location)
+            
+            # 디버깅: 식사 관련 데이터 확인
+            if 'is_meal' in df.columns:
+                meal_data_in_df = df[df['is_meal'] == True]
+            else:
+                meal_data_in_df = pd.DataFrame()
+            if not meal_data_in_df.empty:
+                print(f"식사 데이터 확인:")
+                print(f"  - 식사 기록 수: {len(meal_data_in_df)}")
+                print(f"  - 태그 위치: {meal_data_in_df['tag_location'].unique()}")
+                print(f"  - 매핑된 건물: {meal_data_in_df['building'].unique()}")
+                
+            # 전체 데이터 요약
+            print(f"전체 이동 데이터: {len(df)}건")
+            print(f"건물 매핑 현황: {df.groupby('building').size().to_dict()}")
+            
+            # 디버깅: 게이트 관련 데이터 확인
+            gate_related = df[df['tag_location'].str.contains('정문|GATE|SPEED|스피드|게이트|브릿지', case=False, na=False)]
+            if not gate_related.empty:
+                print(f"게이트 관련 태그 발견: {len(gate_related)}건")
+                print(f"게이트 태그 위치: {gate_related['tag_location'].unique()}")
+                print(f"게이트 매핑 결과: {gate_related['building'].unique()}")
+                
+                # P4 게이트 구분
+                p4_gate = gate_related[gate_related['building'] == 'P4_GATE']
+                if not p4_gate.empty:
+                    print(f"  - P4_GATE: {len(p4_gate)}건")
+                    
+                # P4 관련 태그 중 매핑 안된 것 확인
+                p4_related = df[df['tag_location'].str.contains('P4', case=False, na=False)]
+                p4_unmapped = p4_related[p4_related['building'].isna()]
+                if not p4_unmapped.empty:
+                    print(f"  - P4 태그 중 매핑 안됨: {p4_unmapped['tag_location'].unique()}")
+            
+            # 출퇴근 시간대 데이터 확인
+            if not df.empty and 'timestamp' in df.columns:
+                first_record = df.iloc[0]
+                last_record = df.iloc[-1]
+                print(f"첫 태그: {first_record['timestamp'].strftime('%H:%M')} - {first_record['tag_location']} -> {first_record['building']}")
+                print(f"마지막 태그: {last_record['timestamp'].strftime('%H:%M')} - {last_record['tag_location']} -> {last_record['building']}")
             
         return df
     

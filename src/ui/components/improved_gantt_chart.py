@@ -120,22 +120,39 @@ def render_improved_gantt_chart(analysis_result: dict):
             
             opacity = 0.4 + (confidence / 100) * 0.6  # 0.4 ~ 1.0
             
+            # 테이크아웃 여부 확인 - 여러 방법으로 판단
+            is_takeout = segment.get('is_takeout', False)
+            # 위치명에 '테이크아웃'이 포함된 경우도 테이크아웃으로 처리
+            if not is_takeout and '테이크아웃' in str(segment.get('location', '')):
+                is_takeout = True
+            
             # 원 추가 (활동 표시)
+            # 테이크아웃인 경우 다른 마커 모양과 색상 사용
+            if is_takeout and activity['category'] == 'meal':
+                marker_symbol = 'diamond'  # 테이크아웃은 다이아몬드
+                marker_size = 25
+                marker_color = '#FFA726'  # 테이크아웃은 더 밝은 주황색
+            else:
+                marker_symbol = 'circle'  # 일반 식사는 원
+                marker_size = 20
+                marker_color = activity['color']  # 일반 색상 사용
+                
             fig.add_trace(go.Scatter(
                 x=[mid_time],
                 y=[activity['y_pos']],
                 mode='markers+text',
                 marker=dict(
-                    size=20,
-                    color=activity['color'],
+                    size=marker_size,
+                    color=marker_color,
                     opacity=opacity,
-                    line=dict(color='white', width=2)
+                    line=dict(color='white', width=2),
+                    symbol=marker_symbol
                 ),
                 text=f"{confidence:.0f}%" if confidence < 100 else "",
                 textposition="top center",
                 textfont=dict(size=10, color='red' if confidence < 80 else 'black'),
                 hovertemplate=(
-                    f"<b>{activity['name']}</b><br>" +
+                    f"<b>{activity['name']}{' (테이크아웃)' if is_takeout and activity['category'] == 'meal' else ''}</b><br>" +
                     f"시간: {segment['start_time'].strftime('%H:%M')} - {segment['end_time'].strftime('%H:%M')}<br>" +
                     f"위치: {segment.get('location', 'N/A')}<br>" +
                     f"체류: {segment['duration_minutes']:.0f}분<br>" +
@@ -145,19 +162,45 @@ def render_improved_gantt_chart(analysis_result: dict):
             ))
             
             # 활동 구간을 막대로 표시
-            fig.add_trace(go.Scatter(
-                x=[segment['start_time'], segment['end_time']],
-                y=[activity['y_pos'], activity['y_pos']],
-                mode='lines',
-                line=dict(
-                    color=activity['color'],
-                    width=40,
-                    dash='solid'
-                ),
-                opacity=opacity * 0.3,  # 막대는 더 투명하게
-                hoverinfo='skip',
-                showlegend=False
-            ))
+            # 작업 관련 활동은 다음 태그까지 길게 표시
+            if activity['category'] == 'work':
+                # 다음 세그먼트 확인
+                if i < len(segments) - 1:
+                    next_segment = segments[i + 1]
+                    # 작업 활동은 다음 태그 시작 시점까지 연장
+                    extended_end_time = next_segment['start_time']
+                else:
+                    # 마지막 세그먼트인 경우 원래 종료 시간 사용
+                    extended_end_time = segment['end_time']
+                
+                fig.add_trace(go.Scatter(
+                    x=[segment['start_time'], extended_end_time],
+                    y=[activity['y_pos'], activity['y_pos']],
+                    mode='lines',
+                    line=dict(
+                        color=activity['color'],
+                        width=40,
+                        dash='solid'
+                    ),
+                    opacity=opacity * 0.3,  # 막대는 더 투명하게
+                    hoverinfo='skip',
+                    showlegend=False
+                ))
+            else:
+                # 작업이 아닌 활동은 기존대로
+                fig.add_trace(go.Scatter(
+                    x=[segment['start_time'], segment['end_time']],
+                    y=[activity['y_pos'], activity['y_pos']],
+                    mode='lines',
+                    line=dict(
+                        color=activity['color'],
+                        width=40,
+                        dash='solid'
+                    ),
+                    opacity=opacity * 0.3,  # 막대는 더 투명하게
+                    hoverinfo='skip',
+                    showlegend=False
+                ))
             
             # 이전 활동과 연결선 그리기
             if prev_segment and pd.notna(prev_segment['end_time']):
@@ -166,34 +209,19 @@ def render_improved_gantt_chart(analysis_result: dict):
                     activity_info['UNKNOWN']
                 )
                 
-                # 같은 Y축 위치의 활동이면 수평선으로 연결
-                if prev_activity['y_pos'] == activity['y_pos']:
+                # 현재 활동이 이동인 경우에만 수직선 표시
+                if activity['category'] == 'movement' and prev_activity['y_pos'] != activity['y_pos']:
+                    # 수직선은 이동 시작 시간에 그림
                     fig.add_trace(go.Scatter(
-                        x=[prev_segment['end_time'], segment['start_time']],
-                        y=[activity['y_pos'], activity['y_pos']],
-                        mode='lines',
-                        line=dict(
-                            color=activity['color'],
-                            width=2,
-                            dash='solid'
-                        ),
-                        opacity=0.8,
-                        hoverinfo='skip',
-                        showlegend=False
-                    ))
-                else:
-                    # 다른 Y축 위치의 활동이면 수직선으로 연결
-                    # 수직선은 이전 활동의 끝 시간에 그림
-                    fig.add_trace(go.Scatter(
-                        x=[prev_segment['end_time'], prev_segment['end_time']],
+                        x=[segment['start_time'], segment['start_time']],
                         y=[prev_activity['y_pos'], activity['y_pos']],
                         mode='lines',
                         line=dict(
                             color='gray',
-                            width=1,
-                            dash='solid'
+                            width=2,
+                            dash='dot'
                         ),
-                        opacity=0.5,
+                        opacity=0.7,
                         hoverinfo='skip',
                         showlegend=False
                     ))
@@ -214,6 +242,23 @@ def render_improved_gantt_chart(analysis_result: dict):
                 showlegend=True
             ))
             legend_added.add(category)
+    
+    # 테이크아웃 레전드 추가 (테이크아웃 식사가 있는 경우)
+    # 식사 활동 중에서 테이크아웃이 있는 경우만 확인
+    has_takeout_meal = any(
+        seg.get('is_takeout', False) and 
+        seg.get('activity_code', '') in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']
+        for seg in segments
+    )
+    if has_takeout_meal:
+        fig.add_trace(go.Scatter(
+            x=[None],
+            y=[None],
+            mode='markers',
+            marker=dict(size=15, color='#FFA726', symbol='diamond'),
+            name='테이크아웃',
+            showlegend=True
+        ))
     
     # 레이아웃 설정
     fig.update_layout(

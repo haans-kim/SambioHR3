@@ -398,6 +398,10 @@ class HMMModel:
             exit_reentry_indices = self._detect_exit_reentry_patterns(tag_data)
         
         for i, obs in enumerate(observations):
+            # 태그 데이터에서 is_actual_meal 정보 추가
+            if tag_data is not None and i < len(tag_data):
+                obs['is_actual_meal'] = tag_data.iloc[i].get('is_actual_meal', False)
+            
             # 출문-재입문 패턴이 점심시간대에 발생한 경우
             if i in exit_reentry_indices:
                 timestamp = tag_data.iloc[i]['datetime'] if tag_data is not None else None
@@ -405,12 +409,11 @@ class HMMModel:
                     predicted_states.append(ActivityState.LUNCH.value)
                     continue
             
-            # CAFETERIA 위치이고 식사시간대인 경우
-            if obs.get(ObservationFeature.CAFETERIA_LOCATION.value):
-                meal_state = self._predict_meal_state(obs)
-                if meal_state:
-                    predicted_states.append(meal_state)
-                    continue
+            # 실제 식사 태그가 있는 경우에만 식사로 분류
+            meal_state = self._predict_meal_state(obs)
+            if meal_state:
+                predicted_states.append(meal_state)
+                continue
             
             # 근무구역 여부에 따른 예측
             if obs.get(ObservationFeature.WORK_AREA_TYPE.value) == 'work':
@@ -448,7 +451,16 @@ class HMMModel:
         return lunch_start <= current_time <= lunch_end
     
     def _predict_meal_state(self, obs: Dict[str, Any]) -> Optional[str]:
-        """식사 상태 예측"""
+        """식사 상태 예측 - 실제 식사 태그가 있는 경우에만 식사로 분류"""
+        # 실제 식사 태그가 있는지 확인
+        is_actual_meal = obs.get('is_actual_meal', False)
+        if not is_actual_meal:
+            return None  # 실제 식사 태그가 없으면 식사로 분류하지 않음
+            
+        # CAFETERIA 위치인지 확인
+        if not obs.get(ObservationFeature.CAFETERIA_LOCATION.value):
+            return None  # CAFETERIA가 아니면 식사로 분류하지 않음
+            
         time_period = obs.get(ObservationFeature.TIME_PERIOD.value)
         
         if time_period == "early_morning":

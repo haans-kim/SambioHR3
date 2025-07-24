@@ -500,5 +500,48 @@
       "직무": "object",
       "녹스메일": "object"
     }
+  },
+  "/Users/hanskim/Projects/Sambio_human/data/pickles/meal_data_v20250724_103353.pkl.gz": {
+    "name": "meal_data",
+    "version": "20250724_103353",
+    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/meal_data_v20250724_103353.pkl.gz",
+    "rows": 710583,
+    "columns": 30,
+    "size_mb": 15.70211410522461,
+    "created_at": "2025-07-24T10:34:00.899685",
+    "data_hash": null,
+    "description": "Combined from 1 files",
+    "dtypes": {
+      "NO": "int32",
+      "취식일시": "object",
+      "정산일": "category",
+      "식당명": "category",
+      "배식구": "category",
+      "식사가격": "int16",
+      "카드번호": "int64",
+      "수동입력여부": "category",
+      "회사코드": "category",
+      "회사": "category",
+      "사원증종류": "category",
+      "카드구분": "category",
+      "기기번호": "category",
+      "사번": "category",
+      "Knox ID": "category",
+      "생년월일": "category",
+      "Domain ID": "int32",
+      "성명": "category",
+      "사원구분": "category",
+      "사업장 코드": "category",
+      "사업장": "category",
+      "부서": "category",
+      "직책": "category",
+      "식단": "category",
+      "테이크아웃": "category",
+      "처리일시": "object",
+      "식사대분류": "category",
+      "식사구분명": "category",
+      "취식이벤트": "category",
+      "취식번호": "int32"
+    }
   }
 }

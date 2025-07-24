@@ -352,7 +352,7 @@ class DataTransformer:
         
         # 입사년도 숫자로 변환
         if '입사년도' in processed_df.columns:
-            processed_df['입사년도'] = processed_df['입사년도'].str.extract('(\d{4})').astype(float)
+            processed_df['입사년도'] = processed_df['입사년도'].str.extract(r'(\d{4})').astype(float)
         
         # 조직 계층 구조 생성 (센터 > BU > 팀 > 그룹 > 파트)
         org_hierarchy_cols = ['센터', 'BU', '팀', '그룹', '파트']
@@ -406,6 +406,179 @@ class DataTransformer:
         self.logger.info(f"조직현황 데이터 처리 완료: {len(processed_df):,}행")
         
         return processed_df
+    
+    def process_meal_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        식사 데이터 전처리
+        
+        Args:
+            df: 원본 식사 데이터
+            
+        Returns:
+            DataFrame: 전처리된 식사 데이터
+        """
+        self.logger.info("식사 데이터 전처리 시작")
+        
+        # 데이터 복사
+        processed_df = df.copy()
+        
+        # 1. 컬럼명 정리 및 표준화
+        column_mapping = {
+            '사번': 'employee_id',
+            'Knox ID': 'knox_id',
+            '성명': 'employee_name',
+            '취식일시': 'meal_datetime',
+            '식당명': 'restaurant_name',
+            '식사가격': 'meal_price',
+            '식사대분류': 'meal_category',
+            '식사구분명': 'meal_type_detail',
+            '부서': 'department',
+            '부서코드': 'department_code',
+            '테이크아웃': 'is_takeout',
+            '배식구': 'serving_counter',
+            '식단': 'menu_detail',
+            '결제날짜': 'payment_date',
+            '카드번호': 'card_number',
+            '기기번호': 'device_number'
+        }
+        
+        # 존재하는 컬럼만 매핑
+        existing_columns = {k: v for k, v in column_mapping.items() if k in processed_df.columns}
+        processed_df = processed_df.rename(columns=existing_columns)
+        
+        # 2. 날짜/시간 형식 변환
+        if 'meal_datetime' in processed_df.columns:
+            processed_df['meal_datetime'] = pd.to_datetime(processed_df['meal_datetime'])
+            processed_df['meal_date'] = processed_df['meal_datetime'].dt.date
+            processed_df['meal_time'] = processed_df['meal_datetime'].dt.time
+            processed_df['meal_hour'] = processed_df['meal_datetime'].dt.hour
+        
+        # 3. 건물/위치 정보 추출 (식당명에서)
+        if 'restaurant_name' in processed_df.columns:
+            # 식당명에서 건물 정보 추출
+            processed_df['building'] = processed_df['restaurant_name'].apply(self._extract_building_from_restaurant)
+            processed_df['cafeteria_location'] = 'CAFETERIA'  # 모든 식사 데이터는 CAFETERIA 태그
+        
+        # 4. 식사 시간대 검증 및 분류
+        if 'meal_category' in processed_df.columns and 'meal_hour' in processed_df.columns:
+            processed_df['is_valid_meal_time'] = processed_df.apply(self._validate_meal_time, axis=1)
+        
+        # 5. 교대 근무 정보 추가
+        if 'meal_hour' in processed_df.columns:
+            processed_df['shift_type'] = processed_df['meal_hour'].apply(
+                lambda h: 'NIGHT' if (h >= 20 or h < 8) else 'DAY'
+            )
+        
+        # 6. 테이크아웃 플래그 변환
+        if 'is_takeout' in processed_df.columns:
+            processed_df['is_takeout'] = processed_df['is_takeout'].map({'Y': True, 'N': False})
+        
+        # 7. 중복 제거 (동일 시간대 중복 식사 기록)
+        if 'employee_id' in processed_df.columns and 'meal_datetime' in processed_df.columns:
+            processed_df = processed_df.drop_duplicates(subset=['employee_id', 'meal_datetime'])
+        
+        self.logger.info(f"식사 데이터 전처리 완료: {len(processed_df):,}행")
+        
+        return processed_df
+    
+    def _extract_building_from_restaurant(self, restaurant_name: str) -> str:
+        """식당명에서 건물 정보 추출"""
+        if pd.isna(restaurant_name):
+            return None
+            
+        restaurant_mapping = {
+            'SBL 2단지 임시 식당': 'P5',  # 임시식당을 P5로 매핑
+            'SBL 바이오프라자2 식당': 'BP',
+            'SBL 바이오프라자2 푸드코트': 'BP',
+            '삼성바이오로직스 커뮤니티동 투썸플레이스': 'COMMUNITY'
+        }
+        
+        return restaurant_mapping.get(restaurant_name, 'UNKNOWN')
+    
+    def _validate_meal_time(self, row) -> bool:
+        """식사 시간대 유효성 검증"""
+        meal_hour = row.get('meal_hour', -1)
+        meal_category = row.get('meal_category', '')
+        
+        valid_times = {
+            '조식': (6, 9),
+            '중식': (11, 14),
+            '석식': (17, 20),
+            '야식': (23, 25),  # 자정 넘어가는 경우 고려
+            '간식': (7, 8)
+        }
+        
+        if meal_category in valid_times:
+            start, end = valid_times[meal_category]
+            if end > 24:  # 자정 넘어가는 경우
+                return meal_hour >= start or meal_hour < (end - 24)
+            else:
+                return start <= meal_hour < end
+        
+        return True
+    
+    def merge_meal_with_tag_data(self, tag_df: pd.DataFrame, meal_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        식사 데이터를 태그 데이터와 병합
+        
+        Args:
+            tag_df: 태그 데이터
+            meal_df: 식사 데이터
+            
+        Returns:
+            DataFrame: 병합된 데이터
+        """
+        self.logger.info("식사 데이터와 태그 데이터 병합 시작")
+        
+        # 태그 데이터에 meal_type 컬럼이 없으면 추가
+        if 'meal_type' not in tag_df.columns:
+            tag_df['meal_type'] = None
+        
+        # 태그 데이터에 is_meal 플래그 추가
+        if 'is_meal' not in tag_df.columns:
+            tag_df['is_meal'] = False
+        
+        # 식사 데이터를 태그 형식으로 변환
+        meal_as_tags = pd.DataFrame()
+        
+        if not meal_df.empty and 'employee_id' in meal_df.columns and 'meal_datetime' in meal_df.columns:
+            # 필요한 컬럼 매핑
+            meal_as_tags['사번'] = meal_df['employee_id']
+            meal_as_tags['datetime'] = meal_df['meal_datetime']
+            meal_as_tags['DR_NO'] = meal_df.get('building', 'CAFETERIA')
+            meal_as_tags['DR_NM'] = meal_df.get('restaurant_name', 'CAFETERIA')
+            meal_as_tags['INOUT_GB'] = 'I'  # 식당 입장으로 처리
+            meal_as_tags['meal_type'] = meal_df.get('meal_category', None)
+            meal_as_tags['is_meal'] = True
+            meal_as_tags['work_area'] = 'N'  # 식당은 비근무구역
+            
+            # 태그 데이터에 없는 추가 정보
+            meal_as_tags['meal_price'] = meal_df.get('meal_price', None)
+            meal_as_tags['is_takeout'] = meal_df.get('is_takeout', False)
+            meal_as_tags['menu_detail'] = meal_df.get('menu_detail', None)
+            
+            # 날짜와 시간 분리 (태그 데이터 형식에 맞춤)
+            meal_as_tags['ENTE_DT'] = meal_as_tags['datetime'].dt.strftime('%Y%m%d')
+            meal_as_tags['출입시각'] = meal_as_tags['datetime'].dt.strftime('%H%M%S')
+            
+            # 태그 데이터와 동일한 컬럼 구조로 맞춤
+            for col in tag_df.columns:
+                if col not in meal_as_tags.columns:
+                    meal_as_tags[col] = None
+            
+            # 두 데이터프레임 병합
+            merged_df = pd.concat([tag_df, meal_as_tags], ignore_index=True)
+            
+            # 시간순 정렬
+            if 'datetime' in merged_df.columns:
+                merged_df = merged_df.sort_values(['사번', 'datetime'])
+            
+            self.logger.info(f"병합 완료: 태그 {len(tag_df):,}행 + 식사 {len(meal_as_tags):,}행 = 총 {len(merged_df):,}행")
+        else:
+            merged_df = tag_df
+            self.logger.warning("식사 데이터가 비어있거나 필수 컬럼이 없어 병합하지 않음")
+        
+        return merged_df
     
     def get_processing_summary(self, original_df: pd.DataFrame, processed_df: pd.DataFrame) -> Dict:
         """처리 결과 요약 정보"""
