@@ -842,6 +842,18 @@ class IndividualDashboard:
                     
                     # T3: 출입포인트(OUT) -> 퇴근
                     daily_data.loc[daily_data['tag_code'] == 'T3', 'activity_code'] = 'COMMUTE_OUT'
+                
+                # 정문/스피드게이트 입문은 무조건 출근으로 처리 (초기 단계)
+                gate_entry_mask = (
+                    (daily_data['INOUT_GB'] == '입문') & 
+                    (daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)) &
+                    (daily_data['datetime'].dt.hour.between(5, 9))
+                )
+                if gate_entry_mask.any():
+                    daily_data.loc[gate_entry_mask, 'activity_code'] = 'COMMUTE_IN'
+                    daily_data.loc[gate_entry_mask, 'activity_type'] = 'commute'
+                    daily_data.loc[gate_entry_mask, 'confidence'] = 100
+                    self.logger.info(f"초기 단계: 정문 입문 {gate_entry_mask.sum()}개를 COMMUTE_IN으로 설정")
                     
                     # 출근(T2) 후 다음 활동까지의 시간 제한
                     # T2 이후 5분 이상 다른 태그가 없으면 MOVEMENT로 변경
@@ -957,6 +969,22 @@ class IndividualDashboard:
                 # 디버깅: HMM 분류 후 상태 확인
                 breakfast_after = (daily_data['activity_code'] == 'BREAKFAST').sum()
                 self.logger.info(f"HMM 분류 후 조식 개수: {breakfast_after}")
+                
+                # HMM 분류 직후 정문/스피드게이트 입문 보호
+                gate_entry_mask = daily_data['INOUT_GB'] == '입문'
+                gate_name_mask = daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)
+                morning_mask = daily_data['datetime'].dt.hour.between(5, 9)
+                protected_entries = gate_entry_mask & gate_name_mask & morning_mask
+                
+                if protected_entries.any():
+                    # 정문 입문이 조식으로 분류된 경우만 수정
+                    wrong_entries = protected_entries & (daily_data['activity_code'] == 'BREAKFAST')
+                    if wrong_entries.any():
+                        daily_data.loc[wrong_entries, 'activity_code'] = 'COMMUTE_IN'
+                        daily_data.loc[wrong_entries, 'confidence'] = 100
+                        self.logger.info(f"HMM 후 정문 입문 {wrong_entries.sum()}개를 COMMUTE_IN으로 보호")
+                        for idx in daily_data[wrong_entries].index:
+                            self.logger.info(f"  - {daily_data.loc[idx, 'datetime']} at {daily_data.loc[idx, 'DR_NM']}")
                 
                 # 실제 식사 태그가 없는데 식사로 분류된 경우 확인
                 if 'is_actual_meal' in daily_data.columns:
@@ -1459,7 +1487,7 @@ class IndividualDashboard:
             # 마지막으로 한 번 더 식사 전후 출입문 처리 (HMM이 덮어쓴 경우 대비)
             self.logger.info("최종 식사 전후 출입문 처리 시작")
             
-            # 모든 출입문 태그 중 식사로 잘못 분류된 것 찾기
+            # 1. 모든 출입문 태그 중 식사로 잘못 분류된 것 찾기
             entry_exit_mask = daily_data['INOUT_GB'].isin(['입문', '출문'])
             meal_activity_mask = daily_data['activity_code'].isin(['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL'])
             wrong_classification = entry_exit_mask & meal_activity_mask
@@ -1468,8 +1496,37 @@ class IndividualDashboard:
                 self.logger.info(f"잘못 분류된 출입문 {wrong_classification.sum()}개 발견")
                 # 출입문은 절대 식사가 아님
                 daily_data.loc[wrong_classification & (daily_data['INOUT_GB'] == '출문'), 'activity_code'] = 'MOVEMENT'
-                daily_data.loc[wrong_classification & (daily_data['INOUT_GB'] == '입문'), 'activity_code'] = 'WORK'
+                
+                # 입문의 경우, 이미 COMMUTE_IN으로 분류된 것을 보존하기 위해 추가 체크
+                entry_mask = wrong_classification & (daily_data['INOUT_GB'] == '입문')
+                for idx in daily_data[entry_mask].index:
+                    # 스피드게이트나 정문 입문이고 아침 시간대(5-10시)인 경우 COMMUTE_IN으로 설정
+                    hour = daily_data.loc[idx, 'datetime'].hour
+                    dr_nm = daily_data.loc[idx, 'DR_NM']
+                    if ('SPEED GATE' in str(dr_nm).upper() or '정문' in str(dr_nm)) and 5 <= hour < 10:
+                        daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
+                        self.logger.info(f"출근 시간대 게이트 입문 보존: {daily_data.loc[idx, 'datetime']} - {dr_nm}")
+                    else:
+                        daily_data.loc[idx, 'activity_code'] = 'WORK'
+                
                 daily_data.loc[wrong_classification, 'confidence'] = 100
+            
+            # 2. 추가로 정문/스피드게이트 입문이 조식으로 분류된 모든 케이스 확인
+            gate_entry_mask = daily_data['INOUT_GB'] == '입문'
+            gate_name_mask = daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)
+            morning_mask = daily_data['datetime'].dt.hour.between(5, 9)
+            gate_morning_entry = gate_entry_mask & gate_name_mask & morning_mask
+            
+            # 조식으로 잘못 분류된 정문 입문 수정
+            breakfast_gate_entries = gate_morning_entry & (daily_data['activity_code'] == 'BREAKFAST')
+            if breakfast_gate_entries.any():
+                self.logger.info(f"조식으로 잘못 분류된 정문 입문 {breakfast_gate_entries.sum()}개 발견 및 수정")
+                daily_data.loc[breakfast_gate_entries, 'activity_code'] = 'COMMUTE_IN'
+                daily_data.loc[breakfast_gate_entries, 'confidence'] = 100
+                
+                # 로그 출력
+                for idx in daily_data[breakfast_gate_entries].index:
+                    self.logger.info(f"  - {daily_data.loc[idx, 'datetime']} at {daily_data.loc[idx, 'DR_NM']} : BREAKFAST -> COMMUTE_IN")
             
             # 테이크아웃 정보 최종 확인 및 로깅
             if 'is_takeout' in daily_data.columns:
@@ -1478,6 +1535,23 @@ class IndividualDashboard:
                     self.logger.info(f"테이크아웃 식사 {len(takeout_meals)}개 확인:")
                     for idx, row in takeout_meals.iterrows():
                         self.logger.info(f"  - {row['datetime']}: {row['DR_NM']}, activity={row['activity_code']}, is_takeout={row['is_takeout']}")
+            
+            # 최종 리턴 전에 한 번 더 정문 입문 체크
+            final_check = daily_data[
+                (daily_data['INOUT_GB'] == '입문') & 
+                (daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)) &
+                (daily_data['datetime'].dt.hour.between(5, 9)) &
+                (daily_data['activity_code'] == 'BREAKFAST')
+            ]
+            
+            if not final_check.empty:
+                self.logger.warning(f"최종 체크: 조식으로 분류된 정문 입문 {len(final_check)}개 발견!")
+                daily_data.loc[final_check.index, 'activity_code'] = 'COMMUTE_IN'
+                daily_data.loc[final_check.index, 'confidence'] = 100
+                daily_data.loc[final_check.index, 'activity_type'] = 'commute'
+                
+                for idx in final_check.index:
+                    self.logger.warning(f"  최종 수정: {daily_data.loc[idx, 'datetime']} - {daily_data.loc[idx, 'DR_NM']} : BREAKFAST -> COMMUTE_IN")
             
             return daily_data
             
@@ -1670,15 +1744,16 @@ class IndividualDashboard:
                 activity_code = row.get('activity_code', '')
                 activity_type = row.get('activity_type', 'work')
                 
-                # 입문/출문인데 식사로 분류된 경우 올바른 값으로 변경
+                # 입문/출문인데 식사로 잘못 분류된 경우만 수정
+                # COMMUTE_IN은 식사로 분류되지 않으므로 그대로 유지됨
                 if inout_gb == '출문' and activity_code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
                     activity_code = 'MOVEMENT'
                     activity_type = 'movement'
-                    self.logger.info(f"출문 수정: {row['datetime']} - {activity_code}")
+                    self.logger.info(f"출문 수정: {row['datetime']} - 식사 -> {activity_code}")
                 elif inout_gb == '입문' and activity_code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
                     activity_code = 'WORK'
                     activity_type = 'work'
-                    self.logger.info(f"입문 수정: {row['datetime']} - {activity_code}")
+                    self.logger.info(f"입문 수정: {row['datetime']} - 식사 -> {activity_code}")
                 
                 # 디버깅: 테이크아웃 식사 확인
                 is_takeout_value = row.get('is_takeout', False)
