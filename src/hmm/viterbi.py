@@ -47,7 +47,7 @@ class ViterbiAlgorithm:
         encoded_sequence = self._encode_observation_sequence(observation_sequence)
         
         # Viterbi 알고리즘 실행
-        state_sequence, log_probability, path_probabilities = self._viterbi_algorithm(encoded_sequence)
+        state_sequence, log_probability, path_probabilities = self._viterbi_algorithm(encoded_sequence, observation_sequence)
         
         # 상태 시퀀스를 문자열로 변환
         state_names = [self.hmm_model.index_to_state[state] for state in state_sequence]
@@ -128,7 +128,7 @@ class ViterbiAlgorithm:
         
         return encoded_sequence
     
-    def _viterbi_algorithm(self, encoded_sequence: List[int]) -> Tuple[List[int], float, List[List[float]]]:
+    def _viterbi_algorithm(self, encoded_sequence: List[int], observation_sequence: List[Dict[str, Any]] = None) -> Tuple[List[int], float, List[List[float]]]:
         """
         Viterbi 알고리즘 실행
         

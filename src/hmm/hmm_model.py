@@ -60,7 +60,7 @@ class ObservationFeature(Enum):
 class HMMModel:
     """HMM 모델 클래스"""
     
-    def __init__(self, model_name: str = "work_activity_hmm"):
+    def __init__(self, model_name: str = "work_activity_hmm", use_rules: bool = True):
         """
         Args:
             model_name: 모델 이름
@@ -102,6 +102,15 @@ class HMMModel:
         # JSON 규칙 저장소
         self.transition_rules = []
         self.rules_filepath = None
+        
+        # 룰 매니저 연결
+        if use_rules:
+            from ..rules import RuleManager
+            self.rule_manager = RuleManager()
+            self.load_transition_rules()
+            self.logger.info(f"룰 매니저 연결 완료: {len(self.transition_rules)}개 룰 로드")
+        else:
+            self.rule_manager = None
         
         self.logger.info(f"HMM 모델 초기화 완료: {model_name}")
     

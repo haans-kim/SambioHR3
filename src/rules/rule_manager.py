@@ -232,13 +232,24 @@ class RuleManager:
         for condition in conditions:
             cond_type = condition.get('type')
             
-            if cond_type == 'time':
+            if cond_type == 'time' or cond_type == 'time_window':
                 if 'current_time' not in context:
                     return False
                 
+                # 두 가지 형식 모두 지원
+                if 'start' in condition and 'end' in condition:
+                    start_str = condition['start']
+                    end_str = condition['end']
+                elif 'parameters' in condition:
+                    params = condition['parameters']
+                    start_str = params.get('start_time', params.get('start'))
+                    end_str = params.get('end_time', params.get('end'))
+                else:
+                    return False
+                
                 current_time = pd.to_datetime(context['current_time'])
-                start_time = pd.to_datetime(condition['start'], format='%H:%M').time()
-                end_time = pd.to_datetime(condition['end'], format='%H:%M').time()
+                start_time = pd.to_datetime(start_str, format='%H:%M').time()
+                end_time = pd.to_datetime(end_str, format='%H:%M').time()
                 
                 current_time_only = current_time.time()
                 
@@ -254,7 +265,14 @@ class RuleManager:
                 if 'location' not in context:
                     return False
                 
-                pattern = condition['pattern'].upper()
+                # 두 가지 형식 모두 지원
+                if 'pattern' in condition:
+                    pattern = condition['pattern'].upper()
+                elif 'parameters' in condition and 'location' in condition['parameters']:
+                    pattern = condition['parameters']['location'].upper()
+                else:
+                    return False
+                    
                 location = context['location'].upper()
                 
                 if pattern not in location:

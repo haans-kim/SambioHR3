@@ -11,7 +11,8 @@ import logging
 from sqlalchemy.orm import Session
 
 from ..database import DatabaseManager, DailyWorkData, TagLogs, ClaimData, AbcActivityData
-from ..hmm import HMMModel, ViterbiAlgorithm
+from ..hmm import HMMModel
+from ..hmm.viterbi_with_rules import RuleBasedViterbiAlgorithm
 from ..data_processing import DataTransformer, PickleManager
 
 class IndividualAnalyzer:
@@ -25,7 +26,7 @@ class IndividualAnalyzer:
         """
         self.db_manager = db_manager
         self.hmm_model = hmm_model
-        self.viterbi = ViterbiAlgorithm(hmm_model)
+        self.viterbi = RuleBasedViterbiAlgorithm(hmm_model)
         self.data_transformer = DataTransformer()
         self.pickle_manager = PickleManager()
         self.logger = logging.getLogger(__name__)
