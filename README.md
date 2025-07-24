@@ -57,7 +57,20 @@ src/
 
 ## 📊 데이터 구조
 
-### 지원 데이터 형식
+### 포함된 Pickle 파일
+프로젝트에는 전처리된 pickle 파일들이 포함되어 있어 **별도의 데이터 처리 없이 바로 실행 가능**합니다:
+
+- `data/pickles/tag_data_*.pkl.gz`: 2025년 6월 태그 데이터 (약 180만 건)
+- `data/pickles/organization_data_*.pkl.gz`: 조직 구조 및 인원 현황
+- `data/pickles/claim_data_*.pkl.gz`: 근무시간 클레임 데이터
+- `data/pickles/attendance_data_*.pkl.gz`: 근태 데이터
+- `data/pickles/abc_data_*.pkl.gz`: ABC 분석 데이터
+- `data/pickles/non_work_time_*.pkl.gz`: 비근무시간 데이터
+- `data/pickles/tag_location_master_*.pkl.gz`: 태그 위치 마스터 데이터
+
+### 원본 데이터 형식 (미포함)
+개인정보 보호를 위해 원본 Excel 파일들은 제외되었습니다. 새로운 데이터 분석이 필요한 경우:
+
 1. **태깅 데이터** (`tag_data_24.6.xlsx`)
 2. **ABC 활동 데이터** (`data_ABC데이터 리스트_2506.xlsx`)
 3. **근무시간 Claim 데이터** (`data_근무시간(claim)_전사_2506.xlsx`)
