@@ -26,7 +26,10 @@ from src.ui.components.organization_dashboard import OrganizationDashboard
 from src.ui.components.data_upload import DataUploadComponent
 from src.ui.components.model_config import ModelConfigComponent
 from src.ui.components.transition_rule_editor import TransitionRuleEditor
-from src.ui.components.network_analysis_dashboard import NetworkAnalysisDashboard
+try:
+    from src.ui.components.network_analysis_dashboard_optimized import NetworkAnalysisDashboard
+except ImportError:
+    from src.ui.components.network_analysis_dashboard import NetworkAnalysisDashboard
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)

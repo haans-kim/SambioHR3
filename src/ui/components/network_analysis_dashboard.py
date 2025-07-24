@@ -27,10 +27,56 @@ class NetworkAnalysisDashboard:
         self.db_manager = db_manager
         self.logger = logging.getLogger(__name__)
         self.network_analyzer = NetworkAnalyzer("data/sambio_human.db")
+        self._tag_data_cache = None
+        self._date_range_cache = None
+    
+    def get_data_date_range(self):
+        """데이터가 존재하는 날짜 범위 반환"""
+        if self._date_range_cache is not None:
+            return self._date_range_cache
+            
+        try:
+            from ...data_processing import PickleManager
+            pickle_manager = PickleManager()
+            tag_data = pickle_manager.load_dataframe(name='tag_data')
+            
+            if tag_data is None or tag_data.empty:
+                return None, None, pd.Series()
+            
+            # 날짜 변환 및 범위 계산
+            tag_data['ENTE_DT'] = pd.to_numeric(tag_data['ENTE_DT'], errors='coerce')
+            tag_data['time_str'] = tag_data['출입시각'].astype(str).str.zfill(6)
+            tag_data['timestamp'] = pd.to_datetime(
+                tag_data['ENTE_DT'].astype(str) + ' ' + tag_data['time_str'],
+                format='%Y%m%d %H%M%S',
+                errors='coerce'
+            )
+            
+            dates = tag_data['timestamp'].dt.date
+            min_date = dates.min()
+            max_date = dates.max()
+            date_counts = dates.value_counts().sort_index()
+            
+            self._date_range_cache = (min_date, max_date, date_counts)
+            return min_date, max_date, date_counts
+            
+        except Exception as e:
+            self.logger.error(f"날짜 범위 계산 중 오류: {e}")
+            return None, None, pd.Series()
     
     def render(self):
         """네트워크 분석 대시보드 렌더링"""
         st.markdown("### 🌐 조직 네트워크 분석")
+        
+        # 데이터 날짜 범위 확인
+        min_date, max_date, date_counts = self.get_data_date_range()
+        
+        if min_date is None or max_date is None:
+            st.error("데이터의 날짜 범위를 확인할 수 없습니다.")
+            return
+        
+        # 데이터 기간 정보 표시
+        st.info(f"📅 데이터 기간: {min_date.strftime('%Y-%m-%d')} ~ {max_date.strftime('%Y-%m-%d')} (총 {len(date_counts)}일)")
         
         # 분석 유형 선택
         analysis_type = st.selectbox(
@@ -40,18 +86,55 @@ class NetworkAnalysisDashboard:
         
         # 기간 선택
         col1, col2 = st.columns(2)
+        
+        # 기본 날짜 설정 (전체 기간)
+        default_end = max_date
+        default_start = min_date
+        
         with col1:
             start_date = st.date_input(
                 "시작 날짜",
-                value=date.today() - timedelta(days=7),
-                key="network_start_date"
+                value=default_start,
+                min_value=min_date,
+                max_value=max_date,
+                key="network_start_date",
+                help=f"데이터가 있는 날짜: {min_date} ~ {max_date}"
             )
         with col2:
             end_date = st.date_input(
                 "종료 날짜",
-                value=date.today(),
-                key="network_end_date"
+                value=default_end,
+                min_value=min_date,
+                max_value=max_date,
+                key="network_end_date",
+                help=f"데이터가 있는 날짜: {min_date} ~ {max_date}"
             )
+        
+        # 날짜 유효성 검사
+        if start_date > end_date:
+            st.error("시작 날짜는 종료 날짜보다 이전이어야 합니다.")
+            return
+        
+        # 선택한 기간에 데이터가 있는지 확인
+        selected_dates = pd.date_range(start_date, end_date).date
+        data_exists = any(d in date_counts.index for d in selected_dates)
+        
+        if not data_exists:
+            st.warning(f"선택한 기간({start_date} ~ {end_date})에 데이터가 없습니다. 다른 날짜를 선택해주세요.")
+            
+            # 데이터가 있는 날짜 표시
+            with st.expander("데이터가 있는 날짜 확인"):
+                # 월별로 그룹화하여 표시
+                monthly_data = date_counts.groupby(pd.Grouper(freq='M')).sum()
+                if not monthly_data.empty:
+                    fig = px.bar(
+                        x=monthly_data.index,
+                        y=monthly_data.values,
+                        labels={'x': '월', 'y': '데이터 개수'},
+                        title='월별 데이터 분포'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+            return
         
         if analysis_type == "직원 간 상호작용 네트워크":
             self.render_interaction_network(start_date, end_date)
