@@ -15,6 +15,8 @@ import json
 import time
 
 from .schema import Base, DatabaseSchema
+from ..data_processing import PickleManager
+from pathlib import Path
 
 class DatabaseManager:
     """데이터베이스 관리를 위한 클래스"""
@@ -40,11 +42,15 @@ class DatabaseManager:
         self._initialize_database()
     
     def _initialize_database(self):
-        """데이터베이스 초기화"""
+        """데이터베이스 초기화 및 pickle 파일 자동 로드"""
         try:
             # 테이블 생성
             self.schema.create_tables()
             self.logger.info("데이터베이스 초기화 완료")
+            
+            # Pickle 파일 자동 로드
+            self._auto_load_pickle_data()
+            
         except Exception as e:
             self.logger.error(f"데이터베이스 초기화 실패: {e}")
             raise
@@ -414,3 +420,79 @@ class DatabaseManager:
             self.logger.info("데이터베이스 연결 종료")
         except Exception as e:
             self.logger.error(f"데이터베이스 연결 종료 실패: {e}")
+    
+    def _auto_load_pickle_data(self):
+        """Pickle 파일에서 데이터를 자동으로 로드하여 데이터베이스에 저장"""
+        self.logger.info("Pickle 데이터 자동 로드 시작...")
+        
+        try:
+            pickle_manager = PickleManager()
+            
+            # 데이터 유형과 테이블 매핑
+            data_mappings = {
+                "tag_data": "태깅 데이터",
+                "tag_location_master": "태깅 지점 마스터",
+                "claim_data": "근무시간 Claim 데이터",
+                "attendance_data": "근태 사용 데이터",
+                "non_work_time": "비근무시간 데이터",
+                "abc_data": "ABC 활동 데이터",
+                "meal_data": "식사 데이터",
+                "organization_data": "조직현황 자료"
+            }
+            
+            for table_name, display_name in data_mappings.items():
+                try:
+                    # 테이블이 비어있는지 확인
+                    existing_count = self.get_table_row_count(table_name)
+                    
+                    if existing_count == 0:
+                        # Pickle 파일 확인
+                        pickle_files = pickle_manager.list_pickle_files(table_name)
+                        
+                        if pickle_files:
+                            latest_pickle = pickle_files[0]
+                            self.logger.info(f"{display_name} pickle 파일 발견: {latest_pickle['rows']:,}행")
+                            
+                            # 데이터 로드
+                            df = pickle_manager.load_dataframe(
+                                name=table_name,
+                                version=latest_pickle['version']
+                            )
+                            
+                            if df is not None and not df.empty:
+                                # 데이터베이스에 저장
+                                self.save_dataframe(df, table_name)
+                                self.logger.info(f"{display_name} 자동 로드 완료: {len(df):,}행")
+                        else:
+                            self.logger.info(f"{display_name}에 대한 pickle 파일 없음")
+                    else:
+                        self.logger.info(f"{display_name} 이미 데이터 존재: {existing_count:,}행")
+                        
+                except Exception as e:
+                    self.logger.warning(f"{display_name} 자동 로드 실패: {e}")
+                    continue
+            
+            self.logger.info("Pickle 데이터 자동 로드 완료")
+            
+        except Exception as e:
+            self.logger.error(f"Pickle 데이터 자동 로드 중 오류: {e}")
+            # 오류가 발생해도 애플리케이션은 계속 실행되도록 함
+    
+    def get_table_row_count(self, table_name: str) -> int:
+        """테이블의 행 수를 반환"""
+        try:
+            query = f"SELECT COUNT(*) as count FROM {table_name}"
+            result = self.execute_query(query)
+            return result[0]['count'] if result else 0
+        except Exception as e:
+            self.logger.warning(f"테이블 행 수 조회 실패 ({table_name}): {e}")
+            return 0
+    
+    def save_dataframe(self, df: pd.DataFrame, table_name: str, if_exists: str = 'replace'):
+        """DataFrame을 데이터베이스에 저장"""
+        try:
+            df.to_sql(table_name, self.engine, if_exists=if_exists, index=False)
+            self.logger.info(f"{table_name} 테이블에 {len(df):,}행 저장 완료")
+        except Exception as e:
+            self.logger.error(f"{table_name} 테이블 저장 실패: {e}")
+            raise

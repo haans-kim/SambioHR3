@@ -159,10 +159,10 @@
       "work_area_type": "object"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/abc_data_v20250721_153122.pkl.gz": {
+  "data/pickles/abc_data_v20250721_153122.pkl.gz": {
     "name": "abc_data",
     "version": "20250721_153122",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/abc_data_v20250721_153122.pkl.gz",
+    "file_path": "data/pickles/abc_data_v20250721_153122.pkl.gz",
     "rows": 14026,
     "columns": 19,
     "size_mb": 0.26706695556640625,
@@ -191,10 +191,10 @@
       "BU_CD": "object"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_data_v20250721_162321.pkl.gz": {
+  "data/pickles/tag_data_v20250721_162321.pkl.gz": {
     "name": "tag_data",
     "version": "20250721_162321",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_data_v20250721_162321.pkl.gz",
+    "file_path": "data/pickles/tag_data_v20250721_162321.pkl.gz",
     "rows": 11,
     "columns": 31,
     "size_mb": 0.0024328231811523438,
@@ -235,10 +235,10 @@
       "wage_increase_total_sbl": "float64"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_data_v20250721_162511.pkl.gz": {
+  "data/pickles/tag_data_v20250721_162511.pkl.gz": {
     "name": "tag_data",
     "version": "20250721_162511",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_data_v20250721_162511.pkl.gz",
+    "file_path": "data/pickles/tag_data_v20250721_162511.pkl.gz",
     "rows": 1559736,
     "columns": 46,
     "size_mb": 17.758296012878418,
@@ -294,10 +294,10 @@
       "INOUT_GB": "category"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_data_v20250721_163030.pkl.gz": {
+  "data/pickles/tag_data_v20250721_163030.pkl.gz": {
     "name": "tag_data",
     "version": "20250721_163030",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_data_v20250721_163030.pkl.gz",
+    "file_path": "data/pickles/tag_data_v20250721_163030.pkl.gz",
     "rows": 1559725,
     "columns": 15,
     "size_mb": 16.792240142822266,
@@ -322,10 +322,10 @@
       "INOUT_GB": "category"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_location_master_v20250721_163402.pkl.gz": {
+  "data/pickles/tag_location_master_v20250721_163402.pkl.gz": {
     "name": "tag_location_master",
     "version": "20250721_163402",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_location_master_v20250721_163402.pkl.gz",
+    "file_path": "data/pickles/tag_location_master_v20250721_163402.pkl.gz",
     "rows": 3640,
     "columns": 10,
     "size_mb": 0.07953357696533203,
@@ -345,10 +345,10 @@
       "라벨링": "object"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_data_v20250721_171550.pkl.gz": {
+  "data/pickles/tag_data_v20250721_171550.pkl.gz": {
     "name": "tag_data",
     "version": "20250721_171550",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_data_v20250721_171550.pkl.gz",
+    "file_path": "data/pickles/tag_data_v20250721_171550.pkl.gz",
     "rows": 1799769,
     "columns": 15,
     "size_mb": 19.482714653015137,
@@ -373,10 +373,10 @@
       "INOUT_GB": "category"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_location_master_v20250721_171600.pkl.gz": {
+  "data/pickles/tag_location_master_v20250721_171600.pkl.gz": {
     "name": "tag_location_master",
     "version": "20250721_171600",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_location_master_v20250721_171600.pkl.gz",
+    "file_path": "data/pickles/tag_location_master_v20250721_171600.pkl.gz",
     "rows": 3640,
     "columns": 13,
     "size_mb": 0.08253669738769531,
@@ -399,10 +399,10 @@
       "라벨링_활동": "object"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_location_master_v20250721_171717.pkl.gz": {
+  "data/pickles/tag_location_master_v20250721_171717.pkl.gz": {
     "name": "tag_location_master",
     "version": "20250721_171717",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/tag_location_master_v20250721_171717.pkl.gz",
+    "file_path": "data/pickles/tag_location_master_v20250721_171717.pkl.gz",
     "rows": 3640,
     "columns": 13,
     "size_mb": 0.08253669738769531,
@@ -425,10 +425,10 @@
       "라벨링_활동": "object"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/organization_v20250722_105328.pkl.gz": {
+  "data/pickles/organization_v20250722_105328.pkl.gz": {
     "name": "organization",
     "version": "20250722_105328",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/organization_v20250722_105328.pkl.gz",
+    "file_path": "data/pickles/organization_v20250722_105328.pkl.gz",
     "rows": 5142,
     "columns": 25,
     "size_mb": 0.1380481719970703,
@@ -463,10 +463,10 @@
       "녹스메일": "object"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/organization_data_v20250722_110253.pkl.gz": {
+  "data/pickles/organization_data_v20250722_110253.pkl.gz": {
     "name": "organization_data",
     "version": "20250722_110253",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/organization_data_v20250722_110253.pkl.gz",
+    "file_path": "data/pickles/organization_data_v20250722_110253.pkl.gz",
     "rows": 5142,
     "columns": 25,
     "size_mb": 0.13805294036865234,
@@ -501,10 +501,10 @@
       "녹스메일": "object"
     }
   },
-  "/Users/hanskim/Projects/Sambio_human/data/pickles/meal_data_v20250724_103353.pkl.gz": {
+  "data/pickles/meal_data_v20250724_103353.pkl.gz": {
     "name": "meal_data",
     "version": "20250724_103353",
-    "file_path": "/Users/hanskim/Projects/Sambio_human/data/pickles/meal_data_v20250724_103353.pkl.gz",
+    "file_path": "data/pickles/meal_data_v20250724_103353.pkl.gz",
     "rows": 710583,
     "columns": 30,
     "size_mb": 15.70211410522461,

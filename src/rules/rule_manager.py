@@ -26,6 +26,7 @@ class TransitionRule:
     modified_at: Optional[str] = None
     version: int = 1
     is_active: bool = True
+    description: Optional[str] = None  # 설명 필드 추가
     
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환"""
@@ -88,6 +89,9 @@ class RuleManager:
     
     def load_all_rules(self) -> List[TransitionRule]:
         """모든 룰 로드"""
+        # 캐시 클리어 (매번 새로 로드)
+        self.rules_cache.clear()
+        
         if not self.rules_file.exists():
             return []
         

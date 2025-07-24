@@ -10,6 +10,7 @@ from enum import Enum
 import logging
 from datetime import datetime, time
 import json
+from pathlib import Path
 
 class ActivityState(Enum):
     """활동 상태 정의 (2교대 근무 반영)"""
@@ -97,6 +98,10 @@ class HMMModel:
             'evening': (time(18, 0), time(22, 0)),
             'night': (time(22, 0), time(5, 0))
         }
+        
+        # JSON 규칙 저장소
+        self.transition_rules = []
+        self.rules_filepath = None
         
         self.logger.info(f"HMM 모델 초기화 완료: {model_name}")
     
@@ -297,6 +302,119 @@ class HMMModel:
                     emission_matrix[i, 0] = 0.2  # 주간 교대 낮은 확률
         
         return emission_matrix
+    
+    def load_transition_rules(self, filepath: str = "config/rules/hmm_transition_rules.json"):
+        """JSON 파일에서 전이 규칙 로드"""
+        self.rules_filepath = filepath
+        
+        if Path(filepath).exists():
+            with open(filepath, 'r', encoding='utf-8') as f:
+                self.transition_rules = json.load(f)
+            self.logger.info(f"전이 규칙 {len(self.transition_rules)}개 로드됨: {filepath}")
+            
+            # 로드한 규칙으로 전이 행렬 업데이트
+            self._update_transition_matrix_from_rules()
+        else:
+            self.logger.warning(f"전이 규칙 파일을 찾을 수 없음: {filepath}")
+    
+    def _update_transition_matrix_from_rules(self):
+        """JSON 규칙을 기반으로 전이 행렬 업데이트"""
+        if not self.transition_rules:
+            return
+        
+        # 전이 행렬이 없으면 초기화
+        if self.transition_matrix is None:
+            self.transition_matrix = np.zeros((self.n_states, self.n_states))
+        
+        # 규칙 적용
+        for rule in self.transition_rules:
+            if not rule.get('is_active', True):
+                continue
+            
+            from_state = rule['from_state']
+            to_state = rule['to_state']
+            
+            if from_state in self.state_to_index and to_state in self.state_to_index:
+                from_idx = self.state_to_index[from_state]
+                to_idx = self.state_to_index[to_state]
+                
+                # 조건이 있으면 기본 확률 조정 (현재는 단순 적용)
+                probability = rule['base_probability']
+                
+                self.transition_matrix[from_idx, to_idx] = probability
+        
+        # 행별 정규화
+        for i in range(self.n_states):
+            row_sum = np.sum(self.transition_matrix[i, :])
+            if row_sum > 0:
+                self.transition_matrix[i, :] /= row_sum
+        
+        self.logger.info("JSON 규칙으로부터 전이 행렬 업데이트 완료")
+    
+    def get_transition_probability_with_conditions(self, from_state: str, to_state: str, 
+                                                  context: Dict[str, Any]) -> float:
+        """조건을 고려한 전이 확률 계산"""
+        # 기본 확률
+        base_prob = self._get_transition_probability(from_state, to_state)
+        
+        # JSON 규칙에서 해당 전이 찾기
+        for rule in self.transition_rules:
+            if (rule['from_state'] == from_state and 
+                rule['to_state'] == to_state and 
+                rule.get('is_active', True)):
+                
+                # 조건 평가
+                if rule.get('conditions'):
+                    condition_weight = self._evaluate_conditions(
+                        rule['conditions'], context
+                    )
+                    # 조건에 따라 확률 조정
+                    adjusted_prob = base_prob * (1 + condition_weight)
+                    return min(adjusted_prob, 1.0)
+                else:
+                    return rule['base_probability']
+        
+        return base_prob
+    
+    def _evaluate_conditions(self, conditions: List[Dict[str, Any]], 
+                           context: Dict[str, Any]) -> float:
+        """조건들을 평가하여 가중치 반환"""
+        total_weight = 0.0
+        
+        for condition in conditions:
+            cond_type = condition['type']
+            params = condition['parameters']
+            operator = condition['operator']
+            weight = condition.get('weight', 1.0)
+            
+            # 시간 윈도우 조건
+            if cond_type == 'time_window' and 'timestamp' in context:
+                current_time = context['timestamp'].time()
+                start_time = datetime.strptime(params['start'], '%H:%M').time()
+                end_time = datetime.strptime(params['end'], '%H:%M').time()
+                
+                if self._is_time_in_window(current_time, start_time, end_time):
+                    total_weight += weight
+            
+            # 위치 조건
+            elif cond_type == 'location' and 'location' in context:
+                if operator == 'equals' and context['location'] == params['location']:
+                    total_weight += weight
+            
+            # 교대 타입 조건
+            elif cond_type == 'shift_type' and 'shift_type' in context:
+                if operator == 'equals' and context['shift_type'] == params['shift']:
+                    total_weight += weight
+        
+        return total_weight
+    
+    def _is_time_in_window(self, current_time: time, start_time: time, 
+                          end_time: time) -> bool:
+        """시간이 윈도우 내에 있는지 확인 (자정 넘는 경우 처리)"""
+        if start_time <= end_time:
+            return start_time <= current_time <= end_time
+        else:  # 자정을 넘는 경우
+            return current_time >= start_time or current_time <= end_time
     
     def extract_observations(self, tag_data: pd.DataFrame) -> List[Dict[str, Any]]:
         """

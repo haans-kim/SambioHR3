@@ -23,8 +23,8 @@ class PickleManager:
         Args:
             base_path: pickle 파일 저장 기본 경로
         """
-        # 절대 경로로 변환
-        self.base_path = Path(base_path).resolve()
+        # 상대 경로로 유지
+        self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"PickleManager 초기화 - base_path: {self.base_path}")
