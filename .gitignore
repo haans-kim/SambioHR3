@@ -8,6 +8,7 @@ data/*.xls
 # Database files
 *.db
 data/*.db
+database/*.db
 
 # Python
 __pycache__/
@@ -46,6 +47,7 @@ logs/
 *.tmp
 *.temp
 .temp/
+tag_data.pkl
 
 # Streamlit
 .streamlit/secrets.toml
@@ -70,6 +72,13 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Test files
+test_*.py
+viterbi_rule_integration.py
+
+# Config files with sensitive data  
+# config/upload_config.json - 이 파일은 포함됨
 
 # Note: Pickle files are NOT ignored
 # data/pickles/ 디렉토리의 pickle 파일들은 포함됩니다
