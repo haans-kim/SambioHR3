@@ -1496,6 +1496,7 @@ class IndividualDashboard:
                 self.logger.info(f"잘못 분류된 출입문 {wrong_classification.sum()}개 발견")
                 # 출입문은 절대 식사가 아님
                 daily_data.loc[wrong_classification & (daily_data['INOUT_GB'] == '출문'), 'activity_code'] = 'MOVEMENT'
+                daily_data.loc[wrong_classification & (daily_data['INOUT_GB'] == '출문'), 'activity_type'] = 'movement'
                 
                 # 입문의 경우, 이미 COMMUTE_IN으로 분류된 것을 보존하기 위해 추가 체크
                 entry_mask = wrong_classification & (daily_data['INOUT_GB'] == '입문')
@@ -1505,9 +1506,11 @@ class IndividualDashboard:
                     dr_nm = daily_data.loc[idx, 'DR_NM']
                     if ('SPEED GATE' in str(dr_nm).upper() or '정문' in str(dr_nm)) and 5 <= hour < 10:
                         daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
+                        daily_data.loc[idx, 'activity_type'] = 'commute'
                         self.logger.info(f"출근 시간대 게이트 입문 보존: {daily_data.loc[idx, 'datetime']} - {dr_nm}")
                     else:
                         daily_data.loc[idx, 'activity_code'] = 'WORK'
+                        daily_data.loc[idx, 'activity_type'] = 'work'
                 
                 daily_data.loc[wrong_classification, 'confidence'] = 100
             
@@ -1522,6 +1525,7 @@ class IndividualDashboard:
             if breakfast_gate_entries.any():
                 self.logger.info(f"조식으로 잘못 분류된 정문 입문 {breakfast_gate_entries.sum()}개 발견 및 수정")
                 daily_data.loc[breakfast_gate_entries, 'activity_code'] = 'COMMUTE_IN'
+                daily_data.loc[breakfast_gate_entries, 'activity_type'] = 'commute'
                 daily_data.loc[breakfast_gate_entries, 'confidence'] = 100
                 
                 # 로그 출력
@@ -1552,6 +1556,36 @@ class IndividualDashboard:
                 
                 for idx in final_check.index:
                     self.logger.warning(f"  최종 수정: {daily_data.loc[idx, 'datetime']} - {daily_data.loc[idx, 'DR_NM']} : BREAKFAST -> COMMUTE_IN")
+            
+            # 최종적으로 activity_type이 비어있는 경우 재매핑
+            activity_type_mapping = {
+                'WORK': 'work',
+                'FOCUSED_WORK': 'work',
+                'EQUIPMENT_OPERATION': 'work',
+                'WORK_PREPARATION': 'work',
+                'WORKING': 'work',
+                'TRAINING': 'education',
+                'MEETING': 'meeting',
+                'MOVEMENT': 'movement',
+                'COMMUTE_IN': 'commute',
+                'COMMUTE_OUT': 'commute',
+                'BREAKFAST': 'meal',
+                'LUNCH': 'meal',
+                'DINNER': 'meal',
+                'MIDNIGHT_MEAL': 'meal',
+                'REST': 'rest',
+                'FITNESS': 'rest',
+                'LEAVE': 'rest',
+                'IDLE': 'rest',
+                'NON_WORK': 'non_work',
+                'UNKNOWN': 'work'
+            }
+            
+            # activity_type이 비어있거나 None인 경우 재매핑
+            empty_type_mask = daily_data['activity_type'].isna() | (daily_data['activity_type'] == '')
+            if empty_type_mask.any():
+                self.logger.info(f"activity_type이 비어있는 {empty_type_mask.sum()}개 발견, 재매핑 수행")
+                daily_data.loc[empty_type_mask, 'activity_type'] = daily_data.loc[empty_type_mask, 'activity_code'].map(activity_type_mapping).fillna('work')
             
             return daily_data
             
