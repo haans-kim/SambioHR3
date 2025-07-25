@@ -138,7 +138,7 @@ def render_improved_gantt_chart(analysis_result: dict):
                 marker_color = activity['color']  # 일반 색상 사용
                 
             fig.add_trace(go.Scatter(
-                x=[mid_time],
+                x=[segment['start_time']],  # 태깅 시점에 마커 표시
                 y=[activity['y_pos']],
                 mode='markers+text',
                 marker=dict(
@@ -155,7 +155,7 @@ def render_improved_gantt_chart(analysis_result: dict):
                     f"<b>{activity['name']}{' (테이크아웃)' if is_takeout and activity['category'] == 'meal' else ''}</b><br>" +
                     f"시간: {segment['start_time'].strftime('%H:%M')} - {segment['end_time'].strftime('%H:%M')}<br>" +
                     f"위치: {segment.get('location', 'N/A')}<br>" +
-                    f"체류: {segment['duration_minutes']:.0f}분<br>" +
+                    f"체류: {segment.get('duration_minutes', 0):.0f}분<br>" +
                     f"신뢰도: {confidence}%<extra></extra>"
                 ),
                 showlegend=False

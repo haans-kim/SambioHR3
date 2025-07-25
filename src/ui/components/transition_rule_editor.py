@@ -334,7 +334,7 @@ class TransitionRuleEditor:
             
             # 히트맵 스타일 적용
             st.dataframe(
-                df_matrix.style.background_gradient(cmap='Blues', axis=None),
+                df_matrix,
                 use_container_width=True
             )
         

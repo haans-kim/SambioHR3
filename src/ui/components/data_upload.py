@@ -37,8 +37,10 @@ class DataUploadComponent:
         if 'upload_config' not in st.session_state:
             st.session_state.upload_config = self._load_upload_config()
         
-        # 자동으로 pickle 파일 확인 및 로드
-        self._auto_load_pickles()
+        # 자동으로 pickle 파일 확인 및 로드 - 최초 1회만 실행
+        if 'pickles_auto_loaded' not in st.session_state:
+            self._auto_load_pickles()
+            st.session_state.pickles_auto_loaded = True
     
     def _load_data_types(self) -> Dict:
         """데이터 유형 정의 로드"""
@@ -623,36 +625,20 @@ class DataUploadComponent:
                     # 가장 최신 pickle 파일 정보 가져오기
                     latest_pickle = pickle_files[0]
                     
-                    # 데이터베이스 로드 시도
-                    try:
-                        # pickle 파일에서 데이터 로드
-                        df = self.pickle_manager.load_dataframe(
-                            name=info['table_name'],
-                            version=latest_pickle['version']
-                        )
-                        
-                        if df is not None and not df.empty:
-                            # 데이터베이스에 저장 (이미 있으면 건너뜀)
-                            if hasattr(self.db_manager, 'save_dataframe'):
-                                self.db_manager.save_dataframe(df, info['table_name'])
-                            
-                            # 세션 상태 업데이트
-                            config = st.session_state.upload_config.get(data_type, {})
-                            config['pickle_exists'] = True
-                            config['dataframe_name'] = info['table_name']
-                            config['row_count'] = len(df)
-                            config['last_modified'] = latest_pickle.get('created_at', datetime.now().isoformat())
-                            
-                            # 파일명 정보 업데이트
-                            if not config.get('file_names'):
-                                config['file_names'] = [f"Pickle 파일 (자동 로드, {len(df):,}행)"]
-                            
-                            st.session_state.upload_config[data_type] = config
-                            
-                            self.logger.info(f"{data_type} 자동 로드 완료: {len(df):,}행")
+                    # 세션 상태 업데이트만 수행 (실제 데이터 로드는 하지 않음)
+                    config = st.session_state.upload_config.get(data_type, {})
+                    config['pickle_exists'] = True
+                    config['dataframe_name'] = info['table_name']
+                    config['row_count'] = latest_pickle.get('rows', 0)
+                    config['last_modified'] = latest_pickle.get('created_at', datetime.now().isoformat())
                     
-                    except Exception as e:
-                        self.logger.warning(f"{data_type} 자동 로드 실패: {e}")
+                    # 파일명 정보 업데이트
+                    if not config.get('file_names'):
+                        config['file_names'] = [f"Pickle 파일 ({latest_pickle.get('rows', 0):,}행)"]
+                    
+                    st.session_state.upload_config[data_type] = config
+                    
+                    self.logger.info(f"{data_type} 메타데이터 로드 완료: {latest_pickle.get('rows', 0):,}행")
                 else:
                     self.logger.info(f"{data_type}에 대한 pickle 파일 없음")
             

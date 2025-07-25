@@ -33,8 +33,8 @@ class IndividualAnalyzer:
         
         # 2교대 근무 설정
         self.shift_patterns = {
-            '주간': {'start': time(8, 0), 'end': time(17, 0)},
-            '야간': {'start': time(20, 0), 'end': time(5, 0)}
+            '주간': {'start': time(8, 0), 'end': time(20, 30)},
+            '야간': {'start': time(20, 0), 'end': time(8, 30)}
         }
         
         # 식사시간 설정
@@ -454,7 +454,9 @@ class IndividualAnalyzer:
         """교대 구분 판정"""
         current_time = timestamp.time()
         
-        if time(6, 0) <= current_time < time(18, 0):
+        # 주간: 08:00-20:30, 야간: 20:00-08:30
+        # 겹치는 시간(20:00-20:30)은 주간으로 처리
+        if time(8, 0) <= current_time <= time(20, 30):
             return '주간'
         else:
             return '야간'

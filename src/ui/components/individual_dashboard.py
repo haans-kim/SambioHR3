@@ -405,46 +405,35 @@ class IndividualDashboard:
             return None
     
     def get_tag_location_master(self):
-        """태깅지점 마스터 데이터 가져오기"""
+        """태깅지점 마스터 데이터 가져오기 (DB에서 직접 로드)"""
         try:
-            from ...data_processing import PickleManager
-            import gzip
-            pickle_manager = PickleManager()
+            from sqlalchemy import text
             
-            # 직접 파일 경로로 로드 시도
-            import glob
-            pattern = str(pickle_manager.base_path / "tag_location_master_v*.pkl.gz")
-            files = glob.glob(pattern)
+            # 데이터베이스에서 직접 로드
+            query = """
+            SELECT 
+                "정렬No",
+                "위치",
+                "기기번호" as DR_NO,
+                "게이트명" as DR_NM,
+                "표기명",
+                "입출구분" as INOUT_GB,
+                "근무구역여부",
+                "근무",
+                "라벨링"
+            FROM tag_location_master
+            ORDER BY "정렬No"
+            """
             
-            if files:
-                # 가장 최신 파일 선택
-                latest_file = sorted(files)[-1]
-                self.logger.info(f"태깅지점 마스터 파일 직접 로드: {latest_file}")
+            with self.db_manager.engine.connect() as conn:
+                tag_location_master = pd.read_sql(query, conn)
                 
-                with gzip.open(latest_file, 'rb') as f:
-                    tag_location_master = pd.read_pickle(f)
-            else:
-                self.logger.warning("태깅지점 마스터 파일을 찾을 수 없습니다.")
-                return None
-            
-            if tag_location_master is not None:
+            if tag_location_master is not None and not tag_location_master.empty:
                 self.logger.info(f"태깅지점 마스터 데이터 로드 성공: {len(tag_location_master)}건")
                 self.logger.info(f"마스터 데이터 컬럼: {tag_location_master.columns.tolist()}")
                 
-                # 컬럼명 확인 및 표준화
-                # 가능한 컬럼명 변형들
-                dr_no_variations = ['DR_NO', 'dr_no', 'Dr_No', 'DRNO', 'dr번호', 'DR번호', '기기번호']
-                work_area_variations = ['근무구역여부', '근무구역', 'work_area', 'WORK_AREA']
-                work_status_variations = ['근무', '근무상태', 'work_status', 'WORK_STATUS']
-                label_variations = ['라벨링', '라벨', 'label', 'LABEL', '레이블']
-                
-                # 실제 컬럼명 찾기
-                for col in dr_no_variations:
-                    if col in tag_location_master.columns:
-                        tag_location_master['DR_NO'] = tag_location_master[col]
-                        break
-                
-                # 근무구역여부, 근무, 라벨링 컬럼은 이미 있으므로 추가 처리 불필요
+                # DR_NO 컬럼 타입 확인 및 문자열 변환
+                tag_location_master['DR_NO'] = tag_location_master['DR_NO'].astype(str)
                 
                 return tag_location_master
             else:
@@ -1759,7 +1748,7 @@ class IndividualDashboard:
                             'activity': 'meal',
                             'activity_code': activity_code,
                             'location': restaurant_info,
-                            'duration_minutes': 10 if is_takeout else 30,
+                            'duration_minutes': None,  # 나중에 다음 태그와의 시간 차이로 계산
                             'confidence': 100,
                             'is_actual_meal': True,
                             'is_takeout': is_takeout
@@ -1809,6 +1798,25 @@ class IndividualDashboard:
                     'is_actual_meal': row.get('is_actual_meal', False),  # 실제 식사 여부
                     'is_takeout': is_takeout_value  # 테이크아웃 여부
                 })
+            
+            # activity_segments를 시간순으로 정렬
+            activity_segments = sorted(activity_segments, key=lambda x: x['start_time'])
+            
+            # 정렬 후 duration_minutes 재계산
+            for i in range(len(activity_segments)):
+                if activity_segments[i]['duration_minutes'] is None:
+                    if i < len(activity_segments) - 1:
+                        # 다음 세그먼트까지의 시간 계산
+                        duration = (activity_segments[i+1]['start_time'] - activity_segments[i]['start_time']).total_seconds() / 60
+                        activity_segments[i]['duration_minutes'] = duration
+                        # end_time도 업데이트
+                        activity_segments[i]['end_time'] = activity_segments[i+1]['start_time']
+                    else:
+                        # 마지막 세그먼트인 경우
+                        is_takeout = activity_segments[i].get('is_takeout', False)
+                        default_duration = 10 if is_takeout else 30
+                        activity_segments[i]['duration_minutes'] = default_duration
+                        activity_segments[i]['end_time'] = activity_segments[i]['start_time'] + timedelta(minutes=default_duration)
             
             # Claim 데이터 가져오기
             claim_data = self.get_daily_claim_data(employee_id, selected_date)
@@ -2212,19 +2220,6 @@ class IndividualDashboard:
         st.markdown("### 📊 활동별 시간 분석")
         self.render_activity_summary(analysis_result)
         
-        # 구역별 체류 시간 분석
-        st.markdown("### 📍 구역별 체류 시간 분석")
-        self.render_area_summary(analysis_result)
-        
-        # 식사 시간 분석 (meal_time_analysis가 있는 경우)
-        if 'meal_time_analysis' in analysis_result:
-            # render_detailed_analysis의 탭 대신 직접 표시
-            st.markdown("### 🍽️ 식사시간 분석 (4번 식사)")
-            self.render_meal_analysis(analysis_result)
-        
-        # 시계열 타임라인
-        st.markdown("### 📅 일일 활동 타임라인")
-        self.render_timeline_view(analysis_result)
         
         # 상세 Gantt 차트
         st.markdown("### 📊 활동 시퀀스 타임라인")
@@ -2415,18 +2410,15 @@ class IndividualDashboard:
         st.markdown("### 📋 상세 분석 결과")
         
         # 탭으로 구분하여 표시
-        tab1, tab2, tab3, tab4 = st.tabs(["🍽️ 식사시간", "🔄 교대근무", "📊 효율성", "📈 트렌드"])
+        tab1, tab2, tab3 = st.tabs(["🔄 교대근무", "📊 효율성", "📈 트렌드"])
         
         with tab1:
-            self.render_meal_analysis(analysis_result)
-        
-        with tab2:
             self.render_shift_analysis(analysis_result)
         
-        with tab3:
+        with tab2:
             self.render_efficiency_analysis(analysis_result)
         
-        with tab4:
+        with tab3:
             self.render_trend_analysis(analysis_result)
     
     def render_meal_analysis(self, analysis_result: dict):
@@ -2958,7 +2950,7 @@ class IndividualDashboard:
                     f"<b>{get_activity_name(activity_code, 'ko')}</b><br>" +
                     f"시간: {segment['start_time'].strftime('%H:%M')} - {segment['end_time'].strftime('%H:%M')}<br>" +
                     f"위치: {segment.get('location', 'N/A')}<br>" +
-                    f"지속: {segment['duration_minutes']:.0f}분"
+                    f"지속: {segment.get('duration_minutes', 0):.0f}분"
                 )
                 
                 # 막대 추가
@@ -3176,7 +3168,7 @@ class IndividualDashboard:
                     '종료': end_str,
                     '활동': activity_name,
                     '위치': seg['location'],
-                    '체류시간': f"{int(seg['duration_minutes'])}분"
+                    '체류시간': f"{int(seg.get('duration_minutes', 0))}분"
                 })
             
             df_segments = pd.DataFrame(segment_data)
@@ -3234,7 +3226,7 @@ class IndividualDashboard:
                             'work_area_type': 'N',
                             'work_status': 'M',
                             'activity_label': '',
-                            'duration_minutes': 30 if not is_takeout else 10,
+                            'duration_minutes': None,  # 나중에 다음 태그와의 시간 차이로 계산
                             'meal_type': '',
                             'meal_time': meal_time,
                             'restaurant': restaurant_info,
@@ -3263,9 +3255,53 @@ class IndividualDashboard:
                         raw_data = pd.concat([raw_data, meal_df], ignore_index=True)
                         # 시간순 정렬
                         raw_data = raw_data.sort_values('datetime').reset_index(drop=True)
+                        
+                        # 식사 태그의 duration 계산 (다음 태그까지의 시간)
+                        for i in range(len(raw_data) - 1):
+                            if pd.isna(raw_data.iloc[i]['duration_minutes']):
+                                # 다음 태그까지의 시간 계산
+                                duration = (raw_data.iloc[i+1]['datetime'] - raw_data.iloc[i]['datetime']).total_seconds() / 60
+                                raw_data.at[raw_data.index[i], 'duration_minutes'] = duration
+                        
+                        # 마지막 행의 duration이 None인 경우 기본값 설정
+                        if pd.isna(raw_data.iloc[-1]['duration_minutes']):
+                            # 테이크아웃이면 10분, 아니면 30분
+                            is_takeout = raw_data.iloc[-1].get('is_takeout', False)
+                            raw_data.at[raw_data.index[-1], 'duration_minutes'] = 10 if is_takeout else 30
+        
+        # 태깅지점 마스터 정보 추가
+        tag_location_master = self.get_tag_location_master()
+        if tag_location_master is not None and not tag_location_master.empty:
+            # DR_NO로 조인
+            raw_data['DR_NO_str'] = raw_data['DR_NO'].astype(str)
+            tag_location_master['DR_NO_str'] = tag_location_master['DR_NO'].astype(str)
+            
+            # 조인할 컬럼 선택
+            join_columns = ['DR_NO_str', '위치', '표기명', '근무구역여부', '근무', '라벨링']
+            available_join_columns = [col for col in join_columns if col in tag_location_master.columns]
+            
+            # 조인 수행
+            raw_data = raw_data.merge(
+                tag_location_master[available_join_columns],
+                on='DR_NO_str',
+                how='left',
+                suffixes=('', '_master')
+            )
+            
+            # 마스터 정보로 업데이트
+            if '표기명' in raw_data.columns:
+                raw_data['DR_NM'] = raw_data['표기명'].fillna(raw_data['DR_NM'])
+            if '위치' in raw_data.columns:
+                raw_data['location_info'] = raw_data['위치']
+            if '근무구역여부' in raw_data.columns:
+                raw_data['work_area_type'] = raw_data['근무구역여부'].fillna(raw_data.get('work_area_type', 'G'))
+            if '근무' in raw_data.columns:
+                raw_data['work_status'] = raw_data['근무'].fillna(raw_data.get('work_status', ''))
+            if '라벨링' in raw_data.columns:
+                raw_data['activity_label'] = raw_data['라벨링'].fillna(raw_data.get('activity_label', ''))
         
         # 표시할 컬럼 선택 (테이크아웃 컬럼 제거)
-        display_columns = ['datetime', 'DR_NO', 'DR_NM', 'INOUT_GB', 'activity_code', 'activity_type', 
+        display_columns = ['datetime', 'DR_NO', 'DR_NM', 'location_info', 'INOUT_GB', 'activity_code', 'activity_type', 
                           'work_area_type', 'work_status', 'activity_label', 'duration_minutes', 
                           'meal_time', 'restaurant']
         
@@ -3277,12 +3313,13 @@ class IndividualDashboard:
             'datetime': '시각',
             'DR_NO': '게이트 번호',
             'DR_NM': '위치',
+            'location_info': '구역/동/층',
             'INOUT_GB': '태그종류',  # 입/출에서 태그종류로 변경
             'activity_code': '활동코드',
             'activity_type': '활동분류',
-            'work_area_type': '구역',
-            'work_status': '상태',
-            'activity_label': '라벨',
+            'work_area_type': '구역코드',
+            'work_status': '공간분류',
+            'activity_label': '허용활동',
             'duration_minutes': '체류시간(분)',
             'meal_time': '식사시간',
             'restaurant': '식당'
@@ -3291,7 +3328,8 @@ class IndividualDashboard:
         # 데이터프레임 준비
         df_display = raw_data[available_columns].copy()
         df_display['datetime'] = df_display['datetime'].dt.strftime('%H:%M:%S')
-        df_display['duration_minutes'] = df_display['duration_minutes'].round(1)
+        # None 값을 0으로 처리한 후 반올림
+        df_display['duration_minutes'] = df_display['duration_minutes'].fillna(0).round(1)
         
         # 활동 코드를 한글명으로 변환 (테이크아웃 반영)
         # 디버깅: raw_data 확인
@@ -3393,9 +3431,15 @@ class IndividualDashboard:
                 lambda x: '✓' if x else ''
             )
         
-        # 구역 타입 한글 변환
+        # 구역 타입 표시 (새로운 코드 체계 반영)
         if 'work_area_type' in df_display.columns:
-            area_type_map = {'Y': '근무구역', 'G': '1선게이트', 'N': '비근무구역'}
+            # 새로운 코드 체계: G(근무영역), N(비근무영역), T(연결구간)
+            area_type_map = {
+                'Y': 'G', 'N': 'N', 'G': 'T',  # 기존 코드를 새 코드로 매핑
+                'G1': 'G1', 'G2': 'G2', 'G3': 'G3', 'G4': 'G4',  # 근무영역 세부
+                'N1': 'N1', 'N2': 'N2',  # 비근무영역 세부
+                'T1': 'T1', 'T2': 'T2', 'T3': 'T3'  # 연결구간 세부
+            }
             df_display['work_area_type'] = df_display['work_area_type'].map(area_type_map).fillna(df_display['work_area_type'])
         
         # 상태 한글 변환 (확장) - activity_code 기반으로 상태 업데이트
@@ -3851,8 +3895,11 @@ class IndividualDashboard:
                 str(facility_image_path)
             )
             
-            # use_container_width로 전체 너비 사용
-            st.pyplot(fig, use_container_width=True)
+            # 고정 크기로 표시 (use_container_width=False)
+            # 차트를 중앙에 배치하기 위해 columns 사용
+            col1, col2, col3 = st.columns([1, 3, 1])
+            with col2:
+                st.pyplot(fig, use_container_width=False)
             plt.close()
             
             # 주요 이동 경로
@@ -3865,22 +3912,6 @@ class IndividualDashboard:
             else:
                 st.info("No frequent paths found.")
             
-            # 건물별 체류 시간
-            st.subheader("🏢 Time Spent by Building")
-            time_spent = movement_analysis.get('time_spent', {})
-            
-            if time_spent:
-                building_time_data = []
-                for building, minutes in time_spent.items():
-                    hours = minutes / 60
-                    building_time_data.append({
-                        'Building': building,
-                        'Time Spent': f"{int(hours)}h {int(minutes % 60)}m",
-                        'Percentage(%)': round(minutes / sum(time_spent.values()) * 100, 1)
-                    })
-                
-                df_building_time = pd.DataFrame(building_time_data)
-                st.dataframe(df_building_time, use_container_width=True)
             
         except Exception as e:
             import traceback
