@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from ...database import DatabaseManager
-from ...data_processing import PickleManager, DataTransformer, ExcelLoader
+from ...database import DatabaseManager, get_pickle_manager
+from ...data_processing import DataTransformer, ExcelLoader
 
 class DataUploadComponent:
     """데이터 업로드 컴포넌트"""
@@ -21,7 +21,7 @@ class DataUploadComponent:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
         self.logger = logging.getLogger(__name__)
-        self.pickle_manager = PickleManager()
+        self.pickle_manager = get_pickle_manager()
         self.data_transformer = DataTransformer()
         self.excel_loader = ExcelLoader()
         

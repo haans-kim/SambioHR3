@@ -18,6 +18,13 @@ from .models import (
     ProcessedTagData, HMMModel, InteractionNetwork,
     MovementNetwork, DailyActivity, ACTIVITY_STATES, TIME_WINDOWS
 )
+from .singleton_manager import (
+    SingletonDatabaseManager, 
+    SingletonPickleManager,
+    get_database_manager,
+    get_pickle_manager,
+    reset_singletons
+)
 
 __all__ = [
     # Schema
@@ -29,6 +36,11 @@ __all__ = [
     
     # Manager
     'DatabaseManager',
+    'SingletonDatabaseManager',
+    'SingletonPickleManager',
+    'get_database_manager',
+    'get_pickle_manager',
+    'reset_singletons',
     
     # Models
     'Employee', 'DailyWorkSummary', 'OrgSummary',

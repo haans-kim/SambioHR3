@@ -10,16 +10,15 @@ from datetime import datetime, timedelta, date
 import calendar
 
 from ...analysis import OrganizationAnalyzer
-from ...data_processing.pickle_manager import PickleManager
-from ...database.db_manager import DatabaseManager
+from ...database import get_database_manager, get_pickle_manager
 
 class OrganizationDashboard:
     """조직별 대시보드 컴포넌트"""
     
     def __init__(self, organization_analyzer: OrganizationAnalyzer):
         self.analyzer = organization_analyzer
-        self.pickle_manager = PickleManager()
-        self.db_manager = DatabaseManager()
+        self.pickle_manager = get_pickle_manager()
+        self.db_manager = get_database_manager()
     
     def render(self):
         """대시보드 렌더링"""

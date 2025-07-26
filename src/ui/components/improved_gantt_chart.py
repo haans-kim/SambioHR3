@@ -79,6 +79,13 @@ def render_improved_gantt_chart(analysis_result: dict):
     # 각 세그먼트를 원과 연결선으로 표시
     prev_segment = None
     
+    # 디버깅: 출퇴근 활동 확인
+    commute_segments = [seg for seg in segments if seg.get('activity_code') in ['COMMUTE_IN', 'COMMUTE_OUT']]
+    if commute_segments:
+        print(f"출퇴근 세그먼트 발견: {len(commute_segments)}개")
+        for seg in commute_segments:
+            print(f"  - {seg['start_time']} : {seg['activity_code']} @ {seg.get('location', 'N/A')}")
+    
     for i, segment in enumerate(segments):
         if pd.notna(segment['start_time']) and pd.notna(segment['end_time']):
             activity_code = segment.get('activity_code', 'UNKNOWN')

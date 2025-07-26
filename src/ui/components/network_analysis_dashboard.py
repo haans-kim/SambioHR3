@@ -36,8 +36,8 @@ class NetworkAnalysisDashboard:
             return self._date_range_cache
             
         try:
-            from ...data_processing import PickleManager
-            pickle_manager = PickleManager()
+            from ...database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
             tag_data = pickle_manager.load_dataframe(name='tag_data')
             
             if tag_data is None or tag_data.empty:
@@ -315,8 +315,8 @@ class NetworkAnalysisDashboard:
         """직원 간 상호작용 분석"""
         try:
             # Pickle 파일에서 태그 데이터 로드
-            from ...data_processing import PickleManager
-            pickle_manager = PickleManager()
+            from ...database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
             tag_data = pickle_manager.load_dataframe(name='tag_data')
             
             if tag_data is None or tag_data.empty:
@@ -419,8 +419,8 @@ class NetworkAnalysisDashboard:
         """공간 이동 패턴 분석"""
         try:
             # Pickle 파일에서 태그 데이터 로드
-            from ...data_processing import PickleManager
-            pickle_manager = PickleManager()
+            from ...database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
             tag_data = pickle_manager.load_dataframe(name='tag_data')
             
             if tag_data is None or tag_data.empty:
@@ -729,8 +729,8 @@ class NetworkAnalysisDashboard:
         """부서 목록 가져오기"""
         try:
             # Pickle 파일에서 부서 정보 가져오기
-            from ...data_processing import PickleManager
-            pickle_manager = PickleManager()
+            from ...database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
             
             # 조직 데이터에서 부서 정보 가져오기
             org_data = pickle_manager.load_dataframe(name='organization_data')
@@ -785,8 +785,8 @@ class NetworkAnalysisDashboard:
         """시계열 네트워크 데이터 분석"""
         try:
             # Pickle 파일에서 태그 데이터 로드
-            from ...data_processing import PickleManager
-            pickle_manager = PickleManager()
+            from ...database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
             tag_data = pickle_manager.load_dataframe(name='tag_data')
             
             if tag_data is None or tag_data.empty:
@@ -894,8 +894,8 @@ class NetworkAnalysisDashboard:
             # 여기서는 간단히 위치 기반으로 활동을 추정
             # 실제로는 HMM 모델 결과나 활동 분류 결과를 사용해야 함
             
-            from ...data_processing import PickleManager
-            pickle_manager = PickleManager()
+            from ...database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
             tag_data = pickle_manager.load_dataframe(name='tag_data')
             
             if tag_data is None or tag_data.empty:

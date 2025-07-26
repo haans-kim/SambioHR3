@@ -460,6 +460,10 @@ class DatabaseManager:
                             )
                             
                             if df is not None and not df.empty:
+                                # attendance_data의 경우 특별 처리
+                                if table_name == 'attendance_data':
+                                    df = self._process_attendance_data(df)
+                                
                                 # 데이터베이스에 저장
                                 self.save_dataframe(df, table_name)
                                 self.logger.info(f"{display_name} 자동 로드 완료: {len(df):,}행")
@@ -488,10 +492,90 @@ class DatabaseManager:
             self.logger.warning(f"테이블 행 수 조회 실패 ({table_name}): {e}")
             return 0
     
+    def _process_attendance_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """attendance_data의 datetime.time 타입을 처리"""
+        df_copy = df.copy()
+        
+        # 첫 번째 행이 헤더인 경우 제거
+        if df_copy.iloc[0]['Unnamed: 0'] == '사번':
+            df_copy = df_copy.iloc[1:].copy()
+            df_copy.reset_index(drop=True, inplace=True)
+        
+        # 컬럼명 매핑
+        column_mapping = {
+            'Unnamed: 0': 'employee_id',
+            '질의2': 'employee_name',
+            'Unnamed: 2': 'department_name',
+            'Unnamed: 3': 'position_name',
+            'Unnamed: 4': 'attendance_code',
+            'Unnamed: 5': 'attendance_name',
+            'Unnamed: 6': 'start_date',
+            'Unnamed: 7': 'end_date',
+            'Unnamed: 8': 'attendance_days',
+            'Unnamed: 9': 'start_time',
+            'Unnamed: 10': 'end_time',
+            'Unnamed: 11': 'attendance_hours',
+            'Unnamed: 12': 'reason',
+            'Unnamed: 13': 'reason_detail',
+            'Unnamed: 14': 'destination',
+            'Unnamed: 15': 'contact',
+            'Unnamed: 16': 'contact_relation',
+            'Unnamed: 17': 'created_date',
+            'Unnamed: 18': 'approval_status',
+            'Unnamed: 19': 'last_modifier',
+            'Unnamed: 20': 'first_approver',
+            'Unnamed: 21': 'second_approver',
+            'Unnamed: 22': 'third_approver'
+        }
+        
+        df_copy.rename(columns=column_mapping, inplace=True)
+        
+        # datetime.time 타입 컬럼을 문자열로 변환
+        time_columns = ['start_time', 'end_time']
+        for col in time_columns:
+            if col in df_copy.columns:
+                # 각 값을 개별적으로 처리
+                converted_values = []
+                for val in df_copy[col]:
+                    if pd.isna(val):
+                        converted_values.append(None)
+                    elif hasattr(val, 'strftime'):
+                        # datetime.time 객체인 경우
+                        converted_values.append(val.strftime('%H:%M:%S'))
+                    else:
+                        # 이미 문자열이거나 다른 타입인 경우
+                        converted_values.append(val)
+                df_copy[col] = converted_values
+        
+        # 날짜 컬럼 처리 (YYYYMMDD 형식을 YYYY-MM-DD로 변환)
+        date_columns = ['start_date', 'end_date', 'created_date']
+        for col in date_columns:
+            if col in df_copy.columns:
+                df_copy[col] = pd.to_datetime(df_copy[col], format='%Y%m%d', errors='coerce')
+        
+        # 숫자 타입 변환
+        numeric_columns = ['attendance_days', 'attendance_hours']
+        for col in numeric_columns:
+            if col in df_copy.columns:
+                df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce')
+        
+        self.logger.info(f"attendance_data 처리 완료: {len(df_copy)}행")
+        return df_copy
+    
     def save_dataframe(self, df: pd.DataFrame, table_name: str, if_exists: str = 'replace'):
         """DataFrame을 데이터베이스에 저장"""
         try:
-            df.to_sql(table_name, self.engine, if_exists=if_exists, index=False)
+            # datetime.time 타입 컬럼을 문자열로 변환
+            df_copy = df.copy()
+            for col in df_copy.columns:
+                if df_copy[col].dtype == 'object':
+                    # datetime.time 객체가 있는지 확인
+                    sample = df_copy[col].dropna().iloc[0] if not df_copy[col].dropna().empty else None
+                    if sample is not None and hasattr(sample, 'strftime'):
+                        self.logger.info(f"{col} 컬럼의 datetime.time 타입을 문자열로 변환")
+                        df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%H:%M:%S') if pd.notna(x) and hasattr(x, 'strftime') else x)
+            
+            df_copy.to_sql(table_name, self.engine, if_exists=if_exists, index=False)
             self.logger.info(f"{table_name} 테이블에 {len(df):,}행 저장 완료")
         except Exception as e:
             self.logger.error(f"{table_name} 테이블 저장 실패: {e}")

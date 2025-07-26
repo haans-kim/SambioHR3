@@ -18,7 +18,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
-from src.database import DatabaseManager
+from src.database import get_database_manager
 from src.hmm import HMMModel
 from src.analysis import IndividualAnalyzer, OrganizationAnalyzer
 from src.ui.components.individual_dashboard import IndividualDashboard
@@ -48,8 +48,8 @@ class SambioHumanApp:
     def initialize_components(self):
         """컴포넌트 초기화"""
         try:
-            # 데이터베이스 매니저 초기화
-            self.db_manager = DatabaseManager()
+            # 싱글톤 데이터베이스 매니저 사용
+            self.db_manager = get_database_manager()
             
             # HMM 모델 초기화
             self.hmm_model = HMMModel("sambio_work_activity_hmm")
