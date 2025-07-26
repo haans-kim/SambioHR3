@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 import matplotlib.pyplot as plt
 import sqlite3
+from sqlalchemy import text
 from .improved_gantt_chart import render_improved_gantt_chart
 from .hmm_classifier import HMMActivityClassifier
 
@@ -31,6 +32,10 @@ class IndividualDashboard:
     def __init__(self, individual_analyzer: IndividualAnalyzer):
         self.analyzer = individual_analyzer
         self.logger = logging.getLogger(__name__)
+        
+        # DatabaseManager 초기화
+        from ...database import DatabaseManager
+        self.db_manager = DatabaseManager()
         
         # 색상 팔레트 (activity_types.py에서 가져옴)
         self.colors = {}
@@ -426,7 +431,7 @@ class IndividualDashboard:
             """
             
             with self.db_manager.engine.connect() as conn:
-                tag_location_master = pd.read_sql(query, conn)
+                tag_location_master = pd.read_sql(text(query), conn)
                 
             if tag_location_master is not None and not tag_location_master.empty:
                 self.logger.info(f"태깅지점 마스터 데이터 로드 성공: {len(tag_location_master)}건")
@@ -453,19 +458,63 @@ class IndividualDashboard:
             # Claim 데이터에서 근무제 유형 확인
             claim_data = pickle_manager.load_dataframe(name='claim_data')
             if claim_data is not None and '사번' in claim_data.columns:
+                # 사번 형식 맞추기
+                if ' - ' in str(employee_id):
+                    employee_id = employee_id.split(' - ')[0].strip()
+                
                 # 날짜 형식 맞추기
                 date_int = int(selected_date.strftime('%Y%m%d'))
-                emp_claim = claim_data[
-                    (claim_data['사번'] == employee_id) & 
-                    (claim_data['근무일'] == date_int)
-                ]
+                
+                # 사번을 숫자로 변환
+                try:
+                    emp_id_int = int(employee_id)
+                    emp_claim = claim_data[
+                        (claim_data['사번'] == emp_id_int) & 
+                        (claim_data['근무일'] == date_int)
+                    ]
+                except:
+                    emp_claim = claim_data[
+                        (claim_data['사번'] == employee_id) & 
+                        (claim_data['근무일'] == date_int)
+                    ]
                 
                 if not emp_claim.empty and 'WORKSCHDTYPNM' in emp_claim.columns:
                     work_type = emp_claim.iloc[0]['WORKSCHDTYPNM']
+                    self.logger.info(f"Claim 데이터에서 근무제 확인: {work_type}")
                     if '탄력' in str(work_type):
                         return 'flexible'
                     elif '선택' in str(work_type):
                         return 'selective'
+                    elif '야간' in str(work_type) or '2교대' in str(work_type) or '교대' in str(work_type):
+                        return 'night_shift'
+                    else:
+                        # Claim 데이터가 있지만 키워드가 없는 경우도 태그 데이터로 추가 확인
+                        pass
+            
+            # 태그 데이터로 야간 근무 여부 판단
+            tag_data = pickle_manager.load_dataframe(name='tag_data')
+            if tag_data is not None and '사번' in tag_data.columns:
+                try:
+                    emp_id_int = int(employee_id)
+                    date_int = int(selected_date.strftime('%Y%m%d'))
+                    
+                    # 해당 날짜의 첫 출근 시간 확인
+                    daily_tags = tag_data[
+                        (tag_data['사번'] == emp_id_int) & 
+                        (tag_data['ENTE_DT'] == date_int)
+                    ].copy()
+                    
+                    if not daily_tags.empty:
+                        # 시간 정보 파싱
+                        daily_tags['hour'] = daily_tags['출입시각'].astype(str).str.zfill(6).str[:2].astype(int)
+                        
+                        # 첫 태그의 시간 확인 (18시 이후 또는 6시 이전이면 야간조)
+                        first_hour = daily_tags.iloc[0]['hour']
+                        if first_hour >= 18 or first_hour <= 6:
+                            self.logger.info(f"야간 근무자 감지: {employee_id}, 첫 태그 시간: {first_hour}시")
+                            return 'night_shift'
+                except:
+                    pass
             
             return 'standard'  # 기본값
             
@@ -484,6 +533,10 @@ class IndividualDashboard:
             if meal_data is None:
                 self.logger.info("식사 데이터가 없습니다.")
                 return None
+            
+            # 근무 유형 확인
+            work_type = self.get_employee_work_type(employee_id, selected_date)
+            self.logger.info(f"직원 {employee_id}의 근무 유형: {work_type}")
             
             self.logger.info(f"식사 데이터 로드 완료: {len(meal_data)}행")
             self.logger.info(f"식사 데이터 컬럼: {list(meal_data.columns[:10])}")
@@ -528,23 +581,74 @@ class IndividualDashboard:
                 # meal_data의 사번도 숫자로 변환
                 meal_data[emp_id_column] = pd.to_numeric(meal_data[emp_id_column], errors='coerce')
                 
-                # 날짜로 필터링
-                daily_meals = meal_data[
-                    (meal_data[emp_id_column] == emp_id_int) & 
-                    (meal_data[date_column].dt.date == selected_date)
-                ].copy()
+                # 야간 근무자는 전날 데이터도 포함해야 함
+                if work_type in ['flexible', 'night_shift']:
+                    # 야간 근무자는 전날과 당일 데이터 모두 가져오기
+                    prev_date = selected_date - timedelta(days=1)
+                    self.logger.info(f"야간 근무자 식사 데이터 조회: {prev_date} ~ {selected_date}")
+                    
+                    daily_meals = meal_data[
+                        (meal_data[emp_id_column] == emp_id_int) & 
+                        ((meal_data[date_column].dt.date == selected_date) | 
+                         (meal_data[date_column].dt.date == prev_date))
+                    ].copy()
+                    
+                    # 디버깅: 각 날짜별 식사 건수 확인
+                    prev_meals = meal_data[(meal_data[emp_id_column] == emp_id_int) & (meal_data[date_column].dt.date == prev_date)]
+                    curr_meals = meal_data[(meal_data[emp_id_column] == emp_id_int) & (meal_data[date_column].dt.date == selected_date)]
+                    self.logger.info(f"전날({prev_date}) 식사: {len(prev_meals)}건, 당일({selected_date}) 식사: {len(curr_meals)}건")
+                else:
+                    # 일반 근무자는 당일 데이터만
+                    daily_meals = meal_data[
+                        (meal_data[emp_id_column] == emp_id_int) & 
+                        (meal_data[date_column].dt.date == selected_date)
+                    ].copy()
                 
-                self.logger.info(f"숫자 비교 결과: {len(daily_meals)}건의 식사 데이터 찾음")
+                self.logger.info(f"숫자 비교 결과: {len(daily_meals)}건의 식사 데이터 찾음 (근무유형: {work_type})")
+                
+                # 디버깅: 날짜 필터링 전 데이터 확인
+                if work_type in ['flexible', 'night_shift']:
+                    self.logger.info(f"필터링 전 전날({prev_date}) 식사: {len(prev_meals)}건, 당일({selected_date}) 식사: {len(curr_meals)}건")
                 
             except ValueError:
                 # 문자열로 비교
                 meal_data[emp_id_column] = meal_data[emp_id_column].astype(str)
-                daily_meals = meal_data[
-                    (meal_data[emp_id_column] == str(employee_id)) & 
-                    (meal_data[date_column].dt.date == selected_date)
-                ].copy()
                 
-                self.logger.info(f"문자열 비교 결과: {len(daily_meals)}건의 식사 데이터 찾음")
+                if work_type in ['flexible', 'night_shift']:
+                    # 야간 근무자는 전날과 당일 데이터 모두 가져오기
+                    prev_date = selected_date - timedelta(days=1)
+                    daily_meals = meal_data[
+                        (meal_data[emp_id_column] == str(employee_id)) & 
+                        ((meal_data[date_column].dt.date == selected_date) | 
+                         (meal_data[date_column].dt.date == prev_date))
+                    ].copy()
+                else:
+                    # 일반 근무자는 당일 데이터만
+                    daily_meals = meal_data[
+                        (meal_data[emp_id_column] == str(employee_id)) & 
+                        (meal_data[date_column].dt.date == selected_date)
+                    ].copy()
+                
+                self.logger.info(f"문자열 비교 결과: {len(daily_meals)}건의 식사 데이터 찾음 (근무유형: {work_type})")
+            
+            # 야간 근무자의 경우 시간대 필터링
+            if work_type in ['flexible', 'night_shift'] and not daily_meals.empty:
+                # 전날 저녁 17시 ~ 당일 오전 12시까지로 필터링
+                start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
+                end_time = datetime.combine(selected_date, time(12, 0))
+                
+                # 식사 시간 필터링
+                daily_meals = daily_meals[
+                    (pd.to_datetime(daily_meals[date_column]) >= start_time) & 
+                    (pd.to_datetime(daily_meals[date_column]) < end_time)
+                ]
+                self.logger.info(f"야간 근무자 식사 데이터 필터링: {start_time} ~ {end_time}, {len(daily_meals)}건")
+                
+                # 필터링 전후 비교를 위해 로깅
+                before_count = len(meal_data[
+                    (meal_data[emp_id_column] == emp_id_int if 'emp_id_int' in locals() else meal_data[emp_id_column] == str(employee_id))
+                ])
+                self.logger.info(f"전체 식사 데이터 중 해당 사번: {before_count}건")
             
             if not daily_meals.empty:
                 self.logger.info(f"직원 {employee_id}의 {selected_date} 식사 데이터: {len(daily_meals)}건")
@@ -592,17 +696,45 @@ class IndividualDashboard:
             try:
                 emp_id_int = int(employee_id)
                 
-                # 탄력적 근무제의 경우 야간 근무 고려
-                if work_type == 'flexible':
-                    # 전날 야간 근무 데이터도 포함
+                # 탄력적 근무제 또는 야간 근무의 경우 야간 근무 고려
+                if work_type in ['flexible', 'night_shift']:
+                    # 야간 근무자는 전날 저녁 ~ 당일 아침이 한 근무일
+                    # 따라서 '선택 날짜'는 퇴근하는 날짜를 의미
                     prev_date = selected_date - timedelta(days=1)
                     prev_date_int = int(prev_date.strftime('%Y%m%d'))
                     
-                    # 당일 + 전날 데이터 가져오기
-                    daily_data = tag_data[
+                    # 야간 근무자는 전날 저녁부터 당일 아침까지만 필요
+                    # 전날 데이터 (17시 이후)와 당일 데이터 (12시 이전)만 로드
+                    prev_data = tag_data[
                         (tag_data['사번'] == emp_id_int) & 
-                        ((tag_data['ENTE_DT'] == date_int) | (tag_data['ENTE_DT'] == prev_date_int))
+                        (tag_data['ENTE_DT'] == prev_date_int)
                     ].copy()
+                    
+                    current_data = tag_data[
+                        (tag_data['사번'] == emp_id_int) & 
+                        (tag_data['ENTE_DT'] == date_int)
+                    ].copy()
+                    
+                    # 시간 필터링을 여기서 미리 수행
+                    if not prev_data.empty:
+                        prev_data['hour'] = prev_data['출입시각'].astype(str).str.zfill(6).str[:2].astype(int)
+                        prev_data = prev_data[prev_data['hour'] >= 17]  # 17시 이후만
+                    
+                    if not current_data.empty:
+                        current_data['hour'] = current_data['출입시각'].astype(str).str.zfill(6).str[:2].astype(int)
+                        current_data = current_data[current_data['hour'] < 12]  # 12시 이전만
+                    
+                    # 두 데이터 결합
+                    if not prev_data.empty and not current_data.empty:
+                        daily_data = pd.concat([prev_data, current_data], ignore_index=True)
+                    elif not prev_data.empty:
+                        daily_data = prev_data
+                    elif not current_data.empty:
+                        daily_data = current_data
+                    else:
+                        daily_data = pd.DataFrame()
+                    
+                    self.logger.info(f"야간 근무자 데이터 로드: 전날 저녁({len(prev_data)}건) + 당일 오전({len(current_data)}건) = {len(daily_data)}건")
                 else:
                     # 일반 근무제는 당일 데이터만
                     daily_data = tag_data[
@@ -629,28 +761,243 @@ class IndividualDashboard:
             )
             daily_data = daily_data.sort_values('datetime')
             
-            # 탄력적 근무제의 경우 야간 근무 시간대 필터링
-            if work_type == 'flexible':
-                # 전날 20:00 이후 또는 당일 20:30까지의 데이터만 유지
-                start_time = datetime.combine(selected_date - timedelta(days=1), time(20, 0))
-                end_time = datetime.combine(selected_date, time(20, 30))
+            # 탄력적 근무제 또는 야간 근무의 경우 야간 근무 시간대 필터링
+            if work_type in ['flexible', 'night_shift']:
+                # 야간 근무는 전날 저녁 ~ 당일 아침 (하나의 근무 사이클)
+                # 선택한 날짜 = 퇴근하는 날짜 기준
                 
-                # 첫 출근 태그 찾기
-                first_work_in = daily_data[daily_data['INOUT_GB'] == 'T2'].iloc[0]['datetime'] if len(daily_data[daily_data['INOUT_GB'] == 'T2']) > 0 else None
+                # 전날 저녁 17시 ~ 당일 오전 12시까지로 필터링
+                start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
+                end_time = datetime.combine(selected_date, time(12, 0))
                 
-                if first_work_in:
-                    # 야간 근무인 경우
-                    if first_work_in.hour >= 19 or first_work_in.hour <= 9:
-                        # 첫 출근 시간부터 12시간 30분까지의 데이터만 유지
-                        daily_data = daily_data[
-                            (daily_data['datetime'] >= first_work_in) & 
-                            (daily_data['datetime'] <= first_work_in + timedelta(hours=12, minutes=30))
-                        ]
+                # 야간 근무 시간대 필터링
+                daily_data = daily_data[
+                    (daily_data['datetime'] >= start_time) & 
+                    (daily_data['datetime'] < end_time)
+                ]
+                
+                self.logger.info(f"야간 근무 시간대 필터링: {start_time} ~ {end_time}, {len(daily_data)}건")
+                
+                # 실제 출근 시간 확인
+                if not daily_data.empty:
+                    first_tag = daily_data.iloc[0]['datetime']
+                    last_tag = daily_data.iloc[-1]['datetime']
+                    self.logger.info(f"실제 근무: {first_tag.strftime('%m/%d %H:%M')} ~ {last_tag.strftime('%m/%d %H:%M')}")
+                
+                # 정문 태그 확인
+                gate_tags = daily_data[daily_data['DR_NM'].str.contains('정문|GATE', case=False, na=False)]
+                if not gate_tags.empty:
+                    self.logger.info(f"정문 태그 {len(gate_tags)}건 포함됨:")
+                    for _, tag in gate_tags.iterrows():
+                        self.logger.info(f"  - {tag['datetime']}: {tag['DR_NM']}")
+                else:
+                    self.logger.warning("정문 태그가 필터링 후 없음")
+            
+            # 장비 사용 데이터를 O 태그로 추가
+            equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
+            if equipment_data is not None and not equipment_data.empty:
+                self.logger.info(f"장비 데이터 {len(equipment_data)}건을 O 태그로 변환하여 추가")
+                
+                # 장비 데이터를 태그 형식으로 변환
+                for _, equip in equipment_data.iterrows():
+                    # O 태그 생성
+                    o_tag = pd.DataFrame({
+                        'ENTE_DT': [int(pd.to_datetime(equip['timestamp']).strftime('%Y%m%d'))],
+                        '출입시각': [int(pd.to_datetime(equip['timestamp']).strftime('%H%M%S'))],
+                        '사번': [int(employee_id)],
+                        'DR_NO': ['O_EQUIP'],  # 가상의 게이트 번호
+                        'DR_NM': [f"{equip.get('system_type', 'EQUIPMENT')} 사용"],
+                        'INOUT_GB': ['O'],  # O 태그
+                        'datetime': [pd.to_datetime(equip['timestamp'])],
+                        'time': [pd.to_datetime(equip['timestamp']).strftime('%H%M%S')],
+                        'equipment_type': [equip.get('system_type', '')],
+                        'action_type': [equip.get('action_type', 'USE')]
+                    })
+                    
+                    # 기존 데이터에 추가
+                    daily_data = pd.concat([daily_data, o_tag], ignore_index=True)
+                
+                # 시간순 재정렬
+                daily_data = daily_data.sort_values('datetime').reset_index(drop=True)
             
             return daily_data
             
         except Exception as e:
             self.logger.error(f"일일 태그 데이터 로드 실패: {e}")
+            return None
+    
+    def get_employee_equipment_data_from_db(self, employee_id: str, selected_date: date):
+        """DB에서 직원의 장비 사용 데이터 조회"""
+        try:
+            # 근무 유형 확인
+            work_type = self.get_employee_work_type(employee_id, selected_date)
+            
+            if work_type in ['flexible', 'night_shift']:
+                # 야간/교대 근무자는 전날 17:00부터 당일 12:00까지
+                start_date = selected_date - timedelta(days=1)
+                end_date = selected_date
+                
+                query = f"""
+                SELECT * FROM equipment_logs 
+                WHERE employee_id = '{employee_id}' 
+                AND datetime >= '{start_date} 17:00:00'
+                AND datetime < '{end_date} 12:00:00'
+                """
+            else:
+                # 일반 근무자는 당일 데이터만
+                query = f"""
+                SELECT * FROM equipment_logs 
+                WHERE employee_id = '{employee_id}' 
+                AND DATE(datetime) = '{selected_date}'
+                """
+            
+            # DB 쿼리 실행
+            result = self.db_manager.execute_query(text(query))
+            
+            if result and len(result) > 0:
+                # DataFrame으로 변환
+                equipment_data = pd.DataFrame(result)
+                equipment_data['timestamp'] = pd.to_datetime(equipment_data['datetime'])
+                return equipment_data
+            
+            return None
+            
+        except Exception as e:
+            self.logger.warning(f"DB에서 장비 데이터 조회 실패: {e}")
+            return None
+    
+    def get_employee_equipment_data(self, employee_id: str, selected_date: date):
+        """직원의 일일 장비 사용 데이터 가져오기"""
+        try:
+            # 먼저 DB에서 조회 시도
+            equipment_data = self.get_employee_equipment_data_from_db(employee_id, selected_date)
+            if equipment_data is not None:
+                return equipment_data
+                
+            # DB에 데이터가 없으면 pickle 파일에서 로드
+            from ...data_processing import PickleManager
+            pickle_manager = PickleManager()
+            
+            # 사번 형식 맞추기
+            if ' - ' in str(employee_id):
+                employee_id = employee_id.split(' - ')[0].strip()
+            
+            # 근무 유형 확인
+            work_type = self.get_employee_work_type(employee_id, selected_date)
+            
+            equipment_data_list = []
+            
+            # LAMS 데이터 로드
+            lams_data = pickle_manager.load_dataframe(name='lams_data')
+            if lams_data is not None and not lams_data.empty:
+                try:
+                    # 사번을 숫자로 변환
+                    emp_id_int = int(employee_id)
+                    lams_data['employee_id'] = pd.to_numeric(lams_data['employee_id'], errors='coerce')
+                    
+                    # 날짜 필터링
+                    daily_lams = lams_data[
+                        (lams_data['employee_id'] == emp_id_int) & 
+                        (pd.to_datetime(lams_data['timestamp']).dt.date == selected_date)
+                    ].copy()
+                    
+                    if not daily_lams.empty:
+                        daily_lams['system'] = 'LAMS(품질시스템)'
+                        equipment_data_list.append(daily_lams)
+                        self.logger.info(f"LAMS 데이터 {len(daily_lams)}건 로드")
+                        
+                except Exception as e:
+                    self.logger.warning(f"LAMS 데이터 로드 실패: {e}")
+            
+            # MES 데이터 로드
+            mes_data = pickle_manager.load_dataframe(name='mes_data')
+            if mes_data is not None and not mes_data.empty:
+                try:
+                    # 사번을 숫자로 변환
+                    emp_id_int = int(employee_id)
+                    mes_data['employee_id'] = pd.to_numeric(mes_data['employee_id'], errors='coerce')
+                    
+                    # 날짜 필터링
+                    daily_mes = mes_data[
+                        (mes_data['employee_id'] == emp_id_int) & 
+                        (pd.to_datetime(mes_data['timestamp']).dt.date == selected_date)
+                    ].copy()
+                    
+                    if not daily_mes.empty:
+                        daily_mes['system'] = 'MES(생산시스템)'
+                        equipment_data_list.append(daily_mes)
+                        self.logger.info(f"MES 데이터 {len(daily_mes)}건 로드")
+                        
+                except Exception as e:
+                    self.logger.warning(f"MES 데이터 로드 실패: {e}")
+            
+            # EAM 데이터 로드
+            eam_data = pickle_manager.load_dataframe(name='eam_data')
+            if eam_data is not None and not eam_data.empty:
+                try:
+                    # 사번을 숫자로 변환
+                    emp_id_int = int(employee_id)
+                    eam_data['employee_id'] = pd.to_numeric(eam_data['employee_id'], errors='coerce')
+                    
+                    # 날짜 필터링
+                    daily_eam = eam_data[
+                        (eam_data['employee_id'] == emp_id_int) & 
+                        (pd.to_datetime(eam_data['timestamp']).dt.date == selected_date)
+                    ].copy()
+                    
+                    if not daily_eam.empty:
+                        daily_eam['system'] = 'EAM(안전설비시스템)'
+                        equipment_data_list.append(daily_eam)
+                        self.logger.info(f"EAM 데이터 {len(daily_eam)}건 로드")
+                        
+                except Exception as e:
+                    self.logger.warning(f"EAM 데이터 로드 실패: {e}")
+            
+            # 통합된 장비 데이터 로드 (equipment_data_merged)
+            merged_data = pickle_manager.load_dataframe(name='equipment_data_merged')
+            if merged_data is not None and not merged_data.empty:
+                try:
+                    # 사번을 숫자로 변환
+                    emp_id_int = int(employee_id)
+                    merged_data['employee_id'] = pd.to_numeric(merged_data['employee_id'], errors='coerce')
+                    
+                    # 날짜 필터링
+                    daily_merged = merged_data[
+                        (merged_data['employee_id'] == emp_id_int) & 
+                        (pd.to_datetime(merged_data['timestamp']).dt.date == selected_date)
+                    ].copy()
+                    
+                    if not daily_merged.empty:
+                        self.logger.info(f"통합 장비 데이터 {len(daily_merged)}건 로드")
+                        return daily_merged
+                        
+                except Exception as e:
+                    self.logger.warning(f"통합 장비 데이터 로드 실패: {e}")
+            
+            # 개별 데이터를 통합
+            if equipment_data_list:
+                combined_data = pd.concat(equipment_data_list, ignore_index=True)
+                combined_data = combined_data.sort_values('timestamp')
+                
+                # 야간 근무자의 경우 시간대 필터링
+                if work_type in ['flexible', 'night_shift']:
+                    # 전날 저녁 17시 ~ 당일 오전 12시까지로 필터링
+                    start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
+                    end_time = datetime.combine(selected_date, time(12, 0))
+                    
+                    combined_data = combined_data[
+                        (pd.to_datetime(combined_data['timestamp']) >= start_time) & 
+                        (pd.to_datetime(combined_data['timestamp']) < end_time)
+                    ]
+                    self.logger.info(f"야간 근무자 장비 데이터 필터링: {start_time} ~ {end_time}")
+                
+                self.logger.info(f"총 {len(combined_data)}건의 장비 사용 데이터")
+                return combined_data if not combined_data.empty else None
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"장비 데이터 로드 실패: {e}")
             return None
     
     def check_work_hour_compliance(self, employee_id: str, selected_date: date, work_hours: float):
@@ -732,6 +1079,76 @@ class IndividualDashboard:
             daily_data['activity_label'] = 'YW'  # 기본값 (근무구역에서 근무중)
             daily_data['confidence'] = 80  # 기본 신뢰도
             daily_data['is_takeout'] = False  # 테이크아웃 여부 기본값 False
+            daily_data['tag_code'] = 'G1'  # 기본 태그 코드
+            
+            # O 태그 (장비 사용) 처리
+            o_tag_mask = daily_data['INOUT_GB'] == 'O'
+            if o_tag_mask.any():
+                daily_data.loc[o_tag_mask, 'activity_code'] = 'EQUIPMENT_OPERATION'
+                daily_data.loc[o_tag_mask, 'confidence'] = 98  # 장비 사용 로그는 높은 신뢰도
+                daily_data.loc[o_tag_mask, 'work_area_type'] = 'Y'  # 장비 사용은 근무구역
+                daily_data.loc[o_tag_mask, 'work_status'] = 'O'  # 장비 조작 상태
+                daily_data.loc[o_tag_mask, 'activity_label'] = 'YO'  # 근무구역에서 장비조작
+                self.logger.info(f"O 태그 {o_tag_mask.sum()}건을 EQUIPMENT_OPERATION으로 분류")
+            
+            # 정문/스피드게이트 태그를 T2/T3로 변환 (조인 전에 처리)
+            work_type = self.get_employee_work_type(employee_id, selected_date) if employee_id and selected_date else 'standard'
+            gate_mask = daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)
+            entry_mask = (daily_data['INOUT_GB'] == '입문') & gate_mask
+            exit_mask = (daily_data['INOUT_GB'] == '출문') & gate_mask
+            
+            # 입문 -> T2, 출문 -> T3 변환
+            daily_data.loc[entry_mask, 'tag_code'] = 'T2'
+            daily_data.loc[exit_mask, 'tag_code'] = 'T3'
+            daily_data.loc[entry_mask, 'INOUT_GB'] = 'T2'  # INOUT_GB도 업데이트
+            daily_data.loc[exit_mask, 'INOUT_GB'] = 'T3'
+            self.logger.info(f"정문 태그 변환 - T2: {entry_mask.sum()}건, T3: {exit_mask.sum()}건")
+            
+            # 시간대별 출퇴근 처리
+            if work_type in ['night_shift', 'flexible']:
+                # 야간 근무자는 17-22시 입문을 출근으로
+                gate_entry_mask = (
+                    (daily_data['tag_code'] == 'T2') & 
+                    (daily_data['datetime'].dt.hour.between(17, 22))
+                )
+                if gate_entry_mask.any():
+                    daily_data.loc[gate_entry_mask, 'activity_code'] = 'COMMUTE_IN'
+                    daily_data.loc[gate_entry_mask, 'activity_type'] = 'commute'
+                    daily_data.loc[gate_entry_mask, 'confidence'] = 100
+                    self.logger.info(f"야간 근무자 출근: {gate_entry_mask.sum()}건")
+                
+                # 야간 근무자는 5-10시 출문을 퇴근으로
+                gate_exit_mask = (
+                    (daily_data['tag_code'] == 'T3') & 
+                    (daily_data['datetime'].dt.hour.between(5, 10))
+                )
+                if gate_exit_mask.any():
+                    daily_data.loc[gate_exit_mask, 'activity_code'] = 'COMMUTE_OUT'
+                    daily_data.loc[gate_exit_mask, 'activity_type'] = 'commute'
+                    daily_data.loc[gate_exit_mask, 'confidence'] = 100
+                    self.logger.info(f"야간 근무자 퇴근: {gate_exit_mask.sum()}건")
+            else:
+                # 일반 근무자는 5-10시 입문을 출근으로
+                gate_entry_mask = (
+                    (daily_data['tag_code'] == 'T2') & 
+                    (daily_data['datetime'].dt.hour.between(5, 10))
+                )
+                if gate_entry_mask.any():
+                    daily_data.loc[gate_entry_mask, 'activity_code'] = 'COMMUTE_IN'
+                    daily_data.loc[gate_entry_mask, 'activity_type'] = 'commute'
+                    daily_data.loc[gate_entry_mask, 'confidence'] = 100
+                    self.logger.info(f"일반 근무자 출근: {gate_entry_mask.sum()}건")
+                
+                # 일반 근무자는 17-22시 출문을 퇴근으로
+                gate_exit_mask = (
+                    (daily_data['tag_code'] == 'T3') & 
+                    (daily_data['datetime'].dt.hour.between(17, 22))
+                )
+                if gate_exit_mask.any():
+                    daily_data.loc[gate_exit_mask, 'activity_code'] = 'COMMUTE_OUT'
+                    daily_data.loc[gate_exit_mask, 'activity_type'] = 'commute'
+                    daily_data.loc[gate_exit_mask, 'confidence'] = 100
+                    self.logger.info(f"일반 근무자 퇴근: {gate_exit_mask.sum()}건")
             
             # 태깅지점 마스터 데이터와 조인
             if tag_location_master is not None and 'DR_NO' in tag_location_master.columns:
@@ -826,37 +1243,17 @@ class IndividualDashboard:
                     # T1: 건물/구역 연결 -> 내부이동
                     daily_data.loc[daily_data['tag_code'] == 'T1', 'activity_code'] = 'MOVEMENT'
                     
-                    # T2: 출입포인트(IN) -> 출근
-                    daily_data.loc[daily_data['tag_code'] == 'T2', 'activity_code'] = 'COMMUTE_IN'
+                    # T2: 출입포인트(IN) -> 출근 (이미 위에서 처리했지만 다른 T2도 있을 수 있음)
+                    t2_mask = (daily_data['tag_code'] == 'T2') & (daily_data['activity_code'] != 'COMMUTE_IN')
+                    if t2_mask.any():
+                        daily_data.loc[t2_mask, 'activity_code'] = 'COMMUTE_IN'
                     
-                    # T3: 출입포인트(OUT) -> 퇴근
-                    daily_data.loc[daily_data['tag_code'] == 'T3', 'activity_code'] = 'COMMUTE_OUT'
+                    # T3: 출입포인트(OUT) -> 퇴근 (이미 위에서 처리했지만 다른 T3도 있을 수 있음)
+                    t3_mask = (daily_data['tag_code'] == 'T3') & (daily_data['activity_code'] != 'COMMUTE_OUT')
+                    if t3_mask.any():
+                        daily_data.loc[t3_mask, 'activity_code'] = 'COMMUTE_OUT'
                 
-                # 정문/스피드게이트 입문은 무조건 출근으로 처리 (초기 단계)
-                gate_entry_mask = (
-                    (daily_data['INOUT_GB'] == '입문') & 
-                    (daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)) &
-                    (daily_data['datetime'].dt.hour.between(5, 9))
-                )
-                if gate_entry_mask.any():
-                    daily_data.loc[gate_entry_mask, 'activity_code'] = 'COMMUTE_IN'
-                    daily_data.loc[gate_entry_mask, 'activity_type'] = 'commute'
-                    daily_data.loc[gate_entry_mask, 'confidence'] = 100
-                    self.logger.info(f"초기 단계: 정문 입문 {gate_entry_mask.sum()}개를 COMMUTE_IN으로 설정")
-                    
-                    # 출근(T2) 후 다음 활동까지의 시간 제한
-                    # T2 이후 5분 이상 다른 태그가 없으면 MOVEMENT로 변경
-                    for i in range(len(daily_data) - 1):
-                        if daily_data.iloc[i]['tag_code'] == 'T2':
-                            # 다음 태그까지의 시간 차이
-                            time_diff = (daily_data.iloc[i+1]['datetime'] - 
-                                       daily_data.iloc[i]['datetime']).total_seconds() / 60  # 분 단위
-                            
-                            # 5분 이상 차이나면 출근 상태를 이동으로 변경
-                            if time_diff > 5:
-                                # 출근은 첫 1분만 유지
-                                daily_data.loc[daily_data.index[i], 'duration_minutes'] = 1
-                                # 나머지 시간은 MOVEMENT로 분류될 것임
+                # 이미 위에서 정문 태그를 처리했으므로 이 부분은 삭제
                 else:
                     # 기존 라벨링 기반 분류 (호환성)
                     if 'activity_label' in daily_data.columns:
@@ -1011,12 +1408,29 @@ class IndividualDashboard:
                     # 시간대에 따른 분류
                     for idx in daily_data[speed_gate_mask].index:
                         hour = daily_data.loc[idx, 'datetime'].hour
-                        if 5 <= hour < 10:  # 오전 5시~10시는 출근
+                        if work_type in ['night_shift', 'flexible'] and 17 <= hour <= 22:  # 야간 근무자는 저녁 출근
+                            daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
+                            daily_data.loc[idx, 'confidence'] = 100
+                        elif work_type not in ['night_shift', 'flexible'] and 5 <= hour < 10:  # 일반 근무자는 아침 출근
                             daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
                             daily_data.loc[idx, 'confidence'] = 100
                         else:  # 그 외 시간대는 이동
                             daily_data.loc[idx, 'activity_code'] = 'MOVEMENT'
                             daily_data.loc[idx, 'confidence'] = 90
+                
+                # 스피드게이트/정문 출문을 퇴근으로 처리
+                gate_exit_mask = daily_data['DR_NM'].str.contains('SPEED GATE.*출문|정문.*출문', case=False, na=False)
+                if gate_exit_mask.any():
+                    self.logger.info(f"게이트 출문 {gate_exit_mask.sum()}건을 수정")
+                    # 시간대에 따른 분류
+                    for idx in daily_data[gate_exit_mask].index:
+                        hour = daily_data.loc[idx, 'datetime'].hour
+                        if work_type in ['night_shift', 'flexible'] and 5 <= hour <= 10:  # 야간 근무자는 아침 퇴근
+                            daily_data.loc[idx, 'activity_code'] = 'COMMUTE_OUT'
+                            daily_data.loc[idx, 'confidence'] = 100
+                        elif work_type not in ['night_shift', 'flexible'] and 17 <= hour <= 22:  # 일반 근무자는 저녁 퇴근
+                            daily_data.loc[idx, 'activity_code'] = 'COMMUTE_OUT'
+                            daily_data.loc[idx, 'confidence'] = 100
                 
                 # 식사 전후 출문/입문 처리
                 # 1. 식사 그룹 찾기 (연속된 식사 태그를 하나의 그룹으로)
@@ -1244,6 +1658,47 @@ class IndividualDashboard:
             if 'tag_code' in daily_data.columns:
                 daily_data.loc[meal_masks & (daily_data['tag_code'] == 'G1'), 'confidence'] = 95
             
+            # 1.5. 장비 사용 데이터 반영
+            if employee_id and selected_date:
+                equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
+                if equipment_data is not None and not equipment_data.empty:
+                    self.logger.info(f"장비 사용 데이터 {len(equipment_data)}건을 활동 분류에 반영합니다.")
+                    
+                    # 장비 사용 시간대의 태그를 EQUIPMENT_OPERATION으로 변경
+                    for _, equip in equipment_data.iterrows():
+                        equip_time = pd.to_datetime(equip['timestamp'])
+                        system_type = equip.get('system_type', equip.get('system', ''))
+                        
+                        # 해당 시간대 근처의 태그 찾기 (±5분)
+                        time_window = timedelta(minutes=5)
+                        nearby_tags = daily_data[
+                            (daily_data['datetime'] >= equip_time - time_window) &
+                            (daily_data['datetime'] <= equip_time + time_window)
+                        ]
+                        
+                        if not nearby_tags.empty:
+                            # 가장 가까운 시간의 태그 찾기
+                            time_diffs = abs(nearby_tags['datetime'] - equip_time)
+                            closest_idx = time_diffs.idxmin()
+                            
+                            # 장비 조작으로 분류
+                            daily_data.loc[closest_idx, 'activity_code'] = 'EQUIPMENT_OPERATION'
+                            daily_data.loc[closest_idx, 'confidence'] = 98  # 실제 장비 사용 로그이므로 높은 신뢰도
+                            daily_data.loc[closest_idx, 'equipment_type'] = system_type
+                            
+                            # 장비 사용 세션 확장 (전후 10분간 같은 위치에 있었다면)
+                            session_start = equip_time - timedelta(minutes=10)
+                            session_end = equip_time + timedelta(minutes=10)
+                            session_mask = (
+                                (daily_data['datetime'] >= session_start) &
+                                (daily_data['datetime'] <= session_end) &
+                                (daily_data['DR_NO'] == daily_data.loc[closest_idx, 'DR_NO']) &
+                                (daily_data['activity_code'] == 'WORK')
+                            )
+                            daily_data.loc[session_mask, 'activity_code'] = 'EQUIPMENT_OPERATION'
+                            daily_data.loc[session_mask, 'confidence'] = 95
+                            daily_data.loc[session_mask, 'equipment_type'] = system_type
+            
             # 2. 특수 활동 분류 (위치명 기반 세부 분류)
             # 회의실
             meeting_mask = daily_data['DR_NM'].str.contains('MEETING|회의|CONFERENCE', case=False, na=False)
@@ -1285,6 +1740,18 @@ class IndividualDashboard:
             # 마지막 레코드는 5분으로 가정
             if len(daily_data) > 0:
                 daily_data.loc[daily_data.index[-1], 'duration_minutes'] = 5
+            
+            # O 태그 (장비 사용)의 체류시간 설정
+            o_tag_indices = daily_data[daily_data['INOUT_GB'] == 'O'].index
+            for idx in o_tag_indices:
+                # 장비 사용은 기본적으로 10분으로 설정
+                daily_data.loc[idx, 'duration_minutes'] = 10
+                # 다음 태그까지의 시간이 30분 이내면 그 시간으로 조정
+                if idx < len(daily_data) - 1:
+                    next_idx = daily_data.index[daily_data.index.get_loc(idx) + 1]
+                    time_to_next = (daily_data.loc[next_idx, 'datetime'] - daily_data.loc[idx, 'datetime']).total_seconds() / 60
+                    if time_to_next < 30:
+                        daily_data.loc[idx, 'duration_minutes'] = time_to_next
             
             # 식사 태그 전후 처리 - 식사 전까지의 작업 시간 조정
             meal_activities = ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']
@@ -1490,13 +1957,25 @@ class IndividualDashboard:
                 # 입문의 경우, 이미 COMMUTE_IN으로 분류된 것을 보존하기 위해 추가 체크
                 entry_mask = wrong_classification & (daily_data['INOUT_GB'] == '입문')
                 for idx in daily_data[entry_mask].index:
-                    # 스피드게이트나 정문 입문이고 아침 시간대(5-10시)인 경우 COMMUTE_IN으로 설정
+                    # 근무 유형에 따라 출근 시간대 다르게 판단
                     hour = daily_data.loc[idx, 'datetime'].hour
                     dr_nm = daily_data.loc[idx, 'DR_NM']
-                    if ('SPEED GATE' in str(dr_nm).upper() or '정문' in str(dr_nm)) and 5 <= hour < 10:
-                        daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
-                        daily_data.loc[idx, 'activity_type'] = 'commute'
-                        self.logger.info(f"출근 시간대 게이트 입문 보존: {daily_data.loc[idx, 'datetime']} - {dr_nm}")
+                    is_gate = 'SPEED GATE' in str(dr_nm).upper() or '정문' in str(dr_nm)
+                    
+                    if is_gate:
+                        if work_type in ['night_shift', 'flexible'] and 17 <= hour <= 22:
+                            # 야간 근무자의 저녁 출근
+                            daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
+                            daily_data.loc[idx, 'activity_type'] = 'commute'
+                            self.logger.info(f"야간 출근 시간대 게이트 입문: {daily_data.loc[idx, 'datetime']} - {dr_nm}")
+                        elif work_type not in ['night_shift', 'flexible'] and 5 <= hour < 10:
+                            # 일반 근무자의 아침 출근
+                            daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
+                            daily_data.loc[idx, 'activity_type'] = 'commute'
+                            self.logger.info(f"일반 출근 시간대 게이트 입문: {daily_data.loc[idx, 'datetime']} - {dr_nm}")
+                        else:
+                            daily_data.loc[idx, 'activity_code'] = 'WORK'
+                            daily_data.loc[idx, 'activity_type'] = 'work'
                     else:
                         daily_data.loc[idx, 'activity_code'] = 'WORK'
                         daily_data.loc[idx, 'activity_type'] = 'work'
@@ -1506,20 +1985,28 @@ class IndividualDashboard:
             # 2. 추가로 정문/스피드게이트 입문이 조식으로 분류된 모든 케이스 확인
             gate_entry_mask = daily_data['INOUT_GB'] == '입문'
             gate_name_mask = daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)
-            morning_mask = daily_data['datetime'].dt.hour.between(5, 9)
-            gate_morning_entry = gate_entry_mask & gate_name_mask & morning_mask
             
-            # 조식으로 잘못 분류된 정문 입문 수정
-            breakfast_gate_entries = gate_morning_entry & (daily_data['activity_code'] == 'BREAKFAST')
-            if breakfast_gate_entries.any():
-                self.logger.info(f"조식으로 잘못 분류된 정문 입문 {breakfast_gate_entries.sum()}개 발견 및 수정")
-                daily_data.loc[breakfast_gate_entries, 'activity_code'] = 'COMMUTE_IN'
-                daily_data.loc[breakfast_gate_entries, 'activity_type'] = 'commute'
-                daily_data.loc[breakfast_gate_entries, 'confidence'] = 100
+            # 근무 유형에 따라 출근 시간대 다르게 설정
+            if work_type in ['night_shift', 'flexible']:
+                # 야간 근무자는 저녁 시간대를 출근으로
+                commute_time_mask = daily_data['datetime'].dt.hour.between(17, 22)
+            else:
+                # 일반 근무자는 아침 시간대를 출근으로
+                commute_time_mask = daily_data['datetime'].dt.hour.between(5, 10)
+                
+            gate_commute_entry = gate_entry_mask & gate_name_mask & commute_time_mask
+            
+            # 식사로 잘못 분류된 정문 입문 수정
+            meal_gate_entries = gate_commute_entry & (daily_data['activity_code'].isin(['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']))
+            if meal_gate_entries.any():
+                self.logger.info(f"식사로 잘못 분류된 정문 입문 {meal_gate_entries.sum()}개 발견 및 수정 (근무유형: {work_type})")
+                daily_data.loc[meal_gate_entries, 'activity_code'] = 'COMMUTE_IN'
+                daily_data.loc[meal_gate_entries, 'activity_type'] = 'commute'
+                daily_data.loc[meal_gate_entries, 'confidence'] = 100
                 
                 # 로그 출력
-                for idx in daily_data[breakfast_gate_entries].index:
-                    self.logger.info(f"  - {daily_data.loc[idx, 'datetime']} at {daily_data.loc[idx, 'DR_NM']} : BREAKFAST -> COMMUTE_IN")
+                for idx in daily_data[meal_gate_entries].index:
+                    self.logger.info(f"  - {daily_data.loc[idx, 'datetime']} at {daily_data.loc[idx, 'DR_NM']} : {daily_data.loc[idx, 'activity_code']} -> COMMUTE_IN")
             
             # 테이크아웃 정보 최종 확인 및 로깅
             if 'is_takeout' in daily_data.columns:
@@ -1530,21 +2017,31 @@ class IndividualDashboard:
                         self.logger.info(f"  - {row['datetime']}: {row['DR_NM']}, activity={row['activity_code']}, is_takeout={row['is_takeout']}")
             
             # 최종 리턴 전에 한 번 더 정문 입문 체크
-            final_check = daily_data[
-                (daily_data['INOUT_GB'] == '입문') & 
-                (daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)) &
-                (daily_data['datetime'].dt.hour.between(5, 9)) &
-                (daily_data['activity_code'] == 'BREAKFAST')
-            ]
+            if work_type in ['night_shift', 'flexible']:
+                # 야간 근무자는 저녁 시간대 체크
+                final_check = daily_data[
+                    (daily_data['INOUT_GB'] == '입문') & 
+                    (daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)) &
+                    (daily_data['datetime'].dt.hour.between(17, 22)) &
+                    (daily_data['activity_code'].isin(['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']))
+                ]
+            else:
+                # 일반 근무자는 아침 시간대 체크
+                final_check = daily_data[
+                    (daily_data['INOUT_GB'] == '입문') & 
+                    (daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)) &
+                    (daily_data['datetime'].dt.hour.between(5, 10)) &
+                    (daily_data['activity_code'].isin(['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']))
+                ]
             
             if not final_check.empty:
-                self.logger.warning(f"최종 체크: 조식으로 분류된 정문 입문 {len(final_check)}개 발견!")
+                self.logger.warning(f"최종 체크: 식사로 분류된 정문 입문 {len(final_check)}개 발견! (근무유형: {work_type})")
                 daily_data.loc[final_check.index, 'activity_code'] = 'COMMUTE_IN'
                 daily_data.loc[final_check.index, 'confidence'] = 100
                 daily_data.loc[final_check.index, 'activity_type'] = 'commute'
                 
                 for idx in final_check.index:
-                    self.logger.warning(f"  최종 수정: {daily_data.loc[idx, 'datetime']} - {daily_data.loc[idx, 'DR_NM']} : BREAKFAST -> COMMUTE_IN")
+                    self.logger.warning(f"  최종 수정: {daily_data.loc[idx, 'datetime']} - {daily_data.loc[idx, 'DR_NM']} : {daily_data.loc[idx, 'activity_code']} -> COMMUTE_IN")
             
             # 최종적으로 activity_type이 비어있는 경우 재매핑
             activity_type_mapping = {
@@ -1610,6 +2107,9 @@ class IndividualDashboard:
         
         # 시간순으로 정렬
         data = data.sort_values('datetime').reset_index(drop=True)
+        
+        # 마지막 태그 시간 확인 (야간 근무자 처리를 위해)
+        last_tag_time = data.iloc[-1]['datetime']
         
         for i in range(len(data)):
             current_row = data.iloc[i].copy()
@@ -1684,9 +2184,46 @@ class IndividualDashboard:
             # 시간 간격 채우기 (태그 사이의 빈 시간을 활동으로 채움)
             classified_data = self._fill_time_gaps(classified_data)
             
+            # 근무 유형 확인
+            work_type = self.get_employee_work_type(employee_id, selected_date)
+            
             # 근무시간 계산
-            work_start = classified_data['datetime'].min()
-            work_end = classified_data['datetime'].max()
+            if work_type == 'night_shift':
+                # 야간 근무자의 경우 출근 태그 기준으로 계산
+                commute_in_tags = classified_data[classified_data['activity_code'] == 'COMMUTE_IN']
+                commute_out_tags = classified_data[classified_data['activity_code'] == 'COMMUTE_OUT']
+                
+                if not commute_in_tags.empty:
+                    work_start = commute_in_tags['datetime'].min()
+                else:
+                    # 18시 이후 첫 태그를 출근으로 간주
+                    evening_tags = classified_data[classified_data['datetime'].dt.hour >= 18]
+                    if not evening_tags.empty:
+                        work_start = evening_tags['datetime'].min()
+                    else:
+                        work_start = classified_data['datetime'].min()
+                
+                # 퇴근은 다음날 오전의 마지막 태그
+                if not commute_out_tags.empty:
+                    work_end = commute_out_tags['datetime'].max()
+                else:
+                    work_end = classified_data['datetime'].max()
+                    
+                # 야간 근무자의 경우 work_end가 12시를 넘으면 12시로 제한
+                if work_end.hour >= 12 and work_end.date() == selected_date:
+                    work_end = datetime.combine(selected_date, time(12, 0))
+                    self.logger.info(f"야간 근무자 work_end를 12시로 제한: {work_end}")
+            else:
+                # 일반 근무자
+                work_start = classified_data['datetime'].min()
+                work_end = classified_data['datetime'].max()
+                
+            # 디버깅: 실제 데이터 범위 로깅
+            self.logger.info(f"근무 유형: {work_type}")
+            self.logger.info(f"분석 데이터 범위: {work_start} ~ {work_end}")
+            self.logger.info(f"데이터 첫 태그: {classified_data['datetime'].min()}")
+            self.logger.info(f"데이터 마지막 태그: {classified_data['datetime'].max()}")
+            
             total_hours = (work_end - work_start).total_seconds() / 3600
             
             # 활동별 시간 집계 (새로운 activity_code 기준)
@@ -1753,7 +2290,7 @@ class IndividualDashboard:
                             'is_actual_meal': True,
                             'is_takeout': is_takeout
                         })
-                        self.logger.info(f"식사 세그먼트 직접 추가: {meal_time} - {restaurant_info}, takeout={is_takeout}")
+                        self.logger.info(f"식사 세그먼트 직접 추가: {meal_time} - {meal_category} @ {restaurant_info}, takeout={is_takeout}, code={activity_code}")
             
             # 나머지 활동 정리
             for idx, row in classified_data.iterrows():
@@ -2108,11 +2645,20 @@ class IndividualDashboard:
                     st.warning(f"선택한 날짜({selected_date})에 해당 직원({employee_id})의 데이터가 없습니다.")
                     return
                 
+                # 장비 데이터 로드
+                equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
+                if equipment_data is not None and not equipment_data.empty:
+                    st.info(f"🔧 장비 사용 데이터: {len(equipment_data)}건 발견")
+                
                 # 활동 분류 수행 (employee_id와 selected_date 전달)
                 classified_data = self.classify_activities(daily_data, employee_id, selected_date)
                 
                 # 분석 결과 생성
                 analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
+                
+                # 장비 데이터를 분석 결과에 추가
+                if equipment_data is not None and not equipment_data.empty:
+                    analysis_result['equipment_data'] = equipment_data
                 
                 # 결과 렌더링
                 self.render_analysis_results(analysis_result)
@@ -2215,6 +2761,11 @@ class IndividualDashboard:
         if analysis_result.get('claim_data'):
             st.markdown("### 📋 근무시간 Claim 비교")
             self.render_claim_comparison(analysis_result)
+        
+        # 장비 사용 데이터 (있을 경우)
+        if analysis_result.get('equipment_data') is not None:
+            st.markdown("### 🔧 장비 사용 현황")
+            self.render_equipment_usage(analysis_result)
         
         # 활동별 시간 요약
         st.markdown("### 📊 활동별 시간 분석")
@@ -3391,6 +3942,11 @@ class IndividualDashboard:
             if 'DR_NM' in df_display.columns:
                 equipment_mask = df_display['DR_NM'].str.contains('EQUIPMENT|장비|기계실', case=False, na=False)
                 df_display.loc[equipment_mask, 'INOUT_GB'] = '장비'
+            
+            # O 태그 처리
+            o_tag_mask = df_display['INOUT_GB'] == 'O'
+            if o_tag_mask.any():
+                df_display.loc[o_tag_mask, 'INOUT_GB'] = '장비사용'
         
         # 식사 정보 처리와 테이크아웃 통합
         if 'meal_type' in df_display.columns:
@@ -3644,6 +4200,79 @@ class IndividualDashboard:
         )
         
         st.plotly_chart(fig, use_container_width=True)
+    
+    def render_equipment_usage(self, analysis_result: dict):
+        """장비 사용 현황 렌더링"""
+        equipment_data = analysis_result.get('equipment_data')
+        
+        if equipment_data is None or equipment_data.empty:
+            st.info("장비 사용 데이터가 없습니다.")
+            return
+        
+        # 시스템별 통계
+        system_counts = equipment_data['system_type'].value_counts()
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            lams_count = system_counts.get('LAMS', 0)
+            st.metric("LAMS(품질시스템)", f"{lams_count}건")
+        
+        with col2:
+            mes_count = system_counts.get('MES', 0)
+            st.metric("MES(생산시스템)", f"{mes_count}건")
+        
+        with col3:
+            eam_count = system_counts.get('EAM', 0)
+            st.metric("EAM(안전설비시스템)", f"{eam_count}건")
+        
+        # 시간대별 장비 사용 현황
+        equipment_data['hour'] = pd.to_datetime(equipment_data['timestamp']).dt.hour
+        hourly_usage = equipment_data.groupby(['hour', 'system_type']).size().unstack(fill_value=0)
+        
+        fig = px.bar(
+            hourly_usage.T,
+            title="시간대별 장비 사용 현황",
+            labels={'value': '사용 횟수', 'index': '시스템', 'hour': '시간'},
+            color_discrete_map={
+                'LAMS': '#FF6B6B',
+                'MES': '#4ECDC4',
+                'EAM': '#45B7D1'
+            }
+        )
+        
+        fig.update_layout(
+            xaxis_title="시간",
+            yaxis_title="사용 횟수",
+            height=300
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # 상세 장비 사용 내역
+        with st.expander("🔍 상세 장비 사용 내역"):
+            # 표시할 컬럼 선택
+            display_columns = ['timestamp', 'system_type', 'action_type', 'equipment_type']
+            available_columns = [col for col in display_columns if col in equipment_data.columns]
+            
+            # 컬럼명 한글화
+            column_names = {
+                'timestamp': '시간',
+                'system_type': '시스템',
+                'action_type': '작업유형',
+                'equipment_type': '장비유형'
+            }
+            
+            # 데이터 준비
+            df_display = equipment_data[available_columns].copy()
+            df_display = df_display.rename(columns=column_names)
+            
+            # 시간 형식 변경
+            if '시간' in df_display.columns:
+                df_display['시간'] = pd.to_datetime(df_display['시간']).dt.strftime('%H:%M:%S')
+            
+            # 데이터프레임 표시
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
     
     def render_area_summary(self, analysis_result: dict):
         """구역별 체류 시간 분석 렌더링"""
