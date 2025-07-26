@@ -21,6 +21,7 @@ from .hmm_classifier import HMMActivityClassifier
 
 from ...analysis import IndividualAnalyzer
 from ...analysis.network_analyzer import NetworkAnalyzer
+from ...tag_system.confidence_calculator_v2 import ConfidenceCalculatorV2
 from ...config.activity_types import (
     ACTIVITY_TYPES, get_activity_color, get_activity_name,
     get_activity_type, ActivityType
@@ -36,6 +37,9 @@ class IndividualDashboard:
         # DatabaseManager 초기화
         from ...database import DatabaseManager
         self.db_manager = DatabaseManager()
+        
+        # 신뢰지수 계산기 초기화
+        self.confidence_calculator = ConfidenceCalculatorV2()
         
         # 색상 팔레트 (activity_types.py에서 가져옴)
         self.colors = {}
@@ -796,29 +800,40 @@ class IndividualDashboard:
             # 장비 사용 데이터를 O 태그로 추가
             equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
             if equipment_data is not None and not equipment_data.empty:
-                self.logger.info(f"장비 데이터 {len(equipment_data)}건을 O 태그로 변환하여 추가")
+                # 야간 근무자의 경우 장비 데이터도 동일한 시간대로 필터링
+                if work_type in ['flexible', 'night_shift']:
+                    # 야간 근무 시간대만 포함
+                    equipment_data['timestamp'] = pd.to_datetime(equipment_data['timestamp'])
+                    equipment_data = equipment_data[
+                        (equipment_data['timestamp'] >= start_time) & 
+                        (equipment_data['timestamp'] < end_time)
+                    ]
+                    self.logger.info(f"야간 근무자 장비 데이터 필터링: {start_time} ~ {end_time}, {len(equipment_data)}건")
                 
-                # 장비 데이터를 태그 형식으로 변환
-                for _, equip in equipment_data.iterrows():
-                    # O 태그 생성
-                    o_tag = pd.DataFrame({
-                        'ENTE_DT': [int(pd.to_datetime(equip['timestamp']).strftime('%Y%m%d'))],
-                        '출입시각': [int(pd.to_datetime(equip['timestamp']).strftime('%H%M%S'))],
-                        '사번': [int(employee_id)],
-                        'DR_NO': ['O_EQUIP'],  # 가상의 게이트 번호
-                        'DR_NM': [f"{equip.get('system_type', 'EQUIPMENT')} 사용"],
-                        'INOUT_GB': ['O'],  # O 태그
-                        'datetime': [pd.to_datetime(equip['timestamp'])],
-                        'time': [pd.to_datetime(equip['timestamp']).strftime('%H%M%S')],
-                        'equipment_type': [equip.get('system_type', '')],
-                        'action_type': [equip.get('action_type', 'USE')]
-                    })
+                if not equipment_data.empty:
+                    self.logger.info(f"장비 데이터 {len(equipment_data)}건을 O 태그로 변환하여 추가")
                     
-                    # 기존 데이터에 추가
-                    daily_data = pd.concat([daily_data, o_tag], ignore_index=True)
-                
-                # 시간순 재정렬
-                daily_data = daily_data.sort_values('datetime').reset_index(drop=True)
+                    # 장비 데이터를 태그 형식으로 변환
+                    for _, equip in equipment_data.iterrows():
+                        # O 태그 생성
+                        o_tag = pd.DataFrame({
+                            'ENTE_DT': [int(pd.to_datetime(equip['timestamp']).strftime('%Y%m%d'))],
+                            '출입시각': [int(pd.to_datetime(equip['timestamp']).strftime('%H%M%S'))],
+                            '사번': [int(employee_id)],
+                            'DR_NO': ['O_EQUIP'],  # 가상의 게이트 번호
+                            'DR_NM': [f"{equip.get('system_type', 'EQUIPMENT')} 사용"],
+                            'INOUT_GB': ['O'],  # O 태그
+                            'datetime': [pd.to_datetime(equip['timestamp'])],
+                            'time': [pd.to_datetime(equip['timestamp']).strftime('%H%M%S')],
+                            'equipment_type': [equip.get('system_type', '')],
+                            'action_type': [equip.get('action_type', 'USE')]
+                        })
+                        
+                        # 기존 데이터에 추가
+                        daily_data = pd.concat([daily_data, o_tag], ignore_index=True)
+                    
+                    # 시간순 재정렬
+                    daily_data = daily_data.sort_values('datetime').reset_index(drop=True)
             
             return daily_data
             
@@ -1216,9 +1231,12 @@ class IndividualDashboard:
                     daily_data.loc[daily_data['tag_code'].str.startswith('T'), 'work_area_type'] = 'T'  # 이동구간
                 else:
                     # 기존 방식 유지 (호환성)
-                    daily_data['work_area_type'] = daily_data['근무구역여부'].fillna('Y')
-                    daily_data['work_status'] = daily_data['근무'].fillna('W')
-                    daily_data['activity_label'] = daily_data['라벨링'].fillna('YW')
+                    if '근무구역여부' in daily_data.columns:
+                        daily_data['work_area_type'] = daily_data['근무구역여부'].fillna('Y')
+                    if '근무' in daily_data.columns:
+                        daily_data['work_status'] = daily_data['근무'].fillna('W')
+                    if '라벨링' in daily_data.columns:
+                        daily_data['activity_label'] = daily_data['라벨링'].fillna('YW')
                 
                 # Tag_Code 기반 기본 활동 분류
                 if 'tag_code' in daily_data.columns:
@@ -1652,11 +1670,12 @@ class IndividualDashboard:
                     daily_data.loc[takeout_location_mask, 'is_takeout'] = True
                     self.logger.info(f"위치명 기반 테이크아웃 설정: {takeout_location_mask.sum()}건")
             
-            # 추정 식사 활동은 위치+시간이 모두 일치하므로 신뢰도 95%
-            meal_masks = breakfast_mask | lunch_mask | dinner_mask | midnight_mask
-            # 식사 활동이면서 tag_code가 G1인 경우만 95%로 상향 (나머지는 기존 유지)
-            if 'tag_code' in daily_data.columns:
-                daily_data.loc[meal_masks & (daily_data['tag_code'] == 'G1'), 'confidence'] = 95
+            # 식사 활동의 신뢰도 조정
+            meal_activity_codes = ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']
+            meal_activity_mask = daily_data['activity_code'].isin(meal_activity_codes)
+            if meal_activity_mask.any() and 'tag_code' in daily_data.columns:
+                # 식사 활동이면서 tag_code가 G1인 경우만 95%로 상향 (나머지는 기존 유지)
+                daily_data.loc[meal_activity_mask & (daily_data['tag_code'] == 'G1'), 'confidence'] = 95
             
             # 1.5. 장비 사용 데이터 반영
             if employee_id and selected_date:
@@ -2081,7 +2100,11 @@ class IndividualDashboard:
             if 'activity_code' not in daily_data.columns:
                 daily_data['activity_code'] = 'WORK'
             if 'activity_type' not in daily_data.columns:
-                daily_data['activity_type'] = 'work'
+                # activity_code가 있으면 매핑
+                if 'activity_code' in daily_data.columns:
+                    daily_data['activity_type'] = daily_data['activity_code'].map(activity_type_mapping).fillna('work')
+                else:
+                    daily_data['activity_type'] = 'work'
             if 'duration_minutes' not in daily_data.columns:
                 daily_data['duration_minutes'] = 5
             if 'confidence' not in daily_data.columns:
@@ -2118,9 +2141,18 @@ class IndividualDashboard:
             if i < len(data) - 1:
                 next_time = data.iloc[i + 1]['datetime']
                 duration = (next_time - current_row['datetime']).total_seconds() / 60
+                
+                # 60분을 초과하는 간격은 5분으로 제한 (비정상적인 gap 방지)
+                if duration > 60:
+                    self.logger.warning(f"긴 시간 간격 감지: {current_row['datetime']} ~ {next_time} ({duration:.0f}분) -> 5분으로 제한")
+                    duration = 5
             else:
                 # 마지막 태그는 5분으로 설정
                 duration = 5
+            
+            # O 태그(장비 사용)의 경우 최소 10분, 최대 30분으로 제한
+            if current_row.get('INOUT_GB') == 'O' or current_row.get('activity_code') == 'EQUIPMENT_OPERATION':
+                duration = min(max(duration, 10), 30)
             
             # 식사 활동의 최소 duration 설정
             if current_row.get('activity_code') in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
@@ -2140,9 +2172,11 @@ class IndividualDashboard:
                         duration = min_duration
                 else:
                     # 식사 태그가 없는데 식사로 분류된 경우 WORK로 변경
-                    current_row['activity_code'] = 'WORK'
-                    current_row['activity_type'] = 'work'
-                    current_row['confidence'] = 85
+                    # 단, EQUIPMENT_OPERATION은 보존
+                    if current_row.get('activity_code') != 'EQUIPMENT_OPERATION':
+                        current_row['activity_code'] = 'WORK'
+                        current_row['activity_type'] = 'work'
+                        current_row['confidence'] = 85
             
             current_row['duration_minutes'] = duration
             filled_data.append(current_row)
@@ -2181,8 +2215,55 @@ class IndividualDashboard:
     def analyze_daily_data(self, employee_id: str, selected_date: date, classified_data: pd.DataFrame):
         """일일 데이터 분석"""
         try:
+            # 근무제 유형 확인
+            work_type = self.get_employee_work_type(employee_id, selected_date)
+            
+            # 야간 근무자의 경우 근무 종료 시간 이후 데이터 제거
+            if work_type == 'night_shift' and len(classified_data) > 0:
+                # COMMUTE_OUT (퇴근) 태그 찾기
+                commute_out_mask = classified_data['activity_code'] == 'COMMUTE_OUT'
+                if commute_out_mask.any():
+                    # 마지막 퇴근 시간
+                    last_commute_out_idx = classified_data[commute_out_mask].index[-1]
+                    last_commute_out_time = classified_data.loc[last_commute_out_idx, 'datetime']
+                    
+                    # 퇴근 후 1시간까지만 데이터 유지 (식사 등을 위해)
+                    cutoff_time = last_commute_out_time + timedelta(hours=1)
+                    classified_data = classified_data[classified_data['datetime'] <= cutoff_time].copy()
+                    self.logger.info(f"야간 근무자 데이터 필터링: {last_commute_out_time} 퇴근 후 {cutoff_time}까지만 유지")
+            
             # 시간 간격 채우기 (태그 사이의 빈 시간을 활동으로 채움)
             classified_data = self._fill_time_gaps(classified_data)
+            
+            # activity_type이 비어있는 경우 매핑
+            if 'activity_type' not in classified_data.columns or classified_data['activity_type'].isna().any():
+                activity_type_mapping = {
+                    'WORK': 'work',
+                    'FOCUSED_WORK': 'work',
+                    'EQUIPMENT_OPERATION': 'work',
+                    'WORK_PREPARATION': 'work',
+                    'WORKING': 'work',
+                    'TRAINING': 'education',
+                    'MEETING': 'meeting',
+                    'MOVEMENT': 'movement',
+                    'COMMUTE_IN': 'commute',
+                    'COMMUTE_OUT': 'commute',
+                    'BREAKFAST': 'meal',
+                    'LUNCH': 'meal',
+                    'DINNER': 'meal',
+                    'MIDNIGHT_MEAL': 'meal',
+                    'REST': 'rest',
+                    'FITNESS': 'rest',
+                    'LEAVE': 'rest',
+                    'IDLE': 'rest',
+                    'NON_WORK': 'non_work',
+                    'UNKNOWN': 'work'
+                }
+                if 'activity_type' not in classified_data.columns:
+                    classified_data['activity_type'] = classified_data['activity_code'].map(activity_type_mapping).fillna('work')
+                else:
+                    empty_mask = classified_data['activity_type'].isna() | (classified_data['activity_type'] == '')
+                    classified_data.loc[empty_mask, 'activity_type'] = classified_data.loc[empty_mask, 'activity_code'].map(activity_type_mapping).fillna('work')
             
             # 근무 유형 확인
             work_type = self.get_employee_work_type(employee_id, selected_date)
@@ -2361,24 +2442,36 @@ class IndividualDashboard:
             # 데이터 품질 분석
             data_quality = self.analyze_data_quality(classified_data)
             
-            # 활동별 시간 통계 (시간 단위로)
+            # 신뢰지수 기반 근무시간 계산
+            work_hours, avg_confidence, activity_breakdown = self.confidence_calculator.calculate_work_time(classified_data)
+            
+            # work_status별 시간 집계 (참고용)
+            if 'work_status' in classified_data.columns:
+                status_summary = classified_data.groupby('work_status')['duration_minutes'].sum()
+            else:
+                status_summary = pd.Series()
+            
             work_time_analysis = {
-                'actual_work_hours': activity_type_summary.get('work', 0) / 60,
+                'actual_work_hours': work_hours,
                 'claimed_work_hours': claim_data['claim_hours'] if claim_data else 8.0,
                 'efficiency_ratio': 0,
-                'work_breakdown': {}
+                'work_breakdown': activity_breakdown,
+                'status_breakdown': {},  # work_status별 시간 추가
+                'confidence_score': avg_confidence  # 전체 신뢰도 추가
             }
             
             # 효율성 계산
             if work_time_analysis['claimed_work_hours'] > 0:
-                work_time_analysis['efficiency_ratio'] = (
-                    work_time_analysis['actual_work_hours'] / 
-                    work_time_analysis['claimed_work_hours'] * 100
-                )
+                efficiency = work_time_analysis['actual_work_hours'] / work_time_analysis['claimed_work_hours'] * 100
+                work_time_analysis['efficiency_ratio'] = round(efficiency, 1)
             
             # 활동별 시간 분석
             for activity_type, minutes in activity_type_summary.items():
                 work_time_analysis['work_breakdown'][activity_type] = minutes / 60
+            
+            # work_status별 시간 분석
+            for status, minutes in status_summary.items():
+                work_time_analysis['status_breakdown'][status] = minutes / 60
             
             # 근무제 유형 추가
             work_type = self.get_employee_work_type(employee_id, selected_date)
@@ -2518,7 +2611,9 @@ class IndividualDashboard:
         }
         
         # 전체 품질 점수 (평균 신뢰도)
-        overall_score = round(confidence_values.mean(), 1) if len(confidence_values) > 0 else 80
+        # 신뢰도가 100을 초과하는 경우 100으로 제한
+        avg_confidence = confidence_values.mean() if len(confidence_values) > 0 else 80
+        overall_score = min(round(avg_confidence, 1), 100.0)
         
         # 태그 데이터 완성도 (태그 코드가 있는 비율)
         if 'tag_code' in classified_data.columns:
@@ -2757,16 +2852,6 @@ class IndividualDashboard:
         with col4:
             st.metric("태그 기록 수", f"{analysis_result['total_records']}건")
         
-        # Claim 데이터 비교 (있을 경우)
-        if analysis_result.get('claim_data'):
-            st.markdown("### 📋 근무시간 Claim 비교")
-            self.render_claim_comparison(analysis_result)
-        
-        # 장비 사용 데이터 (있을 경우)
-        if analysis_result.get('equipment_data') is not None:
-            st.markdown("### 🔧 장비 사용 현황")
-            self.render_equipment_usage(analysis_result)
-        
         # 활동별 시간 요약
         st.markdown("### 📊 활동별 시간 분석")
         self.render_activity_summary(analysis_result)
@@ -2776,11 +2861,20 @@ class IndividualDashboard:
         st.markdown("### 📊 활동 시퀀스 타임라인")
         # 개선된 Gantt 차트 사용
         improved_chart = render_improved_gantt_chart(analysis_result)
+        
         if improved_chart:
             st.plotly_chart(improved_chart, use_container_width=True)
         else:
             # fallback to original chart
             self.render_detailed_gantt_chart(analysis_result)
+        
+        # 장비 사용 데이터 (있을 경우에만 타임라인 아래에 표시)
+        equipment_data = self.get_employee_equipment_data(analysis_result['employee_id'], analysis_result['analysis_date'])
+        if equipment_data is not None and not equipment_data.empty:
+            # 필요 시 equipment_data를 analysis_result에 추가
+            analysis_result['equipment_data'] = equipment_data
+            st.markdown("### 🔧 장비 사용 현황")
+            self.render_equipment_usage(analysis_result)
         
         # 네트워크 분석 (이동 경로)
         st.markdown("### 🔄 Movement Path Network Analysis")
@@ -3214,8 +3308,8 @@ class IndividualDashboard:
         activity_summary = analysis_result['activity_summary']
         claim_data = analysis_result.get('claim_data', {})
         
-        # 주요 지표 계산
-        total_minutes = sum(activity_summary.values())
+        # 주요 지표 계산 - 체류시간 사용
+        total_minutes = analysis_result.get('total_hours', 0) * 60  # 체류시간을 분으로 변환
         
         # 작업시간 (근무 관련 활동들)
         work_codes = ['WORK', 'FOCUSED_WORK', 'EQUIPMENT_OPERATION', 'WORK_PREPARATION', 
@@ -3239,11 +3333,18 @@ class IndividualDashboard:
             claim_hours = 0
             claim_minutes = 0
         
-        # 실제 업무시간
-        actual_work_hours = work_minutes / 60
+        # 실제 업무시간 (work_time_analysis에서 가져오기)
+        if 'work_time_analysis' in analysis_result:
+            actual_work_hours = analysis_result['work_time_analysis'].get('actual_work_hours', work_minutes / 60)
+        else:
+            actual_work_hours = work_minutes / 60
+        
+        # 실제 업무시간이 체류시간을 초과하는 경우 제한
+        if actual_work_hours > analysis_result['total_hours']:
+            actual_work_hours = analysis_result['total_hours'] * 0.8  # 체류시간의 80%로 제한
         
         # 업무 효율성 (실제 업무시간 / Claim 시간)
-        efficiency = (work_minutes / claim_minutes * 100) if claim_minutes > 0 else 0
+        efficiency = (actual_work_hours * 60 / claim_minutes * 100) if claim_minutes > 0 else 0
         
         # 일일 활동 요약 스타일
         st.markdown("""
@@ -3370,10 +3471,12 @@ class IndividualDashboard:
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            work_percent = (work_minutes / total_minutes * 100) if total_minutes > 0 else 0
+            # actual_work_hours를 사용하여 표시
+            work_percent = (actual_work_hours * 60 / total_minutes * 100) if total_minutes > 0 else 0
+            work_percent = min(work_percent, 100.0)  # 100% 초과 방지
             st.markdown(f"""
                 <div class="metric-card">
-                    <div class="metric-value" style="color: #2196F3;">{work_minutes/60:.1f}h</div>
+                    <div class="metric-value" style="color: #2196F3;">{actual_work_hours:.1f}h</div>
                     <div class="metric-label">작업시간</div>
                     <div class="metric-percent">{work_percent:.1f}%</div>
                 </div>
@@ -3400,24 +3503,15 @@ class IndividualDashboard:
             """, unsafe_allow_html=True)
         
         with col4:
-            data_hours = total_minutes / 60
-            if claim_hours > 0:
-                data_percent = (data_hours / claim_hours * 100)
-                st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-value" style="color: #4CAF50;">{data_percent:.0f}%</div>
-                        <div class="metric-label">데이터 신뢰도</div>
-                        <div class="metric-percent">추정 포함</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-value" style="color: #4CAF50;">{data_hours:.1f}h</div>
-                        <div class="metric-label">총 기록시간</div>
-                        <div class="metric-percent">태그 데이터</div>
-                    </div>
-                """, unsafe_allow_html=True)
+            # 데이터 품질 점수 사용 (analyze_data_quality에서 계산된 값)
+            data_quality_score = analysis_result.get('data_quality', {}).get('overall_quality_score', 80)
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #4CAF50;">{data_quality_score:.0f}%</div>
+                    <div class="metric-label">데이터 신뢰도</div>
+                    <div class="metric-percent">태그 품질</div>
+                </div>
+            """, unsafe_allow_html=True)
         
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -4085,13 +4179,11 @@ class IndividualDashboard:
         """Claim 데이터와 실제 근무시간 비교"""
         claim_data = analysis_result['claim_data']
         
-        # 근무시간을 HH:MM 형식으로 변환
+        # 근무시간을 시간 단위로 표시
         def format_hours_to_hhmm(hours):
-            """시간을 HH:MM 형식으로 변환"""
+            """시간을 H.h 형식으로 변환"""
             if isinstance(hours, (int, float)):
-                h = int(hours)
-                m = int((hours - h) * 60)
-                return f"{h:02d}:{m:02d}"
+                return f"{hours:.1f}h"
             return str(hours)
         
         # 실제 근무시간과 Claim 시간 비교
