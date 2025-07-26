@@ -157,13 +157,39 @@ class OrganizationDashboard:
                     st.warning(f"{year}년 {month}월 데이터가 없습니다.")
                     return
                 
-                # 부서에서 센터 정보 추출 (첫 번째 단어를 센터로 가정)
-                month_data['센터'] = month_data['부서'].str.split().str[0]
+                # 조직현황 데이터 로드하여 센터 정보 매핑
+                org_df = self.pickle_manager.load_dataframe('organization_data')
+                if org_df is None:
+                    # organization_data로 찾을 수 없으면 organization으로 시도
+                    org_df = self.pickle_manager.load_dataframe('organization')
+                
+                if org_df is not None and '부서명' in org_df.columns and '센터' in org_df.columns:
+                    # 부서별 센터 매핑 생성
+                    dept_center_map = org_df.drop_duplicates(subset=['부서명'])[['부서명', '센터']].set_index('부서명')['센터'].to_dict()
+                    
+                    # 센터 정보 매핑
+                    month_data['센터'] = month_data['부서'].map(dept_center_map).fillna('Unknown')
+                    
+                    # 센터 목록 가져오기
+                    valid_centers = sorted(org_df['센터'].dropna().unique().tolist())
+                else:
+                    st.error("조직현황 데이터를 찾을 수 없습니다. 데이터를 먼저 업로드해주세요.")
+                    return
                 
                 # 데이터 확인을 위한 로그
-                st.write(f"총 데이터 행 수: {len(month_data)}")
-                st.write(f"센터 목록: {month_data['센터'].unique()[:10]}")  # 처음 10개만
-                st.write(f"실제근무시간 범위: {month_data['실제근무시간'].describe()}")
+                with st.expander("데이터 확인"):
+                    st.write(f"총 데이터 행 수: {len(month_data)}")
+                    unique_centers = month_data['센터'].unique()
+                    st.write(f"센터 개수: {len(unique_centers)}")
+                    st.write(f"센터 목록: {sorted(unique_centers)}")
+                    
+                    # 센터별 데이터 개수 확인
+                    center_counts = month_data['센터'].value_counts()
+                    st.write("센터별 데이터 수:")
+                    st.dataframe(center_counts.head(20))
+                    
+                    st.write(f"실제근무시간 통계:")
+                    st.write(month_data['실제근무시간'].describe())
                 
                 # 직급 그룹화 (Lv.1~4로 그룹핑)
                 def grade_to_level(grade):
@@ -210,47 +236,90 @@ class OrganizationDashboard:
                 st.markdown(f"### {year}년 {month}월 센터-직급별 평균 근무시간")
                 st.markdown(f"**최소: {month_data['실제근무시간'].min():.2f}h | 최대: {month_data['실제근무시간'].max():.2f}h**")
                 
-                # 스타일링된 데이터프레임 표시
+                # 평균 행과 열 추가
+                # 열 평균 (센터 평균) 계산
+                center_avg = total_pivot.mean(axis=0)
+                total_pivot.loc['센터 평균'] = center_avg
+                
+                # 행 평균 (전체 평균) 계산
+                total_pivot['전체 평균'] = total_pivot.mean(axis=1)
+                
+                # 스타일링된 데이터프레임 표시 - 256 레벨 그라데이션
                 def color_cells(val):
-                    """색상 지정 함수"""
+                    """색상 지정 함수 - 더 세밀한 그라데이션"""
                     if pd.isna(val):
                         return ''
-                    if val >= 47:
-                        return 'background-color: #ff6b6b; color: white'
-                    elif val >= 45:
-                        return 'background-color: #ff8787'
-                    elif val >= 43:
-                        return 'background-color: #ffa0a0'
-                    elif val >= 41:
-                        return 'background-color: #ffb8b8'
-                    elif val >= 39:
-                        return 'background-color: #ffd0d0'
-                    elif val >= 37:
-                        return 'background-color: #f5f5f5'
-                    else:
-                        return 'background-color: #e8e8e8'
+                    
+                    # 최소값과 최대값 기준으로 정규화 (35-50 시간 범위)
+                    min_val, max_val = 35, 50
+                    normalized = (val - min_val) / (max_val - min_val)
+                    normalized = max(0, min(1, normalized))  # 0-1 범위로 제한
+                    
+                    # 256 레벨 색상 계산
+                    if val >= 47:  # 매우 높은 값 - 진한 빨간색
+                        r = 255
+                        g = int(107 - normalized * 60)
+                        b = int(107 - normalized * 60)
+                        return f'background-color: rgb({r}, {g}, {b}); color: white; font-weight: bold'
+                    elif val >= 44:  # 높은 값 - 빨간색 계열
+                        intensity = (val - 44) / 3 * 255
+                        r = 255
+                        g = int(160 - intensity * 0.3)
+                        b = int(160 - intensity * 0.3)
+                        return f'background-color: rgb({r}, {g}, {b})'
+                    elif val >= 40:  # 중간 값 - 연한 빨간색
+                        intensity = (val - 40) / 4 * 100
+                        r = 255
+                        g = int(200 - intensity * 0.4)
+                        b = int(200 - intensity * 0.4)
+                        return f'background-color: rgb({r}, {g}, {b})'
+                    elif val >= 37:  # 정상 범위 - 연한 색
+                        gray = int(245 - (val - 37) * 10)
+                        return f'background-color: rgb({gray}, {gray}, {gray})'
+                    else:  # 낮은 값 - 회색
+                        gray = int(230 + (37 - val) * 3)
+                        gray = min(245, gray)
+                        return f'background-color: rgb({gray}, {gray}, {gray})'
                 
                 styled_df = total_pivot.style.format("{:.1f}").applymap(color_cells)
                 st.dataframe(styled_df, use_container_width=True)
                 
-                # 주차별 상세 데이터 표시
-                st.markdown("### 📅 주차별 상세 데이터")
+                # 주차별 상세 데이터를 하나의 통합 테이블로 표시
+                st.markdown("### 📅 센터-월별 주간 근무시간 비교")
                 
-                # 주차 정보 계산
+                # 모든 주차 데이터를 하나의 테이블로 통합
                 weeks_in_month = sorted(month_data['주차'].unique())
                 
-                for week_num in weeks_in_month:
-                    week_start = month_data[month_data['주차'] == week_num]['근무일'].min()
-                    week_end = month_data[month_data['주차'] == week_num]['근무일'].max()
-                    
-                    with st.expander(f"{week_num}주차 ({week_start.strftime('%m.%d')} - {week_end.strftime('%m.%d')})"):
-                        week_data = weekly_avg[weekly_avg['주차'] == week_num]
+                # 주차별 평균을 센터별로 정리
+                weekly_summary = {}
+                for center in sorted(month_data['센터'].unique()):
+                    weekly_summary[center] = {}
+                    for week in weeks_in_month:
+                        week_data = month_data[(month_data['센터'] == center) & (month_data['주차'] == week)]
                         if not week_data.empty:
-                            week_pivot = week_data.pivot(index='직급레벨', columns='센터', values='실제근무시간')
-                            styled_week = week_pivot.style.format("{:.1f}").applymap(color_cells)
-                            st.dataframe(styled_week, use_container_width=True)
+                            # 직원별로 주간 합계를 구한 후 평균
+                            employee_week_sum = week_data.groupby('사번')['실제근무시간'].sum()
+                            weekly_summary[center][f'{month}.{week}주'] = employee_week_sum.mean()
                         else:
-                            st.info("해당 주차의 데이터가 없습니다.")
+                            weekly_summary[center][f'{month}.{week}주'] = None
+                
+                # DataFrame으로 변환
+                weekly_df = pd.DataFrame(weekly_summary).T
+                
+                # 평균 열 추가
+                weekly_df['월 평균'] = weekly_df.mean(axis=1)
+                
+                # 평균 행 추가
+                weekly_df.loc['센터 평균'] = weekly_df.mean(axis=0)
+                
+                # 날짜 정보 추가 (최소/최대)
+                min_hours = weekly_df.min().min()
+                max_hours = weekly_df.max().max()
+                st.markdown(f"**최소: {min_hours:.1f}h | 최대: {max_hours:.1f}h**")
+                
+                # 스타일 적용
+                styled_weekly = weekly_df.style.format("{:.1f}").applymap(color_cells)
+                st.dataframe(styled_weekly, use_container_width=True)
                 
                 # 시각화
                 st.markdown("### 📈 시각화")

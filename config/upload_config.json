@@ -39,6 +39,21 @@
       "table_name": "organization_data",
       "display_name": "조직현황",
       "process_func_name": "process_organization_data"
+    },
+    "EAM": {
+      "table_name": "eam_data",
+      "display_name": "EAM(안전설비시스템) 로그인 이력",
+      "process_func_name": "process_eam_data"
+    },
+    "LAMS": {
+      "table_name": "lams_data",
+      "display_name": "LAMS(품질시스템) 스케쥴 작성/수정 이력",
+      "process_func_name": "process_lams_data"
+    },
+    "MES": {
+      "table_name": "mes_data",
+      "display_name": "MES(생산시스템) 로그인 이력",
+      "process_func_name": "process_mes_data"
     }
   },
   "upload_config": {
@@ -121,6 +136,37 @@
       "dataframe_name": "organization_data",
       "last_modified": "2025-07-22T11:02:53.643340",
       "row_count": 5142
+    },
+    "EAM": {
+      "files": [],
+      "file_names": [
+        "EAM(안전설비시스템)_로그인 이력_250601~250715.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "eam_data",
+      "last_modified": "2025-07-26T12:01:17.807760",
+      "row_count": 213700
+    },
+    "LAMS": {
+      "files": [],
+      "file_names": [
+        "LAMS(품질시스템) 스케쥴 작성, 수정 이력_2506.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "lams_data",
+      "last_modified": "2025-07-26T12:01:17.929236",
+      "row_count": 2245
+    },
+    "MES": {
+      "files": [],
+      "file_names": [
+        "MES(생산시스템)_003 로그인 이력_250601~0717.xlsx",
+        "MES(생산시스템)_005 로그인 이력_250601~0717.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "mes_data",
+      "last_modified": "2025-07-26T12:02:08.694224",
+      "row_count": 1069249
     }
   }
 }
