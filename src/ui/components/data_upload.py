@@ -186,7 +186,7 @@ class DataUploadComponent:
     
     def render(self):
         """업로드 인터페이스 렌더링"""
-        st.markdown("### 📤 데이터 업로드 관리")
+        st.markdown("### 데이터 업로드 관리")
         
         # 초기 로드 시 pickle 파일 정보로 상태 업데이트
         if 'data_status_refreshed' not in st.session_state:
@@ -205,45 +205,49 @@ class DataUploadComponent:
         # 구분선
         st.markdown("---")
         
-        # 데이터 조회 섹션 추가
-        self._render_data_viewer_section()
+        # 옵션 설정과 데이터 조회를 같은 섹션에 배치
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            # 옵션 설정
+            with st.expander("로드 옵션", expanded=False):
+                save_to_db = st.checkbox("데이터베이스에도 저장", value=False, 
+                                       help="체크하면 Pickle 파일과 함께 SQLite 데이터베이스에도 저장됩니다.")
+                st.session_state.save_to_db = save_to_db
+                
+                process_data = st.checkbox("데이터 전처리 실행", value=False,
+                                         help="체크하면 데이터 로딩 후 전처리(분석)를 실행합니다. 대용량 데이터는 시간이 오래 걸릴 수 있습니다.")
+                st.session_state.process_data = process_data
+        
+        with col2:
+            # 데이터 조회 섹션
+            self._render_data_viewer_section()
         
         # 구분선
         st.markdown("---")
         
-        # 옵션 설정
-        with st.expander("⚙️ 로드 옵션", expanded=False):
-            save_to_db = st.checkbox("데이터베이스에도 저장", value=False, 
-                                   help="체크하면 Pickle 파일과 함께 SQLite 데이터베이스에도 저장됩니다.")
-            st.session_state.save_to_db = save_to_db
-            
-            process_data = st.checkbox("데이터 전처리 실행", value=False,
-                                     help="체크하면 데이터 로딩 후 전처리(분석)를 실행합니다. 대용량 데이터는 시간이 오래 걸릴 수 있습니다.")
-            st.session_state.process_data = process_data
-        
         # 데이터 로드 버튼
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         with col1:
-            if st.button("🚀 데이터 로드", type="primary", use_container_width=True):
+            if st.button("데이터 로드", type="primary", use_container_width=True):
                 self._load_all_data()
         
         with col2:
-            if st.button("🗑️ 캐시 초기화", use_container_width=True):
+            if st.button("캐시 초기화", use_container_width=True):
                 self._clear_cache()
                 
         with col3:
-            if st.button("🔄 새로고침", use_container_width=True):
+            if st.button("새로고침", use_container_width=True):
                 self._refresh_data_status()
                 st.rerun()
                 
         with col4:
-            if st.button("💾 설정 저장", use_container_width=True):
+            if st.button("설정 저장", use_container_width=True):
                 self._save_upload_config()
                 st.success("설정이 저장되었습니다.")
     
     def _render_data_status_table(self):
         """데이터 상태 테이블 렌더링"""
-        st.markdown("#### 📊 데이터 로딩 상태")
         
         # 상태 정보 수집
         status_data = []
@@ -294,7 +298,7 @@ class DataUploadComponent:
             status_data.append({
                 "데이터 유형": info['display_name'],
                 "등록 파일": file_info,
-                "Pickle 상태": "✅ 있음" if (pickle_exists or config.get('pickle_exists', False)) else "❌ 없음",
+                "Pickle 상태": "있음" if (pickle_exists or config.get('pickle_exists', False)) else "없음",
                 "데이터프레임": dataframe_name,
                 "행 수": f"{row_count:,}" if row_count > 0 else "-",
                 "최종 수정": last_modified if last_modified != '-' else "-"
@@ -302,11 +306,22 @@ class DataUploadComponent:
         
         # DataFrame으로 변환하여 표시
         df_status = pd.DataFrame(status_data)
-        st.dataframe(df_status, use_container_width=True, height=250)
+        
+        # 전체 행이 보이도록 height를 데이터 행 수에 맞춰 설정
+        row_height = 35  # 각 행의 높이
+        header_height = 40  # 헤더 높이
+        total_height = len(df_status) * row_height + header_height + 20  # 여유분 20px
+        
+        st.dataframe(
+            df_status, 
+            use_container_width=True,
+            hide_index=True,
+            height=total_height
+        )
     
     def _render_file_upload_section(self):
         """파일 업로드 섹션 렌더링"""
-        st.markdown("#### 📁 파일 등록")
+        st.markdown("#### 파일 등록")
         
         # 데이터 유형 선택
         col1, col2 = st.columns([1, 2])
@@ -341,7 +356,7 @@ class DataUploadComponent:
         
         # 등록된 파일 목록 표시
         if st.session_state.upload_config[selected_type]["files"]:
-            st.markdown(f"##### 📋 {self.data_types[selected_type]['display_name']} 등록 파일")
+            st.markdown(f"##### {self.data_types[selected_type]['display_name']} 등록 파일")
             
             for idx, file_info in enumerate(st.session_state.upload_config[selected_type]["files"]):
                 col1, col2, col3 = st.columns([3, 1, 1])
@@ -350,11 +365,11 @@ class DataUploadComponent:
                 with col2:
                     st.text(f"{file_info['size'] / (1024*1024):.2f} MB")
                 with col3:
-                    if st.button("❌", key=f"remove_{selected_type}_{idx}"):
+                    if st.button("삭제", key=f"remove_{selected_type}_{idx}"):
                         st.session_state.upload_config[selected_type]["files"].pop(idx)
         
         # 신규 데이터 유형 추가
-        with st.expander("➕ 신규 데이터 유형 추가"):
+        with st.expander("신규 데이터 유형 추가"):
             new_type_name = st.text_input("데이터 유형 이름")
             new_table_name = st.text_input("테이블 이름")
             new_display_name = st.text_input("표시 이름")
@@ -402,11 +417,11 @@ class DataUploadComponent:
             
             if needs_reload and len(config['files']) > 0:
                 # 엑셀 파일에서 로드
-                detail_text.text(f"📂 {info['display_name']} 파일 로딩 중...")
+                detail_text.text(f"{info['display_name']} 파일 로딩 중...")
                 self._load_from_excel(data_type, info, config, detail_text)
             elif len(pickle_files) > 0 and len(config['files']) == 0:
                 # Pickle 파일에서 로드
-                detail_text.text(f"💾 {info['display_name']} 캐시에서 로딩 중...")
+                detail_text.text(f"{info['display_name']} 캐시에서 로딩 중...")
                 self._load_from_pickle(data_type, info)
             
             time.sleep(0.1)  # UI 업데이트를 위한 짧은 대기
@@ -419,8 +434,8 @@ class DataUploadComponent:
         self._save_upload_config()
         self.logger.info("데이터 로드 완료 - 설정 저장됨")
         
-        st.success("✅ 모든 데이터 로드가 완료되었습니다!")
-        st.info("🔄 새로고침 버튼을 눌러 테이블을 업데이트하세요.")
+        st.success("모든 데이터 로드가 완료되었습니다!")
+        st.info("새로고침 버튼을 눌러 테이블을 업데이트하세요.")
         
         # 버튼 클릭 후에만 rerun
         time.sleep(2)  # 성공 메시지를 보여주기 위한 대기
@@ -446,13 +461,13 @@ class DataUploadComponent:
                 try:
                     # ExcelLoader 사용하여 로드 (여러 시트 자동 병합)
                     if detail_text:
-                        detail_text.text(f"📂 {file_info['name']} 파일 분석 중...")
+                        detail_text.text(f"{file_info['name']} 파일 분석 중...")
                     df = self.excel_loader.load_excel_file(tmp_path, auto_merge_sheets=True)
                     all_dfs.append(df)
                     file_names.append(file_info['name'])
                     self.logger.info(f"{file_info['name']} 로드 완료: {len(df):,}행")
                     if detail_text:
-                        detail_text.text(f"✅ {file_info['name']} 로드 완료: {len(df):,}행")
+                        detail_text.text(f"{file_info['name']} 로드 완료: {len(df):,}행")
                 finally:
                     # 임시 파일 삭제
                     import os
@@ -516,10 +531,10 @@ class DataUploadComponent:
                 st.session_state.upload_config[data_type] = config
                 self.logger.info(f"{data_type} 설정 업데이트: {config}")
                 
-                st.success(f"✅ {info['display_name']} 로드 완료: {len(processed_df):,}행")
+                st.success(f"{info['display_name']} 로드 완료: {len(processed_df):,}행")
                 
         except Exception as e:
-            st.error(f"❌ {info['display_name']} 로드 실패: {e}")
+            st.error(f"{info['display_name']} 로드 실패: {e}")
             self.logger.error(f"{data_type} 로드 오류: {e}")
     
     def _load_from_pickle(self, data_type: str, info: Dict):
@@ -545,12 +560,12 @@ class DataUploadComponent:
                     # 세션 상태 업데이트
                     st.session_state.upload_config[data_type] = config
                     
-                    st.info(f"ℹ️ {info['display_name']} Pickle 캐시에서 로드: {len(df):,}행")
+                    st.info(f"{info['display_name']} Pickle 캐시에서 로드: {len(df):,}행")
                 else:
-                    st.warning(f"⚠️ {info['display_name']} Pickle 파일 로드 실패")
+                    st.warning(f"{info['display_name']} Pickle 파일 로드 실패")
                     
         except Exception as e:
-            st.error(f"❌ {info['display_name']} Pickle 로드 오류: {e}")
+            st.error(f"{info['display_name']} Pickle 로드 오류: {e}")
             self.logger.error(f"{data_type} pickle 로드 오류: {e}")
     
     def _refresh_data_status(self):
@@ -596,7 +611,7 @@ class DataUploadComponent:
     def _clear_cache(self):
         """캐시 초기화"""
         # 확인 다이얼로그 표시
-        with st.expander("⚠️ 캐시 초기화 확인", expanded=True):
+        with st.expander("캐시 초기화 확인", expanded=True):
             st.warning("모든 Pickle 캐시가 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")
             
             col1, col2 = st.columns([1, 3])
@@ -609,7 +624,7 @@ class DataUploadComponent:
                             for file in pickle_dir.glob("*.pkl.gz"):
                                 file.unlink()
                         
-                        st.success("✅ 캐시가 초기화되었습니다.")
+                        st.success("캐시가 초기화되었습니다.")
                         time.sleep(1)
                         
                     except Exception as e:
@@ -620,7 +635,7 @@ class DataUploadComponent:
     
     def _render_data_viewer_section(self):
         """데이터 조회 섹션 렌더링"""
-        st.markdown("#### 🔍 데이터 조회")
+        st.markdown("#### 데이터 조회")
         
         # Pickle 파일이 있는 데이터 유형만 선택 가능하도록
         available_types = []
@@ -630,23 +645,21 @@ class DataUploadComponent:
                 available_types.append(data_type)
         
         if not available_types:
-            st.info("조회 가능한 데이터가 없습니다. 먼저 데이터를 업로드하세요.")
+            st.info("조회 가능한 데이터가 없습니다.")
             return
         
-        col1, col2 = st.columns([2, 1])
+        # 데이터 선택
+        selected_data_type = st.selectbox(
+            "조회할 데이터 선택",
+            available_types,
+            format_func=lambda x: self.data_types[x]['display_name'],
+            key="viewer_data_type"
+        )
         
-        with col1:
-            selected_data_type = st.selectbox(
-                "조회할 데이터 선택",
-                available_types,
-                format_func=lambda x: self.data_types[x]['display_name'],
-                key="viewer_data_type"
-            )
-        
-        with col2:
-            if st.button("📊 데이터 보기", type="primary", use_container_width=True):
-                st.session_state.show_data_preview = True
-                st.session_state.selected_data_for_preview = selected_data_type
+        # 데이터 보기 버튼
+        if st.button("데이터 보기", type="primary", use_container_width=True):
+            st.session_state.show_data_preview = True
+            st.session_state.selected_data_for_preview = selected_data_type
         
         # 데이터 미리보기를 별도 섹션에 표시
         if st.session_state.get('show_data_preview', False):
@@ -681,14 +694,14 @@ class DataUploadComponent:
             # 제목과 닫기 버튼을 같은 줄에 배치
             col_title, col_close = st.columns([5, 1])
             with col_title:
-                st.markdown(f"### 📊 {info['display_name']} 데이터 조회 결과")
+                st.markdown(f"### {info['display_name']} 데이터 조회 결과")
             with col_close:
-                if st.button("❌ 닫기", use_container_width=True):
+                if st.button("닫기", use_container_width=True):
                     st.session_state.show_data_preview = False
                     st.rerun()
             
             # 데이터 정보 표시
-            st.success(f"✅ {info['display_name']} 데이터 로드 완료")
+            st.success(f"{info['display_name']} 데이터 로드 완료")
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -701,7 +714,7 @@ class DataUploadComponent:
                 st.metric("마지막 업데이트", latest_file.get('created_at', '-')[:10])
             
             # 데이터 미리보기 탭
-            tab1, tab2, tab3, tab4 = st.tabs(["📋 데이터 미리보기", "📊 열 정보", "📈 기본 통계", "🔍 데이터 검색"])
+            tab1, tab2, tab3, tab4 = st.tabs(["데이터 미리보기", "열 정보", "기본 통계", "데이터 검색"])
             
             with tab1:
                 # 샘플 수 선택

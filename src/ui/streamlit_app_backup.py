@@ -1,5 +1,5 @@
 """
-Streamlit 기반 메인 애플리케이션 (깔끔한 비즈니스 버전)
+Streamlit 기반 메인 애플리케이션
 2교대 근무 시스템 분석 대시보드
 """
 
@@ -19,6 +19,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 from src.database import get_database_manager
+# from src.hmm import HMMModel  # HMM 제거 - 태그 기반 시스템 사용
 from src.analysis import IndividualAnalyzer, OrganizationAnalyzer
 from src.ui.components.individual_dashboard import IndividualDashboard
 from src.ui.components.organization_dashboard import OrganizationDashboard
@@ -84,7 +85,7 @@ class SambioHumanApp:
         # 사이드바 네비게이션
         self.render_sidebar()
         
-        # 메인 콘텐츠 렌더링
+        # 메인 콘텐츠 렌더링 (타이틀은 각 페이지에서 처리)
         self.render_main_content()
     
     def render_sidebar(self):
@@ -92,7 +93,7 @@ class SambioHumanApp:
         with st.sidebar:
             st.header("Navigation")
             
-            # 메뉴 버튼들
+            # 메뉴 버튼들을 직접 나열 (홈을 맨 위로)
             if st.button("홈", use_container_width=True):
                 st.session_state.current_page = "홈"
                 
@@ -202,75 +203,47 @@ class SambioHumanApp:
         
         with col4:
             st.metric(
-                label="시스템 가동률",
-                value="99.8%",
-                delta="0.1%"
+                label="🎯 데이터 품질",
+                value="94.2%",
+                delta="1.8%"
             )
         
         # 시스템 개요
         st.markdown("---")
+        st.markdown("## 📋 시스템 개요")
         
         col1, col2 = st.columns(2)
         
         with col1:
             st.markdown("""
-            <div style="background: #f8f9fa; 
-                        border-left: 3px solid #2E86AB; 
-                        padding: 1rem 1.5rem; 
-                        border-radius: 0 8px 8px 0; 
-                        margin: 1rem 0;">
-                <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
-                    주요 기능
-                </h4>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("""
-            • 개인별 분석: 2교대 근무 패턴 분석
-            • 조직별 분석: 팀/부서 단위 생산성 분석  
-            • 조직 분석: 워크플로우 최적화 분석
-            • 4번 식사시간: 정교한 활동 분류 처리
+            ### 🎯 주요 기능
+            - **개인별 분석**: 2교대 근무 패턴 분석
+            - **조직별 분석**: 팀/부서 단위 생산성 분석
+            - **실시간 모니터링**: 태그 데이터 실시간 처리
+            - **태그 기반 시스템**: 태그 코드로 활동 상태 분류
+            - **4번 식사시간**: 조식/중식/석식/야식 추적
             """)
         
         with col2:
             st.markdown("""
-            <div style="background: #f8f9fa; 
-                        border-left: 3px solid #2E86AB; 
-                        padding: 1rem 1.5rem; 
-                        border-radius: 0 8px 8px 0; 
-                        margin: 1rem 0;">
-                <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
-                    분석 범위
-                </h4>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("""
-            • 태그 데이터: 위치 기반 활동 추적
-            • 근무시간 분석: 실제 작업시간 신뢰도 측정
-            • 조직 효율성: 부서별 성과 지표 
-            • 교대 근무: 주간/야간 교대 최적화
+            ### 📊 분석 범위
+            - **태그 데이터**: 위치 기반 활동 추적
+            - **ABC 활동**: 실제 작업 분류 데이터
+            - **Claim 데이터**: 근무시간 신고 데이터
+            - **근태 데이터**: 공식 출퇴근 기록
+            - **교대 근무**: 주간/야간 교대 분석
             """)
         
-        # 최근 활동
+        # 최근 활동 로그
         st.markdown("---")
-        st.markdown("""
-        <div style="background: #f8f9fa; 
-                    border-left: 3px solid #6c757d; 
-                    padding: 0.8rem 1.2rem; 
-                    border-radius: 0 6px 6px 0; 
-                    margin: 1rem 0 0.5rem 0;">
-            <h4 style="margin: 0; color: #495057; font-weight: 600; font-size: 1.1rem;">
-                최근 활동
-            </h4>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("## 📝 최근 활동")
         
+        # 샘플 활동 로그
         recent_activities = [
-            {"시간": "2025-01-18 14:30", "활동": "개인별 분석 완료", "대상": "직원 ID: E001234", "결과": "성공"},
+            {"시간": "2025-01-18 14:30", "활동": "개인 분석 완료", "대상": "직원 ID: E001234", "결과": "성공"},
             {"시간": "2025-01-18 14:15", "활동": "데이터 업로드", "대상": "tag_data_24.6.xlsx", "결과": "성공"},
             {"시간": "2025-01-18 13:45", "활동": "태그 분류 처리", "대상": "100개 태그", "결과": "성공"},
-            {"시간": "2025-01-18 13:30", "활동": "조직 분석", "대상": "Production Team", "결과": "성공"}
+            {"시간": "2025-01-18 13:30", "활동": "조직 분석", "대상": "Production Team", "결과": "성공"},
         ]
         
         df_activities = pd.DataFrame(recent_activities)
@@ -314,20 +287,123 @@ class SambioHumanApp:
         else:
             st.error("조직 분석 컴포넌트가 초기화되지 않았습니다.")
     
+    def render_comparison_analysis(self):
+        """비교 분석 페이지 렌더링"""
+        st.markdown("## 📊 비교 분석")
+        
+        # 비교 유형 선택
+        comparison_type = st.selectbox(
+            "비교 유형 선택",
+            ["개인간 비교", "조직간 비교", "시기별 비교", "교대별 비교"]
+        )
+        
+        if comparison_type == "개인간 비교":
+            self.render_individual_comparison()
+        elif comparison_type == "조직간 비교":
+            self.render_organization_comparison()
+        elif comparison_type == "시기별 비교":
+            self.render_time_comparison()
+        elif comparison_type == "교대별 비교":
+            self.render_shift_comparison()
+    
+    def render_individual_comparison(self):
+        """개인간 비교 분석"""
+        st.markdown("### 👥 개인간 비교")
+        
+        # 직원 선택
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            employee_ids = st.multiselect(
+                "비교할 직원 선택",
+                ["E001234", "E001235", "E001236", "E001237"],
+                default=["E001234", "E001235"]
+            )
+        
+        with col2:
+            date_range = st.date_input(
+                "분석 기간",
+                value=(date.today() - timedelta(days=30), date.today()),
+                key="individual_comparison_date"
+            )
+        
+        if employee_ids and len(employee_ids) >= 2:
+            # 비교 차트 생성
+            self.create_individual_comparison_charts(employee_ids, date_range)
+    
+    def render_organization_comparison(self):
+        """조직간 비교 분석"""
+        st.markdown("### 🏢 조직간 비교")
+        
+        # 조직 선택
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            organizations = st.multiselect(
+                "비교할 조직 선택",
+                ["Production Team A", "Production Team B", "Quality Team", "Maintenance Team"],
+                default=["Production Team A", "Production Team B"]
+            )
+        
+        with col2:
+            date_range = st.date_input(
+                "분석 기간",
+                value=(date.today() - timedelta(days=30), date.today()),
+                key="org_comparison_date"
+            )
+        
+        if organizations and len(organizations) >= 2:
+            # 비교 차트 생성
+            self.create_organization_comparison_charts(organizations, date_range)
+    
+    def render_time_comparison(self):
+        """시기별 비교 분석"""
+        st.markdown("### 📅 시기별 비교")
+        
+        # 기간 선택
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            period_type = st.selectbox(
+                "비교 단위",
+                ["주간", "월간", "분기"]
+            )
+        
+        with col2:
+            target_selection = st.selectbox(
+                "분석 대상",
+                ["전체 조직", "특정 팀", "특정 개인"]
+            )
+        
+        # 시기별 트렌드 차트
+        self.create_time_trend_charts(period_type, target_selection)
+    
+    def render_shift_comparison(self):
+        """교대별 비교 분석"""
+        st.markdown("### 🌅🌙 교대별 비교")
+        
+        # 교대 비교 설정
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            shift_metrics = st.multiselect(
+                "비교 지표",
+                ["생산성", "효율성", "근무시간", "식사시간", "활동 분포"],
+                default=["생산성", "효율성"]
+            )
+        
+        with col2:
+            date_range = st.date_input(
+                "분석 기간",
+                value=(date.today() - timedelta(days=30), date.today()),
+                key="shift_comparison_date"
+            )
+        
+        # 교대별 비교 차트
+        self.create_shift_comparison_charts(shift_metrics, date_range)
+    
     def render_data_upload(self):
         """데이터 업로드 페이지 렌더링"""
-        # 세련된 비즈니스 스타일 헤더
-        st.markdown("""
-        <div style="background: linear-gradient(90deg, #2E86AB 0%, #4A9BC6 100%); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">
-                Data Upload
-            </h2>
-            <p style="color: rgba(255,255,255,0.9); margin: 0.3rem 0 0 0; font-size: 0.95rem;">
-                데이터 업로드 및 관리
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
         if self.data_upload:
             self.data_upload.render()
         else:
@@ -335,17 +411,7 @@ class SambioHumanApp:
     
     def render_model_config(self):
         """모델 설정 페이지 렌더링"""
-        # 세련된 비즈니스 스타일 헤더
-        st.markdown("""
-        <div style="background: linear-gradient(90deg, #2E86AB 0%, #4A9BC6 100%); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">
-                Model Configuration
-            </h2>
-            <p style="color: rgba(255,255,255,0.9); margin: 0.3rem 0 0 0; font-size: 0.95rem;">
-                분석 모델 설정 및 관리
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("## ⚙️ 모델 설정")
         
         if self.model_config:
             self.model_config.render()
@@ -354,153 +420,157 @@ class SambioHumanApp:
     
     def render_transition_rules(self):
         """전이 룰 관리 페이지 렌더링"""
-        # 세련된 비즈니스 스타일 헤더
-        st.markdown("""
-        <div style="background: linear-gradient(90deg, #2E86AB 0%, #4A9BC6 100%); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">
-                Transition Rules
-            </h2>
-            <p style="color: rgba(255,255,255,0.9); margin: 0.3rem 0 0 0; font-size: 0.95rem;">
-                활동 전이 규칙 관리
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
         if self.transition_rule_editor:
             self.transition_rule_editor.render()
         else:
-            st.error("전이 룰 편집기가 초기화되지 않았습니다.")
+            st.error("전이 룰 에디터 컴포넌트가 초기화되지 않았습니다.")
     
     def render_network_analysis(self):
         """네트워크 분석 페이지 렌더링"""
-        # 세련된 비즈니스 스타일 헤더
-        st.markdown("""
-        <div style="background: linear-gradient(90deg, #2E86AB 0%, #4A9BC6 100%); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">
-                Network Analysis
-            </h2>
-            <p style="color: rgba(255,255,255,0.9); margin: 0.3rem 0 0 0; font-size: 0.95rem;">
-                조직 네트워크 및 상호작용 분석
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("## 🌐 네트워크 분석")
         
         if self.network_analysis_dashboard:
             self.network_analysis_dashboard.render()
         else:
-            st.error("네트워크 분석 대시보드가 초기화되지 않았습니다.")
+            st.error("네트워크 분석 컴포넌트가 초기화되지 않았습니다.")
     
     def render_real_time_monitoring(self):
         """실시간 모니터링 페이지 렌더링"""
-        # 세련된 비즈니스 스타일 헤더
-        st.markdown("""
-        <div style="background: linear-gradient(90deg, #2E86AB 0%, #4A9BC6 100%); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">
-                Real-time Monitoring
-            </h2>
-            <p style="color: rgba(255,255,255,0.9); margin: 0.3rem 0 0 0; font-size: 0.95rem;">
-                실시간 생산성 모니터링
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("## 📈 실시간 모니터링")
         
-        # 실시간 데이터 시뮬레이션
-        import time
-        import random
+        # 실시간 데이터 표시
+        st.markdown("### 📊 실시간 시스템 상태")
         
-        # 자동 새로고침 설정
-        auto_refresh = st.checkbox("자동 새로고침 (5초)", value=True)
-        
-        if auto_refresh:
-            time.sleep(5)
-            st.rerun()
-        
-        # 실시간 메트릭
-        col1, col2, col3, col4 = st.columns(4)
+        # 메트릭 표시
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            current_efficiency = random.uniform(85, 95)
-            st.metric(
-                "현재 전체 효율성",
-                f"{current_efficiency:.1f}%",
-                f"{random.uniform(-2, 2):.1f}%"
-            )
+            st.metric("활성 태그", "1,234", "12")
         
         with col2:
-            active_workers = random.randint(1200, 1250)
-            st.metric(
-                "활성 근무자",
-                active_workers,
-                random.randint(-5, 5)
-            )
+            st.metric("처리 중인 데이터", "56", "-3")
         
         with col3:
-            alert_count = random.randint(0, 3)
-            st.metric(
-                "알림 개수",
-                alert_count,
-                random.randint(-1, 1)
-            )
-        
-        with col4:
-            system_health = random.uniform(95, 100)
-            st.metric(
-                "시스템 상태",
-                f"{system_health:.1f}%",
-                f"{random.uniform(-0.5, 0.5):.1f}%"
-            )
+            st.metric("시스템 부하", "23%", "5%")
         
         # 실시간 차트
-        st.markdown("""
-        <div style="background: #f8f9fa; 
-                    border-left: 3px solid #2E86AB; 
-                    padding: 0.8rem 1.2rem; 
-                    border-radius: 0 6px 6px 0; 
-                    margin: 1rem 0 0.5rem 0;">
-            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
-                Real-time Productivity Monitoring
-            </h4>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("### 📈 실시간 활동 모니터링")
         
+        # 샘플 실시간 데이터
+        timestamps = pd.date_range(start=datetime.now()-timedelta(hours=1), 
+                                 end=datetime.now(), freq='1min')
+        activity_data = pd.DataFrame({
+            'timestamp': timestamps,
+            'activity_count': np.random.randint(10, 100, len(timestamps)),
+            'efficiency': np.random.uniform(0.7, 0.95, len(timestamps))
+        })
+        
+        # 활동 수 차트
+        fig1 = px.line(activity_data, x='timestamp', y='activity_count', 
+                      title='실시간 활동 수')
+        st.plotly_chart(fig1, use_container_width=True)
+        
+        # 효율성 차트
+        fig2 = px.line(activity_data, x='timestamp', y='efficiency', 
+                      title='실시간 효율성')
+        st.plotly_chart(fig2, use_container_width=True)
+    
+    def create_individual_comparison_charts(self, employee_ids, date_range):
+        """개인간 비교 차트 생성"""
+        # 샘플 데이터 생성
+        comparison_data = []
+        for emp_id in employee_ids:
+            comparison_data.append({
+                'employee_id': emp_id,
+                'productivity': np.random.uniform(60, 95),
+                'efficiency': np.random.uniform(70, 90),
+                'work_hours': np.random.uniform(7, 9),
+                'focus_time': np.random.uniform(60, 85)
+            })
+        
+        df_comparison = pd.DataFrame(comparison_data)
+        
+        # 생산성 비교
+        fig1 = px.bar(df_comparison, x='employee_id', y='productivity', 
+                     title='개인별 생산성 비교')
+        st.plotly_chart(fig1, use_container_width=True)
+        
+        # 효율성 비교
+        fig2 = px.bar(df_comparison, x='employee_id', y='efficiency', 
+                     title='개인별 효율성 비교')
+        st.plotly_chart(fig2, use_container_width=True)
+    
+    def create_organization_comparison_charts(self, organizations, date_range):
+        """조직간 비교 차트 생성"""
+        # 샘플 데이터 생성
+        org_data = []
+        for org in organizations:
+            org_data.append({
+                'organization': org,
+                'avg_productivity': np.random.uniform(70, 90),
+                'workforce_utilization': np.random.uniform(85, 95),
+                'total_work_hours': np.random.uniform(200, 400),
+                'efficiency_score': np.random.uniform(75, 90)
+            })
+        
+        df_org = pd.DataFrame(org_data)
+        
+        # 조직별 생산성 비교
+        fig1 = px.bar(df_org, x='organization', y='avg_productivity', 
+                     title='조직별 평균 생산성 비교')
+        st.plotly_chart(fig1, use_container_width=True)
+        
+        # 인력 가동률 비교
+        fig2 = px.bar(df_org, x='organization', y='workforce_utilization', 
+                     title='조직별 인력 가동률 비교')
+        st.plotly_chart(fig2, use_container_width=True)
+    
+    def create_time_trend_charts(self, period_type, target_selection):
+        """시기별 트렌드 차트 생성"""
         # 샘플 시계열 데이터
-        hours = list(range(24))
-        productivity = [random.uniform(80, 95) for _ in hours]
+        if period_type == "주간":
+            dates = pd.date_range(start=date.today()-timedelta(weeks=12), 
+                                 end=date.today(), freq='W')
+        elif period_type == "월간":
+            dates = pd.date_range(start=date.today()-timedelta(days=365), 
+                                 end=date.today(), freq='M')
+        else:  # 분기
+            dates = pd.date_range(start=date.today()-timedelta(days=730), 
+                                 end=date.today(), freq='Q')
         
-        fig = px.line(
-            x=hours, 
-            y=productivity,
-            title="시간대별 생산성 추이",
-            labels={'x': '시간', 'y': '생산성 (%)'}
-        )
+        trend_data = pd.DataFrame({
+            'date': dates,
+            'productivity': np.random.uniform(70, 90, len(dates)),
+            'efficiency': np.random.uniform(75, 85, len(dates)),
+            'work_hours': np.random.uniform(7.5, 8.5, len(dates))
+        })
+        
+        # 트렌드 차트
+        fig = px.line(trend_data, x='date', y=['productivity', 'efficiency'], 
+                     title=f'{period_type} 트렌드 분석')
         st.plotly_chart(fig, use_container_width=True)
+    
+    def create_shift_comparison_charts(self, shift_metrics, date_range):
+        """교대별 비교 차트 생성"""
+        # 샘플 교대 데이터
+        shift_data = pd.DataFrame({
+            'shift': ['주간', '야간'],
+            'productivity': [np.random.uniform(80, 90), np.random.uniform(70, 85)],
+            'efficiency': [np.random.uniform(85, 95), np.random.uniform(75, 85)],
+            'work_hours': [np.random.uniform(8, 9), np.random.uniform(7.5, 8.5)],
+            'meal_time': [np.random.uniform(45, 60), np.random.uniform(50, 70)]
+        })
         
-        # 알림 패널
-        st.markdown("""
-        <div style="background: #f8f9fa; 
-                    border-left: 3px solid #6c757d; 
-                    padding: 0.8rem 1.2rem; 
-                    border-radius: 0 6px 6px 0; 
-                    margin: 1rem 0 0.5rem 0;">
-            <h4 style="margin: 0; color: #495057; font-weight: 600; font-size: 1.1rem;">
-                Real-time Alerts
-            </h4>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        alerts = [
-            {"time": "14:30", "type": "warning", "message": "Team B 효율성 임계값 이하"},
-            {"time": "14:25", "type": "info", "message": "데이터 동기화 완료"},
-            {"time": "14:20", "type": "success", "message": "Team A 목표 달성"}
-        ]
-        
-        for alert in alerts:
-            if alert["type"] == "warning":
-                st.warning(f"[{alert['time']}] {alert['message']}")
-            elif alert["type"] == "info":
-                st.info(f"[{alert['time']}] {alert['message']}")
-            elif alert["type"] == "success":
-                st.success(f"[{alert['time']}] {alert['message']}")
+        # 교대별 비교 차트
+        for metric in shift_metrics:
+            if metric == "생산성":
+                fig = px.bar(shift_data, x='shift', y='productivity', 
+                           title='교대별 생산성 비교')
+                st.plotly_chart(fig, use_container_width=True)
+            elif metric == "효율성":
+                fig = px.bar(shift_data, x='shift', y='efficiency', 
+                           title='교대별 효율성 비교')
+                st.plotly_chart(fig, use_container_width=True)
 
 
 def main():

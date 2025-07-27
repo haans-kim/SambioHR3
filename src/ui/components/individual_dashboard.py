@@ -3505,7 +3505,22 @@ class IndividualDashboard:
     def render_analysis_results(self, analysis_result: dict):
         """분석 결과 렌더링"""
         st.markdown("---")
-        st.markdown(f"## 📊 {analysis_result['analysis_date']} 분석 결과")
+        
+        # 세련된 분석 결과 헤더
+        st.markdown(f"""
+        <div style="background: linear-gradient(90deg, #f8f9fa 0%, #e9ecef 100%); 
+                    border-left: 4px solid #2E86AB; 
+                    padding: 1rem 1.5rem; 
+                    border-radius: 0 8px 8px 0; 
+                    margin: 1rem 0;">
+            <h3 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.3rem;">
+                {analysis_result['analysis_date']} Analysis Report
+            </h3>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                Daily productivity and activity analysis
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         # 기본 정보
         col1, col2, col3, col4 = st.columns(4)
@@ -3527,7 +3542,17 @@ class IndividualDashboard:
             self.render_attendance_info(analysis_result['attendance_data'])
         
         # 활동별 시간 요약
-        st.markdown("### 📊 활동별 시간 분석")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #2E86AB; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+                Activity Time Analysis
+            </h4>
+        </div>
+        """, unsafe_allow_html=True)
         self.render_activity_summary(analysis_result)
         
         
@@ -3726,10 +3751,20 @@ class IndividualDashboard:
     
     def render_detailed_analysis(self, analysis_result: dict):
         """상세 분석 결과 렌더링"""
-        st.markdown("### 📋 상세 분석 결과")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #6c757d; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #495057; font-weight: 600; font-size: 1.1rem;">
+                Detailed Analysis
+            </h4>
+        </div>
+        """, unsafe_allow_html=True)
         
         # 탭으로 구분하여 표시
-        tab1, tab2, tab3 = st.tabs(["🔄 교대근무", "📊 효율성", "📈 트렌드"])
+        tab1, tab2, tab3 = st.tabs(["교대근무", "효율성", "트렌드"])
         
         with tab1:
             self.render_shift_analysis(analysis_result)

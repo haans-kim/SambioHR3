@@ -1,0 +1,49 @@
+[theme]
+# Primary color for interactive elements
+primaryColor = "#2E86AB"  # 깊은 블루 - 전문적이고 신뢰감 있는 느낌
+
+# Background color for the main content area
+backgroundColor = "#FFFFFF"
+
+# Background color for sidebar and most interactive widgets
+secondaryBackgroundColor = "#F7F9FC"  # 매우 연한 회색-블루
+
+# Color used for almost all text
+textColor = "#1F2937"  # 다크 그레이 - 가독성 좋음
+
+# Font family for all text in the app, except code blocks
+font = "Inter"  # 모던하고 가독성 좋은 폰트
+
+# Base font size
+base = "rem"
+
+# 추가 설정들
+[theme.palette]
+# 커스텀 색상 팔레트 (CSS 변수로 사용 가능)
+success = "#10B981"  # 에메랄드 그린
+warning = "#F59E0B"  # 앰버
+error = "#EF4444"     # 레드
+info = "#3B82F6"      # 블루
+accent = "#8B5CF6"    # 퍼플
+
+[server]
+# 포트 설정
+port = 8501
+
+# 브라우저 자동 실행 비활성화
+headless = true
+
+# 파일 감시 활성화 (개발 중)
+runOnSave = true
+
+[browser]
+# 탭 제목
+gatherUsageStats = false
+
+[runner]
+# 매직 명령어 활성화
+magicEnabled = true
+
+# 설치 프롬프트 표시
+installTracer = false
+fixMatplotlib = true
