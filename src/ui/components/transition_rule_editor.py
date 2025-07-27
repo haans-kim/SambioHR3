@@ -40,15 +40,15 @@ class TransitionRuleEditor:
     
     def render(self):
         """에디터 UI 렌더링"""
-        st.markdown("## 🔄 전이 룰 에디터")
+        st.markdown("## 전이 룰 에디터")
         st.markdown("활동 간 전이 규칙을 정의하고 관리합니다.")
         
         # 탭 구성
         tab1, tab2, tab3, tab4 = st.tabs([
-            "📝 룰 편집", 
-            "📊 시각화", 
-            "📁 템플릿", 
-            "⚙️ 설정"
+            "룰 편집", 
+            "시각화", 
+            "템플릿", 
+            "설정"
         ])
         
         with tab1:
@@ -104,7 +104,7 @@ class TransitionRuleEditor:
             )
             
             # 룰 추가 버튼
-            if st.button("➕ 룰 추가", type="primary"):
+            if st.button("룰 추가", type="primary"):
                 self.add_rule(
                     from_state, to_state, 
                     base_probability, conditions, 
@@ -187,7 +187,7 @@ class TransitionRuleEditor:
                 with col1:
                     st.write(f"{i+1}. {self._format_condition(cond)}")
                 with col2:
-                    if st.button("❌", key=f"del_cond_{i}"):
+                    if st.button("삭제", key=f"del_cond_{i}"):
                         st.session_state.conditions.pop(i)
                         st.rerun()
         
@@ -232,7 +232,7 @@ class TransitionRuleEditor:
             # 룰 검증
             is_valid, errors = self.rule_manager.validate_rule(rule)
             if not is_valid:
-                st.error(f"❌ 룰 검증 실패: {', '.join(errors)}")
+                st.error(f"룰 검증 실패: {', '.join(errors)}")
                 return
             
             # 룰 저장
@@ -242,15 +242,15 @@ class TransitionRuleEditor:
                     from_state, to_state, probability
                 )
                 
-                st.success(f"✅ 룰 추가됨: {from_state} → {to_state}")
+                st.success(f"룰 추가됨: {from_state} → {to_state}")
                 
                 # 조건 초기화
                 st.session_state.conditions = []
             else:
-                st.error("❌ 룰 저장 실패")
+                st.error("룰 저장 실패")
             
         except Exception as e:
-            st.error(f"❌ 룰 추가 실패: {e}")
+            st.error(f"룰 추가 실패: {e}")
             self.logger.error(f"룰 추가 오류: {e}")
     
     
@@ -293,20 +293,33 @@ class TransitionRuleEditor:
                 format_func=lambda x: f"{x.split('_')[0]} → {x.split('_')[1]}"
             )
             
-            if st.button("🗑️ 선택한 룰 삭제"):
+            if st.button("선택한 룰 삭제", type="secondary"):
                 self.delete_rule(rule_to_delete)
     
     def delete_rule(self, rule_id: str):
         """룰 삭제"""
         if self.rule_manager.delete_rule(rule_id):
-            st.success(f"✅ 룰 비활성화됨: {rule_id}")
+            st.success(f"룰 비활성화됨: {rule_id}")
             st.rerun()
         else:
-            st.error(f"❌ 룰 삭제 실패: {rule_id}")
+            st.error(f"룰 삭제 실패: {rule_id}")
     
     def render_visualization(self):
         """전이 다이어그램 시각화"""
-        st.markdown("### 상태 전이 다이어그램")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #2E86AB; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+                State Transition Diagram
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                상태 전이 다이어그램
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         # 룰 통계 표시
         stats = self.rule_manager.get_rule_statistics()
@@ -323,7 +336,20 @@ class TransitionRuleEditor:
         
         # 간단한 전이 행렬 표시
         if self.hmm_model.transition_matrix is not None:
-            st.markdown("#### 전이 확률 행렬")
+            st.markdown("""
+            <div style="background: #f8f9fa; 
+                        border-left: 3px solid #6c757d; 
+                        padding: 0.8rem 1.2rem; 
+                        border-radius: 0 6px 6px 0; 
+                        margin: 1rem 0 0.5rem 0;">
+                <h4 style="margin: 0; color: #495057; font-weight: 600; font-size: 1.1rem;">
+                    Transition Probability Matrix
+                </h4>
+                <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                    전이 확률 행렬
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
             
             # DataFrame으로 변환
             df_matrix = pd.DataFrame(
@@ -339,7 +365,20 @@ class TransitionRuleEditor:
             )
         
         # 상태별 룰 분포
-        st.markdown("#### 상태별 룰 분포")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #6c757d; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #495057; font-weight: 600; font-size: 1.1rem;">
+                Rule Distribution by State
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                상태별 룰 분포
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         
         with col1:
@@ -362,7 +401,20 @@ class TransitionRuleEditor:
     
     def render_templates(self):
         """룰 템플릿"""
-        st.markdown("### 룰 템플릿")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #2E86AB; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+                Rule Templates
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                룰 템플릿
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         template_options = {
             "표준 근무": self.create_standard_work_template,
@@ -375,7 +427,7 @@ class TransitionRuleEditor:
             list(template_options.keys())
         )
         
-        if st.button("📥 템플릿 적용"):
+        if st.button("템플릿 적용", type="primary"):
             template_func = template_options[selected_template]
             rules = template_func()
             
@@ -410,7 +462,7 @@ class TransitionRuleEditor:
                     )
                     success_count += 1
             
-            st.success(f"✅ {selected_template} 템플릿 적용 완료 ({success_count}개 룰)")
+            st.success(f"{selected_template} 템플릿 적용 완료 ({success_count}개 룰)")
             st.rerun()
     
     def create_standard_work_template(self) -> List[Dict[str, Any]]:
@@ -518,12 +570,35 @@ class TransitionRuleEditor:
     
     def render_settings(self):
         """설정"""
-        st.markdown("### 설정")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #2E86AB; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+                Settings
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                설정
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("#### 모델 설정")
+            st.markdown("""
+            <div style="background: #f8f9fa; 
+                        border-left: 3px solid #6c757d; 
+                        padding: 0.8rem 1.2rem; 
+                        border-radius: 0 6px 6px 0; 
+                        margin: 1rem 0 0.5rem 0;">
+                <h5 style="margin: 0; color: #495057; font-weight: 600; font-size: 1rem;">
+                    Model Settings
+                </h5>
+            </div>
+            """, unsafe_allow_html=True)
             
             # 정규화 옵션
             normalize = st.checkbox(
@@ -543,16 +618,26 @@ class TransitionRuleEditor:
             )
         
         with col2:
-            st.markdown("#### 내보내기/가져오기")
+            st.markdown("""
+            <div style="background: #f8f9fa; 
+                        border-left: 3px solid #6c757d; 
+                        padding: 0.8rem 1.2rem; 
+                        border-radius: 0 6px 6px 0; 
+                        margin: 1rem 0 0.5rem 0;">
+                <h5 style="margin: 0; color: #495057; font-weight: 600; font-size: 1rem;">
+                    Import/Export
+                </h5>
+            </div>
+            """, unsafe_allow_html=True)
             
             # 룰 내보내기
-            if st.button("💾 룰 내보내기"):
+            if st.button("룰 내보내기", type="primary"):
                 export_path = self.rule_manager.export_rules()
                 with open(export_path, 'r', encoding='utf-8') as f:
                     rules_data = f.read()
                 
                 st.download_button(
-                    label="📥 JSON 다운로드",
+                    label="JSON 다운로드",
                     data=rules_data,
                     file_name="transition_rules.json",
                     mime="application/json"
@@ -578,8 +663,8 @@ class TransitionRuleEditor:
                     # 임시 파일 삭제
                     Path(temp_path).unlink()
                     
-                    st.success(f"✅ 룰 가져오기 완료: 성공 {success_count}개, 실패 {fail_count}개")
+                    st.success(f"룰 가져오기 완료: 성공 {success_count}개, 실패 {fail_count}개")
                     st.rerun()
                     
                 except Exception as e:
-                    st.error(f"❌ 파일 로드 실패: {e}")
+                    st.error(f"파일 로드 실패: {e}")

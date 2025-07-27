@@ -17,10 +17,10 @@ class ModelConfigComponent:
     
     def render(self):
         """태그 기반 시스템 설정 인터페이스 렌더링"""
-        st.markdown("### ⚙️ 태그 기반 활동 분류 시스템 설정")
+        st.markdown("### 태그 기반 활동 분류 시스템 설정")
         
         # 탭으로 구분
-        tab1, tab2, tab3 = st.tabs(["📊 시스템 상태", "🎯 태그 규칙 설정", "💾 설정 관리"])
+        tab1, tab2, tab3 = st.tabs(["시스템 상태", "태그 규칙 설정", "설정 관리"])
         
         with tab1:
             self.render_system_status()
@@ -33,7 +33,20 @@ class ModelConfigComponent:
     
     def render_system_status(self):
         """태그 기반 시스템 상태 표시"""
-        st.markdown("#### 📊 태그 기반 활동 분류 시스템 상태")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #2E86AB; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+                Tag-based Activity Classification System Status
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                태그 기반 활동 분류 시스템 상태
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         # 시스템 기본 정보
         col1, col2 = st.columns(2)
@@ -44,12 +57,25 @@ class ModelConfigComponent:
             st.info("**태그 유형:** 10가지 (T1-T3, G1-G4, M1-M2, N1-N2)")
         
         with col2:
-            st.success("**시스템 상태:** 🟢 정상 작동")
+            st.success("**시스템 상태:** 정상 작동")
             st.info("**마지막 업데이트:** 2025-01-27")
             st.info("**분류 정확도:** 95% (규칙 기반)")
         
         # 태그 코드 목록
-        st.markdown("#### 📋 태그 코드 정의")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #6c757d; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #495057; font-weight: 600; font-size: 1.1rem;">
+                Tag Code Definitions
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                태그 코드 정의
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         tag_codes_df = pd.DataFrame({
             '태그 코드': ['T1', 'T2', 'T3', 'G1', 'G2', 'G3', 'G4', 'M1', 'M2', 'N1', 'N2'],
             '위치': ['구역_근무중', '정문등_정문_SPEED_GATE-3_입문', '정문등_정문_SPEED_GATE-3_출문', 
@@ -60,7 +86,20 @@ class ModelConfigComponent:
         st.dataframe(tag_codes_df, use_container_width=True)
         
         # 활동 상태 분류
-        st.markdown("#### 👁️ 활동 상태 분류")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #6c757d; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #495057; font-weight: 600; font-size: 1.1rem;">
+                Activity Status Classifications
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                활동 상태 분류
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         states_df = pd.DataFrame({
             '활동 상태': ['출근', '퇴근', '작업', '집중작업', '장비작업', '회의', 
                        '조식', '중식', '석식', '야식', '휴식', '이동', '유휴', 
@@ -89,7 +128,20 @@ class ModelConfigComponent:
     
     def render_tag_rules(self):
         """태그 규칙 설정"""
-        st.markdown("#### 🎯 태그 분류 규칙 설정")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #2E86AB; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+                Tag Classification Rule Settings
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                태그 분류 규칙 설정
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         # 규칙 유형 선택
         rule_type = st.selectbox(
@@ -106,7 +158,7 @@ class ModelConfigComponent:
     
     def render_tag_mapping_rules(self):
         """태그 코드 매핑 규칙"""
-        st.markdown("##### 🏷️ 태그 코드 → 활동 매핑")
+        st.markdown("##### 태그 코드 → 활동 매핑")
         
         col1, col2, col3 = st.columns(3)
         
@@ -127,12 +179,12 @@ class ModelConfigComponent:
         with col3:
             location = st.text_input("위치 정보", "")
         
-        if st.button("✏️ 매핑 규칙 수정"):
+        if st.button("매핑 규칙 수정", type="primary"):
             st.success(f"태그 매핑 수정: {tag_code} → {activity} ({location})")
     
     def render_meal_time_rules(self):
         """식사 시간 규칙 설정"""
-        st.markdown("##### 🍽️ 식사 시간 설정")
+        st.markdown("##### 식사 시간 설정")
         
         meal_times = {
             '조식': {'start': '06:30', 'end': '09:00'},
@@ -153,12 +205,12 @@ class ModelConfigComponent:
             with col3:
                 new_end = st.time_input(f"{meal} 종료", pd.to_datetime(times['end']).time(), key=f"{meal}_end")
         
-        if st.button("💾 식사 시간 저장"):
+        if st.button("식사 시간 저장", type="primary"):
             st.success("식사 시간 설정이 저장되었습니다.")
     
     def render_work_area_rules(self):
         """근무 구역 설정"""
-        st.markdown("##### 🏭 근무 구역 설정")
+        st.markdown("##### 근무 구역 설정")
         
         work_areas = st.multiselect(
             "근무 구역으로 분류할 태그 코드",
@@ -172,23 +224,36 @@ class ModelConfigComponent:
             default=['N1', 'N2']
         )
         
-        if st.button("💾 구역 설정 저장"):
+        if st.button("구역 설정 저장", type="primary"):
             st.success("근무 구역 설정이 저장되었습니다.")
     
     def render_settings_management(self):
         """설정 관리"""
-        st.markdown("#### 💾 설정 관리")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #2E86AB; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+                Settings Management
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                설정 관리
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         # 설정 저장
-        st.markdown("##### 💾 설정 저장")
+        st.markdown("##### 설정 저장")
         config_name = st.text_input("설정 이름", "sambio_tag_config")
         
-        if st.button("💾 설정 저장"):
+        if st.button("설정 저장", type="primary"):
             filepath = f"configs/{config_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             st.success(f"설정 저장 완료: {filepath}")
         
         # 설정 로드
-        st.markdown("##### 📂 설정 로드")
+        st.markdown("##### 설정 로드")
         uploaded_config = st.file_uploader(
             "설정 파일 선택",
             type=['json'],
@@ -196,16 +261,16 @@ class ModelConfigComponent:
         )
         
         if uploaded_config is not None:
-            if st.button("📂 설정 로드"):
+            if st.button("설정 로드", type="primary"):
                 st.success("설정 로드 완료!")
         
         # 설정 내보내기
-        st.markdown("##### 📤 설정 내보내기")
+        st.markdown("##### 설정 내보내기")
         export_format = st.selectbox(
             "내보내기 형식",
             ["JSON", "CSV", "Excel"]
         )
         
-        if st.button("📤 설정 내보내기"):
+        if st.button("설정 내보내기", type="primary"):
             st.success(f"설정 내보내기 완료: {export_format} 형식")
     

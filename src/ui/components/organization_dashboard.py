@@ -22,7 +22,7 @@ class OrganizationDashboard:
     
     def render(self):
         """대시보드 렌더링"""
-        st.markdown("### 🏢 조직별 근무 분석")
+        st.markdown("### 조직별 근무 분석")
         
         # 탭 생성
         tab1, tab2, tab3 = st.tabs(["센터-직급별 분석", "기존 조직 분석", "상세 분석"])
@@ -56,7 +56,7 @@ class OrganizationDashboard:
                 )
             
             # 분석 실행
-            if st.button("🔍 조직 분석 실행", type="primary"):
+            if st.button("조직 분석 실행", type="primary"):
                 self.execute_organization_analysis(org_id, org_level, date_range)
         
         with tab3:
@@ -88,7 +88,20 @@ class OrganizationDashboard:
     
     def render_organization_charts(self):
         """조직 차트 렌더링"""
-        st.markdown("### 📊 조직 성과 분석")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #2E86AB; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+                Organization Performance Analysis
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                조직 성과 분석
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         # 샘플 데이터
         employees = [f"직원{i+1}" for i in range(10)]
@@ -107,7 +120,20 @@ class OrganizationDashboard:
     
     def render_center_grade_analysis(self):
         """센터-직급별 근무시간 분석"""
-        st.markdown("#### 📊 센터-직급별 주간 근무시간 비교")
+        st.markdown("""
+        <div style="background: #f8f9fa; 
+                    border-left: 3px solid #2E86AB; 
+                    padding: 0.8rem 1.2rem; 
+                    border-radius: 0 6px 6px 0; 
+                    margin: 1rem 0 0.5rem 0;">
+            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+                Center-Grade Weekly Analysis
+            </h4>
+            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                센터-직급별 주간 근무시간 비교
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         # 월 선택
         col1, col2 = st.columns([2, 6])
@@ -133,7 +159,7 @@ class OrganizationDashboard:
             )
         
         # 분석 실행 버튼
-        if st.button("📊 분석 실행", key="analyze_center_grade"):
+        if st.button("분석 실행", type="primary", key="analyze_center_grade"):
             self.analyze_center_grade_data(year, month)
     
     def analyze_center_grade_data(self, year: int, month: int):
@@ -232,7 +258,17 @@ class OrganizationDashboard:
                 total_avg = employee_monthly.groupby(['센터', '직급레벨'])['실제근무시간'].mean().reset_index()
                 total_pivot = total_avg.pivot(index='직급레벨', columns='센터', values='실제근무시간')
                 
-                st.markdown(f"### {year}년 {month}월 센터-직급별 평균 근무시간")
+                st.markdown("""
+                <div style="background: #f8f9fa; 
+                            border-left: 3px solid #28a745; 
+                            padding: 0.8rem 1.2rem; 
+                            border-radius: 0 6px 6px 0; 
+                            margin: 1rem 0 0.5rem 0;">
+                    <h4 style="margin: 0; color: #28a745; font-weight: 600; font-size: 1.1rem;">
+                        {}년 {}월 센터-직급별 평균 근무시간
+                    </h4>
+                </div>
+                """.format(year, month), unsafe_allow_html=True)
                 st.markdown(f"**최소: {month_data['실제근무시간'].min():.2f}h | 최대: {month_data['실제근무시간'].max():.2f}h**")
                 
                 # 평균 행과 열 추가
@@ -284,7 +320,20 @@ class OrganizationDashboard:
                 st.dataframe(styled_df, use_container_width=True)
                 
                 # 주차별 상세 데이터를 하나의 통합 테이블로 표시
-                st.markdown("### 📅 센터-월별 주간 근무시간 비교")
+                st.markdown("""
+                <div style="background: #f8f9fa; 
+                            border-left: 3px solid #6f42c1; 
+                            padding: 0.8rem 1.2rem; 
+                            border-radius: 0 6px 6px 0; 
+                            margin: 1rem 0 0.5rem 0;">
+                    <h4 style="margin: 0; color: #6f42c1; font-weight: 600; font-size: 1.1rem;">
+                        Weekly Working Hours Comparison
+                    </h4>
+                    <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                        센터-월별 주간 근무시간 비교
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 # 모든 주차 데이터를 하나의 테이블로 통합
                 weeks_in_month = sorted(month_data['주차'].unique())
@@ -321,7 +370,20 @@ class OrganizationDashboard:
                 st.dataframe(styled_weekly, use_container_width=True)
                 
                 # 시각화
-                st.markdown("### 📈 시각화")
+                st.markdown("""
+                <div style="background: #f8f9fa; 
+                            border-left: 3px solid #fd7e14; 
+                            padding: 0.8rem 1.2rem; 
+                            border-radius: 0 6px 6px 0; 
+                            margin: 1rem 0 0.5rem 0;">
+                    <h4 style="margin: 0; color: #fd7e14; font-weight: 600; font-size: 1.1rem;">
+                        Data Visualization
+                    </h4>
+                    <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                        데이터 시각화
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 # 센터별 평균 근무시간 차트
                 center_avg = month_data.groupby('센터')['실제근무시간'].mean().sort_values(ascending=False)
