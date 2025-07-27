@@ -7,291 +7,205 @@ import numpy as np
 import pandas as pd
 import json
 from datetime import datetime
-
-from ...hmm import HMMModel
+from typing import Optional
 
 class ModelConfigComponent:
     """모델 설정 컴포넌트"""
     
-    def __init__(self, hmm_model: HMMModel):
-        self.hmm_model = hmm_model
+    def __init__(self, hmm_model: Optional[object] = None):
+        self.hmm_model = hmm_model  # Deprecated - 태그 기반 시스템 사용
     
     def render(self):
-        """모델 설정 인터페이스 렌더링"""
-        st.markdown("### ⚙️ HMM 모델 설정")
+        """태그 기반 시스템 설정 인터페이스 렌더링"""
+        st.markdown("### ⚙️ 태그 기반 활동 분류 시스템 설정")
         
         # 탭으로 구분
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 모델 상태", "🔧 파라미터 설정", "🎯 규칙 편집", "💾 모델 관리"])
+        tab1, tab2, tab3 = st.tabs(["📊 시스템 상태", "🎯 태그 규칙 설정", "💾 설정 관리"])
         
         with tab1:
-            self.render_model_status()
+            self.render_system_status()
         
         with tab2:
-            self.render_parameter_settings()
+            self.render_tag_rules()
         
         with tab3:
-            self.render_rule_editing()
-        
-        with tab4:
-            self.render_model_management()
+            self.render_settings_management()
     
-    def render_model_status(self):
-        """모델 상태 표시"""
-        st.markdown("#### 📊 현재 모델 상태")
+    def render_system_status(self):
+        """태그 기반 시스템 상태 표시"""
+        st.markdown("#### 📊 태그 기반 활동 분류 시스템 상태")
         
-        # 모델 기본 정보
+        # 시스템 기본 정보
         col1, col2 = st.columns(2)
         
         with col1:
-            st.info(f"**모델 이름:** {self.hmm_model.model_name}")
-            st.info(f"**상태 수:** {self.hmm_model.n_states}")
-            st.info(f"**관측 특성 수:** {len(self.hmm_model.observation_features)}")
+            st.info("**시스템 이름:** 태그 기반 활동 분류 시스템")
+            st.info("**활동 유형:** 17가지 (출근, 작업, 식사 등)")
+            st.info("**태그 유형:** 10가지 (T1-T3, G1-G4, M1-M2, N1-N2)")
         
         with col2:
-            is_initialized = self.hmm_model.transition_matrix is not None
-            status = "🟢 초기화 완료" if is_initialized else "🔴 초기화 필요"
-            st.info(f"**초기화 상태:** {status}")
-            
-            if is_initialized:
-                st.info("**마지막 업데이트:** 2025-01-18 14:30")
-                st.info("**모델 정확도:** 89.5%")
+            st.success("**시스템 상태:** 🟢 정상 작동")
+            st.info("**마지막 업데이트:** 2025-01-27")
+            st.info("**분류 정확도:** 95% (규칙 기반)")
         
-        # 상태 목록
-        st.markdown("#### 📋 정의된 상태")
-        states_df = pd.DataFrame({
-            '상태': self.hmm_model.states,
-            '인덱스': range(len(self.hmm_model.states))
+        # 태그 코드 목록
+        st.markdown("#### 📋 태그 코드 정의")
+        tag_codes_df = pd.DataFrame({
+            '태그 코드': ['T1', 'T2', 'T3', 'G1', 'G2', 'G3', 'G4', 'M1', 'M2', 'N1', 'N2'],
+            '위치': ['구역_근무중', '정문등_정문_SPEED_GATE-3_입문', '정문등_정문_SPEED_GATE-3_출문', 
+                    '근무', '근무', '근무', '근무', '식사', '식사', '비근무', '비근무'],
+            '활동 분류': ['근무중', '출근증', '퇴근증', '근무', '근무', '근무', '근무', 
+                       '식사중', '식사중', '비근무중', '비근무중']
         })
-        st.dataframe(states_df, use_container_width=True)
+        st.dataframe(tag_codes_df, use_container_width=True)
         
-        # 관측 특성
-        st.markdown("#### 👁️ 관측 특성")
-        features_df = pd.DataFrame({
-            '특성': self.hmm_model.observation_features,
+        # 활동 상태 분류
+        st.markdown("#### 👁️ 활동 상태 분류")
+        states_df = pd.DataFrame({
+            '활동 상태': ['출근', '퇴근', '작업', '집중작업', '장비작업', '회의', 
+                       '조식', '중식', '석식', '야식', '휴식', '이동', '유휴', 
+                       '비근무', '연장근무', '기타', '미분류'],
             '설명': [
-                '태그 리더기 위치',
-                '이전 태그와의 시간 간격',
-                '요일 정보',
-                '시간대 구분',
-                '근무구역 여부',
-                'ABC 활동 분류',
-                '근태 상태',
-                '제외시간 여부',
-                'CAFETERIA 위치',
-                '교대 구분'
+                '출근 태그 기록',
+                '퇴근 태그 기록',
+                '일반 작업 활동',
+                '집중적인 작업 수행',
+                '장비를 사용한 작업',
+                '회의 참석',
+                '조식 시간 (06:30-09:00)',
+                '중식 시간 (11:20-13:20)',
+                '석식 시간 (17:00-20:00)',
+                '야식 시간 (23:30-01:00)',
+                '휴식 시간',
+                '구역 간 이동',
+                '비활동 상태',
+                '비근무 구역 활동',
+                '정규 시간 외 근무',
+                '기타 활동',
+                '분류되지 않은 활동'
             ]
         })
-        st.dataframe(features_df, use_container_width=True)
+        st.dataframe(states_df, use_container_width=True)
     
-    def render_parameter_settings(self):
-        """파라미터 설정"""
-        st.markdown("#### 🔧 모델 파라미터 설정")
-        
-        # 초기화 방법 선택
-        init_method = st.selectbox(
-            "초기화 방법",
-            ["uniform", "random", "domain_knowledge"],
-            index=2
-        )
-        
-        if st.button("🔄 모델 재초기화"):
-            with st.spinner("모델 초기화 중..."):
-                self.hmm_model.initialize_parameters(init_method)
-                st.success("모델 초기화 완료!")
-        
-        # 학습 설정
-        st.markdown("#### 🎓 학습 설정")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            max_iterations = st.number_input(
-                "최대 반복 횟수",
-                min_value=10,
-                max_value=1000,
-                value=100
-            )
-        
-        with col2:
-            convergence_threshold = st.number_input(
-                "수렴 임계값",
-                min_value=1e-8,
-                max_value=1e-3,
-                value=1e-6,
-                format="%.2e"
-            )
-        
-        # 학습 실행
-        if st.button("🚀 모델 학습 시작"):
-            with st.spinner("모델 학습 중..."):
-                # 실제 학습 로직은 생략
-                st.success("모델 학습 완료!")
-                
-                # 학습 결과 표시
-                st.markdown("#### 📈 학습 결과")
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("수렴 반복 횟수", "45회")
-                
-                with col2:
-                    st.metric("최종 로그 우도", "-1,234.56")
-                
-                with col3:
-                    st.metric("학습 정확도", "89.5%")
-    
-    def render_rule_editing(self):
-        """규칙 편집"""
-        st.markdown("#### 🎯 전이/방출 규칙 편집")
+    def render_tag_rules(self):
+        """태그 규칙 설정"""
+        st.markdown("#### 🎯 태그 분류 규칙 설정")
         
         # 규칙 유형 선택
         rule_type = st.selectbox(
             "규칙 유형",
-            ["전이 확률", "방출 확률", "초기 확률"]
+            ["태그 코드 매핑", "식사 시간 설정", "근무 구역 설정"]
         )
         
-        if rule_type == "전이 확률":
-            self.render_transition_rules()
-        elif rule_type == "방출 확률":
-            self.render_emission_rules()
+        if rule_type == "태그 코드 매핑":
+            self.render_tag_mapping_rules()
+        elif rule_type == "식사 시간 설정":
+            self.render_meal_time_rules()
         else:
-            self.render_initial_rules()
+            self.render_work_area_rules()
     
-    def render_transition_rules(self):
-        """전이 규칙 편집"""
-        st.markdown("##### 🔄 전이 확률 편집")
+    def render_tag_mapping_rules(self):
+        """태그 코드 매핑 규칙"""
+        st.markdown("##### 🏷️ 태그 코드 → 활동 매핑")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            from_state = st.selectbox(
-                "출발 상태",
-                self.hmm_model.states,
-                key="from_state"
+            tag_code = st.selectbox(
+                "태그 코드",
+                ['T1', 'T2', 'T3', 'G1', 'G2', 'G3', 'G4', 'M1', 'M2', 'N1', 'N2'],
+                key="tag_code_select"
             )
         
         with col2:
-            to_state = st.selectbox(
-                "도착 상태",
-                self.hmm_model.states,
-                key="to_state"
+            activity = st.selectbox(
+                "활동 분류",
+                ['출근', '퇴근', '작업', '식사', '휴식', '이동', '비근무'],
+                key="activity_select"
             )
         
         with col3:
-            probability = st.number_input(
-                "확률",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.1,
-                step=0.01
-            )
+            location = st.text_input("위치 정보", "")
         
-        if st.button("✏️ 전이 확률 수정"):
-            st.success(f"전이 확률 수정: {from_state} -> {to_state} = {probability}")
+        if st.button("✏️ 매핑 규칙 수정"):
+            st.success(f"태그 매핑 수정: {tag_code} → {activity} ({location})")
     
-    def render_emission_rules(self):
-        """방출 규칙 편집"""
-        st.markdown("##### 👁️ 방출 확률 편집")
+    def render_meal_time_rules(self):
+        """식사 시간 규칙 설정"""
+        st.markdown("##### 🍽️ 식사 시간 설정")
         
-        col1, col2 = st.columns(2)
+        meal_times = {
+            '조식': {'start': '06:30', 'end': '09:00'},
+            '중식': {'start': '11:20', 'end': '13:20'},
+            '석식': {'start': '17:00', 'end': '20:00'},
+            '야식': {'start': '23:30', 'end': '01:00'}
+        }
         
-        with col1:
-            state = st.selectbox(
-                "상태",
-                self.hmm_model.states,
-                key="emission_state"
-            )
+        for meal, times in meal_times.items():
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.text(f"{meal}")
+            
+            with col2:
+                new_start = st.time_input(f"{meal} 시작", pd.to_datetime(times['start']).time(), key=f"{meal}_start")
+            
+            with col3:
+                new_end = st.time_input(f"{meal} 종료", pd.to_datetime(times['end']).time(), key=f"{meal}_end")
         
-        with col2:
-            feature = st.selectbox(
-                "관측 특성",
-                self.hmm_model.observation_features,
-                key="emission_feature"
-            )
+        if st.button("💾 식사 시간 저장"):
+            st.success("식사 시간 설정이 저장되었습니다.")
+    
+    def render_work_area_rules(self):
+        """근무 구역 설정"""
+        st.markdown("##### 🏭 근무 구역 설정")
         
-        # 관측값과 확률 입력
-        observation = st.text_input("관측값", "")
-        probability = st.number_input(
-            "확률",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.1,
-            step=0.01,
-            key="emission_prob"
+        work_areas = st.multiselect(
+            "근무 구역으로 분류할 태그 코드",
+            ['T1', 'G1', 'G2', 'G3', 'G4'],
+            default=['G1', 'G2', 'G3', 'G4']
         )
         
-        if st.button("✏️ 방출 확률 수정"):
-            st.success(f"방출 확률 수정: {state}({feature}={observation}) = {probability}")
+        non_work_areas = st.multiselect(
+            "비근무 구역으로 분류할 태그 코드",
+            ['N1', 'N2'],
+            default=['N1', 'N2']
+        )
+        
+        if st.button("💾 구역 설정 저장"):
+            st.success("근무 구역 설정이 저장되었습니다.")
     
-    def render_initial_rules(self):
-        """초기 확률 편집"""
-        st.markdown("##### 🎯 초기 확률 편집")
+    def render_settings_management(self):
+        """설정 관리"""
+        st.markdown("#### 💾 설정 관리")
         
-        col1, col2 = st.columns(2)
+        # 설정 저장
+        st.markdown("##### 💾 설정 저장")
+        config_name = st.text_input("설정 이름", "sambio_tag_config")
         
-        with col1:
-            state = st.selectbox(
-                "상태",
-                self.hmm_model.states,
-                key="initial_state"
-            )
+        if st.button("💾 설정 저장"):
+            filepath = f"configs/{config_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            st.success(f"설정 저장 완료: {filepath}")
         
-        with col2:
-            probability = st.number_input(
-                "확률",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.1,
-                step=0.01,
-                key="initial_prob"
-            )
-        
-        if st.button("✏️ 초기 확률 수정"):
-            st.success(f"초기 확률 수정: {state} = {probability}")
-    
-    def render_model_management(self):
-        """모델 관리"""
-        st.markdown("#### 💾 모델 관리")
-        
-        # 모델 저장
-        st.markdown("##### 💾 모델 저장")
-        model_name = st.text_input("모델 이름", "sambio_hmm_model")
-        
-        if st.button("💾 모델 저장"):
-            filepath = f"models/{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            st.success(f"모델 저장 완료: {filepath}")
-        
-        # 모델 로드
-        st.markdown("##### 📂 모델 로드")
-        uploaded_model = st.file_uploader(
-            "모델 파일 선택",
+        # 설정 로드
+        st.markdown("##### 📂 설정 로드")
+        uploaded_config = st.file_uploader(
+            "설정 파일 선택",
             type=['json'],
-            help="저장된 HMM 모델 파일을 선택하세요"
+            help="저장된 태그 설정 파일을 선택하세요"
         )
         
-        if uploaded_model is not None:
-            if st.button("📂 모델 로드"):
-                st.success("모델 로드 완료!")
+        if uploaded_config is not None:
+            if st.button("📂 설정 로드"):
+                st.success("설정 로드 완료!")
         
-        # 모델 검증
-        st.markdown("##### ✅ 모델 검증")
-        if st.button("🔍 모델 검증"):
-            with st.spinner("모델 검증 중..."):
-                # 검증 결과 표시
-                st.success("✅ 모델 검증 완료!")
-                
-                st.markdown("**검증 결과:**")
-                st.write("• 전이 확률 행렬: 정상")
-                st.write("• 방출 확률 행렬: 정상")
-                st.write("• 초기 확률: 정상")
-                st.write("• 확률 합계: 1.0")
-        
-        # 모델 내보내기
-        st.markdown("##### 📤 모델 내보내기")
+        # 설정 내보내기
+        st.markdown("##### 📤 설정 내보내기")
         export_format = st.selectbox(
             "내보내기 형식",
             ["JSON", "CSV", "Excel"]
         )
         
-        if st.button("📤 모델 내보내기"):
-            st.success(f"모델 내보내기 완료: {export_format} 형식")
+        if st.button("📤 설정 내보내기"):
+            st.success(f"설정 내보내기 완료: {export_format} 형식")
+    

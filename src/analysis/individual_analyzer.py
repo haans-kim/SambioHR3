@@ -11,22 +11,22 @@ import logging
 from sqlalchemy.orm import Session
 
 from ..database import DatabaseManager, DailyWorkData, TagLogs, ClaimData, AbcActivityData
-from ..hmm import HMMModel
-from ..hmm.viterbi_with_rules import RuleBasedViterbiAlgorithm
+# from ..hmm import HMMModel  # HMM 제거
+# from ..hmm.viterbi_with_rules import RuleBasedViterbiAlgorithm  # HMM 제거
 from ..data_processing import DataTransformer, PickleManager
 
 class IndividualAnalyzer:
     """개인별 분석기 클래스"""
     
-    def __init__(self, db_manager: DatabaseManager, hmm_model: HMMModel):
+    def __init__(self, db_manager: DatabaseManager, hmm_model=None):
         """
         Args:
             db_manager: 데이터베이스 매니저
-            hmm_model: HMM 모델
+            hmm_model: HMM 모델 (deprecated, 태그 기반 시스템 사용)
         """
         self.db_manager = db_manager
-        self.hmm_model = hmm_model
-        self.viterbi = RuleBasedViterbiAlgorithm(hmm_model)
+        self.hmm_model = None  # HMM 사용 안함
+        self.viterbi = None  # HMM 사용 안함
         self.data_transformer = DataTransformer()
         self.pickle_manager = PickleManager()
         self.logger = logging.getLogger(__name__)
@@ -66,8 +66,8 @@ class IndividualAnalyzer:
             claim_data = self._get_data('claim_data', employee_id, start_date, end_date)
             abc_data = self._get_data('abc_activity_data', employee_id, start_date, end_date)
             
-            # HMM 모델 적용
-            hmm_results = self._apply_hmm_analysis(tag_data)
+            # 태그 기반 분석 (HMM 대체)
+            tag_analysis_results = self._apply_tag_based_analysis(tag_data)
             
             # 분석 결과 통합
             analysis_result = {
@@ -77,12 +77,12 @@ class IndividualAnalyzer:
                     'end_date': end_date.isoformat(),
                     'total_days': (end_date - start_date).days + 1
                 },
-                'work_time_analysis': self._analyze_work_time(hmm_results, claim_data),
-                'shift_analysis': self._analyze_shift_patterns(hmm_results, tag_data),
-                'meal_time_analysis': self._analyze_meal_times(hmm_results, tag_data),
-                'activity_analysis': self._analyze_activities(hmm_results, abc_data),
-                'efficiency_analysis': self._analyze_efficiency(hmm_results, claim_data),
-                'timeline_analysis': self._analyze_daily_timelines(hmm_results, tag_data),
+                'work_time_analysis': self._analyze_work_time(tag_analysis_results, claim_data),
+                'shift_analysis': self._analyze_shift_patterns(tag_analysis_results, tag_data),
+                'meal_time_analysis': self._analyze_meal_times(tag_analysis_results, tag_data),
+                'activity_analysis': self._analyze_activities(tag_analysis_results, abc_data),
+                'efficiency_analysis': self._analyze_efficiency(tag_analysis_results, claim_data),
+                'timeline_analysis': self._analyze_daily_timelines(tag_analysis_results, tag_data),
                 'data_quality': self._assess_data_quality(tag_data, claim_data, abc_data),
                 'generated_at': datetime.now().isoformat()
             }
@@ -131,30 +131,68 @@ class IndividualAnalyzer:
                 return df
 
     
-    def _apply_hmm_analysis(self, tag_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """HMM 모델 적용"""
+    def _apply_tag_based_analysis(self, tag_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """태그 기반 분석 (HMM 대체)"""
         if not tag_data:
             return {'timeline': [], 'summary': {}}
         
-        # 태그 데이터를 관측 시퀀스로 변환
-        observations = []
+        timeline = []
         for tag in tag_data:
-            obs = {
+            # 태그 코드로 활동 분류
+            activity_state = self._classify_activity_by_tag(tag)
+            
+            entry = {
                 'timestamp': tag['timestamp'],
-                '태그위치': tag['tag_location'],
-                '시간간격': 'medium',  # 실제로는 계산 필요
-                '요일': tag['timestamp'].strftime('%A'),
-                '시간대': self._get_time_period(tag['timestamp']),
-                '근무구역여부': tag['work_area_type'],
-                'CAFETERIA위치': 'CAFETERIA' in tag['tag_location'],
-                '교대구분': self._determine_shift_type(tag['timestamp'])
+                'location': tag.get('tag_location', 'UNKNOWN'),
+                'predicted_state': activity_state,
+                'confidence': 0.95,  # 태그 기반 분류는 높은 신뢰도
+                'tag_code': tag.get('tag_code', tag.get('Tag_Code', ''))
             }
-            observations.append(obs)
+            timeline.append(entry)
         
-        # Viterbi 알고리즘으로 상태 시퀀스 예측
-        prediction_result = self.viterbi.predict_with_timeline(observations)
+        # 요약 생성
+        summary = {}
+        for entry in timeline:
+            state = entry['predicted_state']
+            if state not in summary:
+                summary[state] = 0
+            summary[state] += 1
         
-        return prediction_result
+        return {'timeline': timeline, 'summary': summary}
+    
+    def _classify_activity_by_tag(self, tag: Dict[str, Any]) -> str:
+        """태그 정보로 활동 분류"""
+        tag_code = tag.get('tag_code', tag.get('Tag_Code', ''))
+        location = tag.get('tag_location', '')
+        
+        # 태그 코드 기반 분류
+        if tag_code == 'T2':
+            return '출근'
+        elif tag_code == 'T3':
+            return '퇴근'
+        elif tag_code in ['G1', 'G2', 'G3', 'G4']:
+            return '근무'
+        elif tag_code == 'M1':
+            return '식사'  # 식당
+        elif tag_code == 'M2':
+            return '식사'  # 테이크아웃
+        elif tag_code in ['N1', 'N2']:
+            return '휴식'
+        elif tag_code == 'T1':
+            return '이동중'
+        elif tag_code == 'O':
+            return '장비조작'
+        else:
+            # 위치명 기반 부가 분류
+            location_lower = location.lower()
+            if 'cafeteria' in location_lower or '식당' in location_lower:
+                return '식사'
+            elif 'meeting' in location_lower or '회의' in location_lower:
+                return '회의'
+            elif 'rest' in location_lower or '휴게' in location_lower:
+                return '휴식'
+            else:
+                return '근무'
     
     def _analyze_work_time(self, hmm_results: Dict[str, Any], 
                           claim_data: List[Dict[str, Any]]) -> Dict[str, Any]:

@@ -19,7 +19,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 from src.database import get_database_manager
-from src.hmm import HMMModel
+# from src.hmm import HMMModel  # HMM 제거 - 태그 기반 시스템 사용
 from src.analysis import IndividualAnalyzer, OrganizationAnalyzer
 from src.ui.components.individual_dashboard import IndividualDashboard
 from src.ui.components.organization_dashboard import OrganizationDashboard
@@ -51,19 +51,18 @@ class SambioHumanApp:
             # 싱글톤 데이터베이스 매니저 사용
             self.db_manager = get_database_manager()
             
-            # HMM 모델 초기화
-            self.hmm_model = HMMModel("sambio_work_activity_hmm")
-            self.hmm_model.initialize_parameters("domain_knowledge")
+            # HMM 모델 초기화 제거 - 태그 기반 시스템 사용
+            self.hmm_model = None
             
-            # 분석기 초기화
-            self.individual_analyzer = IndividualAnalyzer(self.db_manager, self.hmm_model)
+            # 분석기 초기화 (HMM 없이)
+            self.individual_analyzer = IndividualAnalyzer(self.db_manager, None)
             self.organization_analyzer = OrganizationAnalyzer(self.db_manager, self.individual_analyzer)
             
             # UI 컴포넌트 초기화
             self.individual_dashboard = IndividualDashboard(self.individual_analyzer)
             self.organization_dashboard = OrganizationDashboard(self.organization_analyzer)
             self.data_upload = DataUploadComponent(self.db_manager)
-            self.model_config = ModelConfigComponent(self.hmm_model)
+            self.model_config = ModelConfigComponent(None)  # HMM 없이
             self.transition_rule_editor = TransitionRuleEditor()
             self.network_analysis_dashboard = NetworkAnalysisDashboard(self.db_manager)
             
@@ -138,12 +137,8 @@ class SambioHumanApp:
                 except:
                     st.error("🔴 데이터베이스 연결 실패")
             
-            # HMM 모델 상태
-            if self.hmm_model:
-                if self.hmm_model.transition_matrix is not None:
-                    st.success("🟢 HMM 모델 로드됨")
-                else:
-                    st.warning("🟡 HMM 모델 미초기화")
+            # 태그 기반 시스템 상태
+            st.success("🟢 태그 기반 활동 분류 시스템 활성")
             
             # 버전 정보
             st.markdown("---")
@@ -221,7 +216,7 @@ class SambioHumanApp:
             - **개인별 분석**: 2교대 근무 패턴 분석
             - **조직별 분석**: 팀/부서 단위 생산성 분석
             - **실시간 모니터링**: 태그 데이터 실시간 처리
-            - **HMM 모델**: 활동 상태 자동 분류
+            - **태그 기반 시스템**: 태그 코드로 활동 상태 분류
             - **4번 식사시간**: 조식/중식/석식/야식 추적
             """)
         
@@ -243,7 +238,7 @@ class SambioHumanApp:
         recent_activities = [
             {"시간": "2025-01-18 14:30", "활동": "개인 분석 완료", "대상": "직원 ID: E001234", "결과": "성공"},
             {"시간": "2025-01-18 14:15", "활동": "데이터 업로드", "대상": "tag_data_24.6.xlsx", "결과": "성공"},
-            {"시간": "2025-01-18 13:45", "활동": "HMM 모델 학습", "대상": "100개 시퀀스", "결과": "성공"},
+            {"시간": "2025-01-18 13:45", "활동": "태그 분류 처리", "대상": "100개 태그", "결과": "성공"},
             {"시간": "2025-01-18 13:30", "활동": "조직 분석", "대상": "Production Team", "결과": "성공"},
         ]
         

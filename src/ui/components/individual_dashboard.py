@@ -17,7 +17,8 @@ import matplotlib.pyplot as plt
 import sqlite3
 from sqlalchemy import text
 from .improved_gantt_chart import render_improved_gantt_chart
-from .hmm_classifier import HMMActivityClassifier
+# HMM 제거됨 - 태그 기반 규칙만 사용
+# from .hmm_classifier import HMMActivityClassifier
 
 from ...analysis import IndividualAnalyzer
 from ...analysis.network_analyzer import NetworkAnalyzer
@@ -1137,15 +1138,22 @@ class IndividualDashboard:
             # 태깅지점 마스터 데이터 로드
             tag_location_master = self.get_tag_location_master()
             
-            # 기본 활동 분류
-            daily_data['activity_code'] = 'WORK'  # 기본값
-            daily_data['work_area_type'] = 'Y'  # 기본값 (근무구역)
-            daily_data['work_status'] = 'W'  # 기본값 (근무상태)
-            daily_data['activity_label'] = 'YW'  # 기본값 (근무구역에서 근무중)
-            daily_data['confidence'] = 80  # 기본 신뢰도
-            daily_data['is_takeout'] = False  # 테이크아웃 여부 기본값 False
-            daily_data['tag_code'] = 'G1'  # 기본 태그 코드
-            daily_data['protected_from_meal'] = False  # 식사 분류 보호 플래그
+            # 기본 활동 분류 - 기존 값이 없는 경우에만 설정
+            if 'activity_code' not in daily_data.columns:
+                daily_data['activity_code'] = 'WORK'  # 기본값
+            if 'work_area_type' not in daily_data.columns:
+                daily_data['work_area_type'] = 'Y'  # 기본값 (근무구역)
+            if 'work_status' not in daily_data.columns:
+                daily_data['work_status'] = 'W'  # 기본값 (근무상태)
+            if 'activity_label' not in daily_data.columns:
+                daily_data['activity_label'] = 'YW'  # 기본값 (근무구역에서 근무중)
+            if 'confidence' not in daily_data.columns:
+                daily_data['confidence'] = 80  # 기본 신뢰도
+            if 'is_takeout' not in daily_data.columns:
+                daily_data['is_takeout'] = False  # 테이크아웃 여부 기본값 False
+            # tag_code는 기본값을 설정하지 않음 - 마스터 데이터에서 가져와야 함
+            if 'protected_from_meal' not in daily_data.columns:
+                daily_data['protected_from_meal'] = False  # 식사 분류 보호 플래그
             
             # O 태그 (장비 사용) 처리
             o_tag_mask = daily_data['INOUT_GB'] == 'O'
@@ -1189,6 +1197,20 @@ class IndividualDashboard:
                         self.logger.info(f"701-10-1-1 마스터 데이터: Tag_Code={matching_master.iloc[0]['Tag_Code']}")
                     else:
                         self.logger.info("701-10-1-1이 마스터에 없음")
+                        # 701-10으로 매칭 시도 (DR_NO의 앞부분만)
+                        dr_no_prefix = '701-10'
+                        matching_prefix = tag_location_master[tag_location_master['DR_NO_str'].str.startswith(dr_no_prefix)]
+                        if not matching_prefix.empty:
+                            self.logger.info(f"{dr_no_prefix}로 시작하는 마스터 {len(matching_prefix)}건:")
+                            for idx, row in matching_prefix.head(3).iterrows():
+                                self.logger.info(f"  - DR_NO={row['DR_NO_str']}, DR_NM={row['DR_NM']}, Tag_Code={row.get('Tag_Code', 'N/A')}")
+                        
+                        # 정문 SPEED GATE 관련 마스터 데이터 확인
+                        speed_gate_masters = tag_location_master[tag_location_master['DR_NM'].str.contains('정문.*SPEED GATE', case=False, na=False, regex=True)]
+                        if not speed_gate_masters.empty:
+                            self.logger.info(f"정문 SPEED GATE 관련 마스터 {len(speed_gate_masters)}건:")
+                            for idx, row in speed_gate_masters.head(5).iterrows():
+                                self.logger.info(f"  - DR_NO={row['DR_NO_str']}, DR_NM={row['DR_NM']}, Tag_Code={row.get('Tag_Code', 'N/A')}")
                 
                 # 조인할 컬럼 확인 (새로운 태그 코드 체계 적용)
                 join_columns = ['DR_NO_str']
@@ -1216,6 +1238,33 @@ class IndividualDashboard:
                     suffixes=('', '_master')
                 )
                 
+                # 매칭되지 않은 레코드에 대해 prefix 매칭 시도
+                unmatched_mask = daily_data['Tag_Code'].isna() if 'Tag_Code' in daily_data.columns else pd.Series([True] * len(daily_data))
+                if unmatched_mask.any():
+                    self.logger.info(f"매칭되지 않은 {unmatched_mask.sum()}건에 대해 prefix 매칭 시도")
+                    
+                    # 각 매칭되지 않은 레코드에 대해 처리
+                    for idx in daily_data[unmatched_mask].index:
+                        dr_no = daily_data.loc[idx, 'DR_NO_str']
+                        dr_nm = daily_data.loc[idx, 'DR_NM']
+                        
+                        # DR_NO의 prefix로 매칭 시도 (예: '701-10-1-1' -> '701-10')
+                        if '-' in dr_no:
+                            dr_prefix = '-'.join(dr_no.split('-')[:2])  # 첫 두 부분만 사용
+                            prefix_match = tag_location_master[tag_location_master['DR_NO_str'].str.startswith(dr_prefix)]
+                            
+                            # DR_NM도 비슷한지 확인
+                            if not prefix_match.empty:
+                                # DR_NM에서 유사한 것 찾기
+                                for _, master_row in prefix_match.iterrows():
+                                    if any(word in dr_nm for word in str(master_row['DR_NM']).split()):
+                                        # 매칭된 마스터 데이터 적용
+                                        for col in join_columns:
+                                            if col != 'DR_NO_str' and col in master_row:
+                                                daily_data.loc[idx, col] = master_row[col]
+                                        self.logger.info(f"Prefix 매칭 성공: {dr_no} -> {master_row['DR_NO_str']}")
+                                        break
+                
                 # 조인 후 결과 확인
                 if 'Tag_Code' in daily_data.columns:
                     matched_count = daily_data['Tag_Code'].notna().sum()
@@ -1234,7 +1283,65 @@ class IndividualDashboard:
                 if 'Tag_Code' in daily_data.columns:
                     # Tag_Code 기반 활동 분류
                     # G1~G4: 근무영역, N1~N2: 비근무영역, T1~T3: 이동구간
-                    daily_data['tag_code'] = daily_data['Tag_Code'].fillna('G1')  # 기본값
+                    # Tag_Code가 없는 경우 정문 태그를 수동으로 매핑
+                    # 디버깅: Tag_Code 상태 확인
+                    tag_code_na_count = daily_data['Tag_Code'].isna().sum()
+                    self.logger.info(f"Tag_Code가 없는 레코드: {tag_code_na_count}건")
+                    
+                    # 정문 데이터 확인
+                    gate_data = daily_data[daily_data['DR_NM'].str.contains('정문|SPEED\s*GATE', case=False, na=False, regex=True)]
+                    if not gate_data.empty:
+                        self.logger.info(f"정문 관련 데이터 {len(gate_data)}건 발견:")
+                        for idx, row in gate_data.head(3).iterrows():
+                            self.logger.info(f"  - {row['datetime']}: DR_NM={row['DR_NM']}, Tag_Code={row.get('Tag_Code')}, INOUT_GB={row.get('INOUT_GB')}")
+                    
+                    # 매칭 후 특별 처리: 정문/SPEED GATE는 무조건 T2/T3로 매핑
+                    # 정문 입문 -> T2
+                    gate_entry_mask = (daily_data['DR_NM'].str.contains('정문|SPEED\s*GATE', case=False, na=False, regex=True)) & \
+                                    (daily_data['INOUT_GB'] == '입문')
+                    if gate_entry_mask.any():
+                        daily_data.loc[gate_entry_mask, 'Tag_Code'] = 'T2'
+                        self.logger.info(f"정문 입문 {gate_entry_mask.sum()}건을 강제로 T2로 매핑")
+                    
+                    # 정문 출문 -> T3
+                    gate_exit_mask = (daily_data['DR_NM'].str.contains('정문|SPEED\s*GATE', case=False, na=False, regex=True)) & \
+                                    (daily_data['INOUT_GB'] == '출문')
+                    if gate_exit_mask.any():
+                        daily_data.loc[gate_exit_mask, 'Tag_Code'] = 'T3'
+                        self.logger.info(f"정문 출문 {gate_exit_mask.sum()}건을 강제로 T3로 매핑")
+                    
+                    # Tag_Code가 없거나 잘못된 정문 데이터를 찾기
+                    gate_entry_mask = ((daily_data['Tag_Code'].isna()) | (daily_data['Tag_Code'] != 'T2')) & \
+                                    (daily_data['DR_NM'].str.contains('정문|SPEED\s*GATE', case=False, na=False, regex=True)) & \
+                                    (daily_data['INOUT_GB'] == '입문')
+                    gate_exit_mask = ((daily_data['Tag_Code'].isna()) | (daily_data['Tag_Code'] != 'T3')) & \
+                                   (daily_data['DR_NM'].str.contains('정문|SPEED\s*GATE', case=False, na=False, regex=True)) & \
+                                   (daily_data['INOUT_GB'] == '출문')
+                    
+                    # 정문 태그 매핑
+                    if gate_entry_mask.any():
+                        daily_data.loc[gate_entry_mask, 'Tag_Code'] = 'T2'
+                        self.logger.info(f"Tag_Code 누락된 정문 입문을 T2로 매핑: {gate_entry_mask.sum()}건")
+                    
+                    if gate_exit_mask.any():
+                        daily_data.loc[gate_exit_mask, 'Tag_Code'] = 'T3'
+                        self.logger.info(f"Tag_Code 누락된 정문 출문을 T3로 매핑: {gate_exit_mask.sum()}건")
+                    
+                    # 테이크아웃 태그 매핑
+                    takeout_mask = daily_data['DR_NM'].str.contains('테이크아웃', case=False, na=False)
+                    if takeout_mask.any():
+                        daily_data.loc[takeout_mask, 'Tag_Code'] = 'M2'
+                        self.logger.info(f"테이크아웃 위치를 M2로 매핑: {takeout_mask.sum()}건")
+                    
+                    # Tag_Code를 tag_code로 복사 (기본값은 G1)
+                    daily_data['tag_code'] = daily_data['Tag_Code'].fillna('G1')
+                    
+                    # 디버깅: 701-10-1-1의 tag_code 확인
+                    gate_701_after = daily_data[daily_data['DR_NO'] == '701-10-1-1']
+                    if not gate_701_after.empty:
+                        self.logger.info(f"[조인 후] 701-10-1-1의 tag_code 설정됨:")
+                        for idx, row in gate_701_after.head().iterrows():
+                            self.logger.info(f"  - {row['datetime']}: Tag_Code={row.get('Tag_Code')}, tag_code={row.get('tag_code')}, INOUT_GB={row.get('INOUT_GB')}")
                     daily_data['space_type'] = daily_data['공간구분_NM'].fillna('근무영역')  # 기본값
                     daily_data['detail_type'] = daily_data['세부유형_NM'].fillna('주업무공간')  # 기본값
                     daily_data['allowed_activities'] = daily_data['라벨링_활동'].fillna('업무, 식사, 휴게')  # 기본값
@@ -1290,21 +1397,25 @@ class IndividualDashboard:
                     # T1: 건물/구역 연결 -> 내부이동
                     daily_data.loc[daily_data['tag_code'] == 'T1', 'activity_code'] = 'MOVEMENT'
                     
-                    # T2: 출입포인트(IN) -> 시간대별 출퇴근 처리
+                    # T2: 출입포인트(IN) -> 출근으로 처리
                     t2_mask = daily_data['tag_code'] == 'T2'
                     if t2_mask.any():
-                        for idx in daily_data[t2_mask].index:
-                            hour = daily_data.loc[idx, 'datetime'].hour
-                            # 야간 근무자는 17-22시 출근, 일반 근무자는 5-10시 출근
-                            if (work_type in ['night_shift', 'flexible'] and 17 <= hour <= 22) or \
-                               (work_type not in ['night_shift', 'flexible'] and 5 <= hour <= 10):
-                                daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
-                                daily_data.loc[idx, 'activity_type'] = 'commute'
-                                daily_data.loc[idx, 'confidence'] = 100
-                            else:
-                                daily_data.loc[idx, 'activity_code'] = 'MOVEMENT'
-                                daily_data.loc[idx, 'activity_type'] = 'movement'
-                        self.logger.info(f"T2 태그 처리: {t2_mask.sum()}건")
+                        # T2는 무조건 COMMUTE_IN으로 처리 (시간대 제한 제거)
+                        daily_data.loc[t2_mask, 'activity_code'] = 'COMMUTE_IN'
+                        daily_data.loc[t2_mask, 'activity_type'] = 'commute'
+                        daily_data.loc[t2_mask, 'confidence'] = 100
+                        daily_data.loc[t2_mask, 'activity_label'] = ''  # YW 대신 빈 문자열로 설정
+                        activity_type_obj = get_activity_type('COMMUTE_IN')
+                        if activity_type_obj:
+                            daily_data.loc[t2_mask, '활동분류'] = activity_type_obj.name_ko
+                        self.logger.info(f"T2 태그 처리: {t2_mask.sum()}건 -> 모두 COMMUTE_IN으로 설정")
+                        
+                        # 디버깅: T2 태그 처리 결과 확인
+                        t2_data_after = daily_data[t2_mask]
+                        if not t2_data_after.empty:
+                            self.logger.info(f"[T2 처리 후] 활동 분류 결과:")
+                            for idx, row in t2_data_after.head().iterrows():
+                                self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code')}, DR_NM={row.get('DR_NM')}")
                         
                         # T2 태그는 식사로 분류되지 않도록 표시
                         daily_data.loc[t2_mask, 'protected_from_meal'] = True
@@ -1426,21 +1537,26 @@ class IndividualDashboard:
             try:
                 daily_data = self._apply_tag_based_rules(daily_data, tag_location_master)
                 
-                # HMM 분류 직후 정문/스피드게이트 입문 보호
-                gate_entry_mask = daily_data['INOUT_GB'] == '입문'
-                gate_name_mask = daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)
-                morning_mask = daily_data['datetime'].dt.hour.between(5, 9)
-                protected_entries = gate_entry_mask & gate_name_mask & morning_mask
+                # 태그 기반 규칙 적용 후 추가 확인
+                # T2/T3 태그가 제대로 설정된 경우 확인
+                t2_count = (daily_data['tag_code'] == 'T2').sum()
+                t3_count = (daily_data['tag_code'] == 'T3').sum()
+                self.logger.info(f"태그 기반 규칙 적용 후: T2 태그 {t2_count}건, T3 태그 {t3_count}건")
                 
-                if protected_entries.any():
-                    # 정문 입문이 조식으로 분류된 경우만 수정
-                    wrong_entries = protected_entries & (daily_data['activity_code'] == 'BREAKFAST')
-                    if wrong_entries.any():
-                        daily_data.loc[wrong_entries, 'activity_code'] = 'COMMUTE_IN'
-                        daily_data.loc[wrong_entries, 'confidence'] = 100
-                        self.logger.info(f"HMM 후 정문 입문 {wrong_entries.sum()}개를 COMMUTE_IN으로 보호")
-                        for idx in daily_data[wrong_entries].index:
-                            self.logger.info(f"  - {daily_data.loc[idx, 'datetime']} at {daily_data.loc[idx, 'DR_NM']}")
+                # T2 태그의 activity_code 확인
+                t2_data = daily_data[daily_data['tag_code'] == 'T2']
+                if not t2_data.empty:
+                    self.logger.info(f"T2 태그의 activity_code 상태:")
+                    for idx, row in t2_data.head(3).iterrows():
+                        self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code', 'N/A')}, DR_NM={row['DR_NM']}")
+                
+                # 디버깅: 태그 기반 규칙 후에도 정문 태그가 WORK로 되어 있는지 확인
+                gate_work_mask = daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False) & \
+                                (daily_data['activity_code'] == 'WORK')
+                if gate_work_mask.any():
+                    self.logger.warning(f"태그 기반 규칙 후에도 정문 태그가 WORK로 분류됨: {gate_work_mask.sum()}건")
+                    for idx in daily_data[gate_work_mask].index:
+                        self.logger.warning(f"  - {daily_data.loc[idx, 'datetime']} at {daily_data.loc[idx, 'DR_NM']}, tag_code={daily_data.loc[idx, 'tag_code']}")
                 
                 # 실제 식사 태그가 없는데 식사로 분류된 경우 확인
                 if 'is_actual_meal' in daily_data.columns:
@@ -1605,20 +1721,20 @@ class IndividualDashboard:
                                     self.logger.info(f"{time_obj} 데이터 - 처리 후: activity_code={daily_data.loc[idx, 'activity_code']}")
                                 break  # 첫 번째 입문만 처리
                 
-                self.logger.info("HMM 분류 성공")
+                self.logger.info("태그 기반 분류 성공")
             except Exception as hmm_error:
-                self.logger.warning(f"HMM 분류 실패, 규칙 기반으로 대체: {hmm_error}")
+                self.logger.warning(f"태그 기반 분류 실패, 규칙 기반으로 대체: {hmm_error}")
                 # 규칙 기반 분류로 폴백
                 daily_data = self._apply_rule_based_classification(daily_data, tag_location_master)
             
-            # HMM 분류 후 Tag_Code가 T2/T3인 게이트를 강제로 출퇴근으로 설정
+            # 태그 기반 분류 후 Tag_Code가 T2/T3인 게이트를 강제로 출퇴근으로 설정
             if 'tag_code' in daily_data.columns:
                 # T2 (출입포인트-IN) 태그를 출근으로 강제 설정
                 t2_mask = (daily_data['tag_code'] == 'T2')
                 if t2_mask.any():
                     t2_wrong = t2_mask & (~daily_data['activity_code'].isin(['COMMUTE_IN']))
                     if t2_wrong.any():
-                        self.logger.warning(f"HMM 후 T2 태그 {t2_wrong.sum()}건을 COMMUTE_IN으로 수정")
+                        self.logger.warning(f"태그 기반 분류 후 T2 태그 {t2_wrong.sum()}건을 COMMUTE_IN으로 수정")
                         daily_data.loc[t2_wrong, 'activity_code'] = 'COMMUTE_IN'
                         daily_data.loc[t2_wrong, 'activity_type'] = 'commute'
                         daily_data.loc[t2_wrong, 'confidence'] = 100
@@ -1628,7 +1744,7 @@ class IndividualDashboard:
                 if t3_mask.any():
                     t3_wrong = t3_mask & (~daily_data['activity_code'].isin(['COMMUTE_OUT']))
                     if t3_wrong.any():
-                        self.logger.warning(f"HMM 후 T3 태그 {t3_wrong.sum()}건을 COMMUTE_OUT으로 수정")
+                        self.logger.warning(f"태그 기반 분류 후 T3 태그 {t3_wrong.sum()}건을 COMMUTE_OUT으로 수정")
                         daily_data.loc[t3_wrong, 'activity_code'] = 'COMMUTE_OUT'
                         daily_data.loc[t3_wrong, 'activity_type'] = 'commute'
                         daily_data.loc[t3_wrong, 'confidence'] = 100
@@ -1653,6 +1769,59 @@ class IndividualDashboard:
             # 우선순위 기반 상세 활동 분류
             # 참고: Tag_Code T2(출근), T3(퇴근)이 이미 설정되어 있으므로, 
             # 더 정확한 출퇴근 시간대 검증만 추가
+            
+            # 0. M1/M2 태그 기반 식사 분류 (최우선)
+            # M1: 바이오플라자 식사, M2: 테이크아웃
+            if 'tag_code' in daily_data.columns:
+                m1_mask = daily_data['tag_code'] == 'M1'
+                m2_mask = daily_data['tag_code'] == 'M2'
+                
+                if m1_mask.any() or m2_mask.any():
+                    self.logger.info(f"M1 태그 {m1_mask.sum()}건, M2 태그 {m2_mask.sum()}건 발견")
+                    
+                    # M1/M2 태그에 대해 시간대별 식사 분류
+                    for idx in daily_data[m1_mask | m2_mask].index:
+                        hour = daily_data.loc[idx, 'datetime'].hour
+                        minute = daily_data.loc[idx, 'datetime'].minute
+                        time_in_minutes = hour * 60 + minute
+                        
+                        # 시간대별 식사 종류 결정
+                        if 390 <= time_in_minutes <= 540:  # 06:30-09:00
+                            daily_data.loc[idx, 'activity_code'] = 'BREAKFAST'
+                            daily_data.loc[idx, '활동분류'] = '조식'
+                        elif 680 <= time_in_minutes <= 800:  # 11:20-13:20
+                            daily_data.loc[idx, 'activity_code'] = 'LUNCH'
+                            daily_data.loc[idx, '활동분류'] = '중식'
+                        elif 1020 <= time_in_minutes <= 1200:  # 17:00-20:00
+                            daily_data.loc[idx, 'activity_code'] = 'DINNER'
+                            daily_data.loc[idx, '활동분류'] = '석식'
+                        elif time_in_minutes >= 1410 or time_in_minutes <= 60:  # 23:30-01:00
+                            daily_data.loc[idx, 'activity_code'] = 'MIDNIGHT_MEAL'
+                            daily_data.loc[idx, '활동분류'] = '야식'
+                        else:
+                            # 시간대에 맞지 않으면 가장 가까운 식사로 분류
+                            if time_in_minutes < 390:  # 조식 전
+                                daily_data.loc[idx, 'activity_code'] = 'BREAKFAST'
+                                daily_data.loc[idx, '활동분류'] = '조식'
+                            elif time_in_minutes < 680:  # 조식-중식 사이
+                                daily_data.loc[idx, 'activity_code'] = 'LUNCH'
+                                daily_data.loc[idx, '활동분류'] = '중식'
+                            elif time_in_minutes < 1020:  # 중식-석식 사이
+                                daily_data.loc[idx, 'activity_code'] = 'DINNER'
+                                daily_data.loc[idx, '활동분류'] = '석식'
+                            else:  # 석식-야식 사이
+                                daily_data.loc[idx, 'activity_code'] = 'MIDNIGHT_MEAL'
+                                daily_data.loc[idx, '활동분류'] = '야식'
+                        
+                        # M1/M2 태그 기반이므로 높은 신뢰도
+                        daily_data.loc[idx, 'confidence'] = 100
+                        daily_data.loc[idx, 'is_actual_meal'] = True
+                        daily_data.loc[idx, 'activity_type'] = 'meal'
+                        
+                        # M2는 테이크아웃
+                        if daily_data.loc[idx, 'tag_code'] == 'M2':
+                            daily_data.loc[idx, 'is_takeout'] = True
+                            self.logger.info(f"M2 테이크아웃 - {daily_data.loc[idx, 'datetime']}: {daily_data.loc[idx, 'activity_code']}")
             
             # 1. 식사시간 분류 - 실제 식사 데이터 우선 사용
             # 실제 식사 데이터 가져오기 (employee_id와 selected_date가 전달된 경우에만)
@@ -1712,8 +1881,27 @@ class IndividualDashboard:
                             # 배식구 정보를 우선적으로 meal_location에 저장
                             if '배식구' in meal.index and meal['배식구']:
                                 daily_data.loc[closest_idx, 'meal_location'] = meal['배식구']
+                                
+                                # 배식구 정보로 M1/M2 태그 설정
+                                baesikgu = str(meal['배식구']).lower()
+                                if 'takeout' in baesikgu or '테이크아웃' in baesikgu:
+                                    daily_data.loc[closest_idx, 'tag_code'] = 'M2'
+                                    daily_data.loc[closest_idx, 'is_takeout'] = True
+                                    self.logger.info(f"배식구 기반 M2 태그 설정: {meal_time} - {meal['배식구']}")
+                                else:
+                                    daily_data.loc[closest_idx, 'tag_code'] = 'M1'
+                                    daily_data.loc[closest_idx, 'is_takeout'] = False
+                                    self.logger.info(f"배식구 기반 M1 태그 설정: {meal_time} - {meal['배식구']}")
                             elif '식당명' in meal.index:
                                 daily_data.loc[closest_idx, 'meal_location'] = meal['식당명']
+                                # 식당명으로도 판단
+                                sikdang = str(meal['식당명']).lower()
+                                if 'takeout' in sikdang or '테이크아웃' in sikdang:
+                                    daily_data.loc[closest_idx, 'tag_code'] = 'M2'
+                                    daily_data.loc[closest_idx, 'is_takeout'] = True
+                                else:
+                                    daily_data.loc[closest_idx, 'tag_code'] = 'M1'
+                                    daily_data.loc[closest_idx, 'is_takeout'] = False
                             
                             # 테이크아웃 정보는 실제 식사 태그에만 설정
                             # 방법 1: meal_data의 테이크아웃 컬럼 확인
@@ -2279,17 +2467,23 @@ class IndividualDashboard:
         # 1. T2 태그는 항상 COMMUTE_IN (출입(IN))
         t2_mask = daily_data['tag_code'] == 'T2'
         if t2_mask.any():
+            activity_type = get_activity_type('COMMUTE_IN')
             daily_data.loc[t2_mask, 'activity_code'] = 'COMMUTE_IN'
-            daily_data.loc[t2_mask, 'activity_type'] = 'commute'
+            daily_data.loc[t2_mask, 'activity_type'] = 'commute'  # activity_type.category가 아니라 직접 'commute' 설정
             daily_data.loc[t2_mask, '활동분류'] = '출근'
             daily_data.loc[t2_mask, 'confidence'] = 100
+            daily_data.loc[t2_mask, 'activity_label'] = ''  # YW 대신 빈 문자열로 설정
             self.logger.info(f"T2 태그 {t2_mask.sum()}개를 COMMUTE_IN으로 설정")
+            
+            # 디버깅: T2 태그 처리 결과 확인
+            for idx in daily_data[t2_mask].index[:3]:  # 처음 3개만
+                self.logger.info(f"  - {daily_data.loc[idx, 'datetime']}: activity_code={daily_data.loc[idx, 'activity_code']}, activity_type={daily_data.loc[idx, 'activity_type']}")
         
         # 2. T3 태그는 항상 COMMUTE_OUT (출입(OUT))
         t3_mask = daily_data['tag_code'] == 'T3'
         if t3_mask.any():
             daily_data.loc[t3_mask, 'activity_code'] = 'COMMUTE_OUT'
-            daily_data.loc[t3_mask, 'activity_type'] = 'commute'
+            daily_data.loc[t3_mask, 'activity_type'] = 'commute'  # 직접 설정
             daily_data.loc[t3_mask, '활동분류'] = '퇴근'
             daily_data.loc[t3_mask, 'confidence'] = 100
             self.logger.info(f"T3 태그 {t3_mask.sum()}개를 COMMUTE_OUT으로 설정")
@@ -2297,32 +2491,40 @@ class IndividualDashboard:
         # 3. O 태그 (실제 업무 수행 로그) 처리
         o_mask = daily_data['tag_code'] == 'O'
         if o_mask.any():
+            activity_type = get_activity_type('WORK')
             daily_data.loc[o_mask, 'activity_code'] = 'WORK'
-            daily_data.loc[o_mask, '활동분류'] = '작업'
+            daily_data.loc[o_mask, 'activity_type'] = activity_type.category if activity_type else 'work'
+            daily_data.loc[o_mask, '활동분류'] = activity_type.name_ko if activity_type else '작업'
             daily_data.loc[o_mask, 'confidence'] = 98
             self.logger.info(f"O 태그 {o_mask.sum()}개를 WORK로 설정")
         
         # 4. G1 태그 (주업무공간) 처리
         g1_mask = daily_data['tag_code'] == 'G1'
         if g1_mask.any():
+            activity_type = get_activity_type('WORK')
             daily_data.loc[g1_mask, 'activity_code'] = 'WORK'
-            daily_data.loc[g1_mask, '활동분류'] = '작업'
+            daily_data.loc[g1_mask, 'activity_type'] = activity_type.category if activity_type else 'work'
+            daily_data.loc[g1_mask, '활동분류'] = activity_type.name_ko if activity_type else '작업'
             daily_data.loc[g1_mask, 'confidence'] = 85
             self.logger.info(f"G1 태그 {g1_mask.sum()}개를 WORK로 설정")
         
         # 5. G2 태그 (준비공간) 처리
         g2_mask = daily_data['tag_code'] == 'G2'
         if g2_mask.any():
-            daily_data.loc[g2_mask, 'activity_code'] = 'PREPARATION'
-            daily_data.loc[g2_mask, '활동분류'] = '준비'
+            activity_type = get_activity_type('WORK_PREPARATION')
+            daily_data.loc[g2_mask, 'activity_code'] = 'WORK_PREPARATION'
+            daily_data.loc[g2_mask, 'activity_type'] = activity_type.category if activity_type else 'work'
+            daily_data.loc[g2_mask, '활동분류'] = activity_type.name_ko if activity_type else '준비'
             daily_data.loc[g2_mask, 'confidence'] = 90
-            self.logger.info(f"G2 태그 {g2_mask.sum()}개를 PREPARATION으로 설정")
+            self.logger.info(f"G2 태그 {g2_mask.sum()}개를 WORK_PREPARATION으로 설정")
         
         # 6. G3 태그 (회의공간) 처리
         g3_mask = daily_data['tag_code'] == 'G3'
         if g3_mask.any():
+            activity_type = get_activity_type('MEETING')
             daily_data.loc[g3_mask, 'activity_code'] = 'MEETING'
-            daily_data.loc[g3_mask, '활동분류'] = '회의'
+            daily_data.loc[g3_mask, 'activity_type'] = activity_type.category if activity_type else 'meeting'
+            daily_data.loc[g3_mask, '활동분류'] = activity_type.name_ko if activity_type else '회의'
             daily_data.loc[g3_mask, 'confidence'] = 95
             self.logger.info(f"G3 태그 {g3_mask.sum()}개를 MEETING으로 설정")
         
@@ -2337,18 +2539,24 @@ class IndividualDashboard:
                 
                 if 390 <= time_in_minutes <= 540:  # 06:30-09:00
                     daily_data.loc[idx, 'activity_code'] = 'BREAKFAST'
+                    daily_data.loc[idx, 'activity_type'] = 'meal'
                     daily_data.loc[idx, '활동분류'] = '조식'
                 elif 680 <= time_in_minutes <= 800:  # 11:20-13:20
                     daily_data.loc[idx, 'activity_code'] = 'LUNCH'
+                    daily_data.loc[idx, 'activity_type'] = 'meal'
                     daily_data.loc[idx, '활동분류'] = '중식'
                 elif 1020 <= time_in_minutes <= 1200:  # 17:00-20:00
                     daily_data.loc[idx, 'activity_code'] = 'DINNER'
+                    daily_data.loc[idx, 'activity_type'] = 'meal'
                     daily_data.loc[idx, '활동분류'] = '석식'
                 elif time_in_minutes >= 1410 or time_in_minutes <= 60:  # 23:30-01:00
                     daily_data.loc[idx, 'activity_code'] = 'MIDNIGHT_MEAL'
+                    daily_data.loc[idx, 'activity_type'] = 'meal'
                     daily_data.loc[idx, '활동분류'] = '야식'
                 else:
+                    # 기본 식사 - activity_types.py에 없으므로 직접 설정
                     daily_data.loc[idx, 'activity_code'] = 'MEAL'
+                    daily_data.loc[idx, 'activity_type'] = 'meal'
                     daily_data.loc[idx, '활동분류'] = '식사'
                 
                 daily_data.loc[idx, 'confidence'] = 100
@@ -2358,10 +2566,12 @@ class IndividualDashboard:
         # 8. N1 태그 (휴게공간) 처리
         n1_mask = daily_data['tag_code'] == 'N1'
         if n1_mask.any():
-            daily_data.loc[n1_mask, 'activity_code'] = 'BREAK'
-            daily_data.loc[n1_mask, '활동분류'] = '휴게'
+            activity_type = get_activity_type('REST')
+            daily_data.loc[n1_mask, 'activity_code'] = 'REST'
+            daily_data.loc[n1_mask, 'activity_type'] = activity_type.category if activity_type else 'rest'
+            daily_data.loc[n1_mask, '활동분류'] = activity_type.name_ko if activity_type else '휴식'
             daily_data.loc[n1_mask, 'confidence'] = 90
-            self.logger.info(f"N1 태그 {n1_mask.sum()}개를 BREAK로 설정")
+            self.logger.info(f"N1 태그 {n1_mask.sum()}개를 REST로 설정")
         
         # 9. 꼬리물기 감지 - 긴 T1 구간
         # T1 태그가 연속적으로 나타나는 구간 찾기
@@ -2405,9 +2615,11 @@ class IndividualDashboard:
                 
                 if duration_minutes >= 30:  # 30분 이상 T1 구간
                     # 꼬리물기로 판정 - WORK로 변경
+                    activity_type = get_activity_type('WORK')
                     for idx in block:
                         daily_data.loc[idx, 'activity_code'] = 'WORK'
-                        daily_data.loc[idx, '활동분류'] = '작업'
+                        daily_data.loc[idx, 'activity_type'] = activity_type.category if activity_type else 'work'
+                        daily_data.loc[idx, '활동분류'] = activity_type.name_ko if activity_type else '작업'
                         
                         if duration_minutes >= 120:  # 2시간 이상
                             daily_data.loc[idx, 'confidence'] = 85
@@ -2417,9 +2629,11 @@ class IndividualDashboard:
                     self.logger.info(f"꼬리물기 감지: {start_time} ~ {end_time} ({duration_minutes:.1f}분) - {len(block)}개 태그를 WORK로 변경")
                 else:
                     # 짧은 T1은 MOVEMENT로 유지
+                    activity_type = get_activity_type('MOVEMENT')
                     for idx in block:
                         daily_data.loc[idx, 'activity_code'] = 'MOVEMENT'
-                        daily_data.loc[idx, '활동분류'] = '이동'
+                        daily_data.loc[idx, 'activity_type'] = activity_type.category if activity_type else 'movement'
+                        daily_data.loc[idx, '활동분류'] = activity_type.name_ko if activity_type else '이동'
                         daily_data.loc[idx, 'confidence'] = 85
         
         # 10. 정문/스피드게이트 입문 최종 검증
@@ -2430,8 +2644,10 @@ class IndividualDashboard:
             (daily_data['tag_code'] != 'T2')
         )
         if gate_entry_mask.any():
+            activity_type = get_activity_type('COMMUTE_IN')
             daily_data.loc[gate_entry_mask, 'activity_code'] = 'COMMUTE_IN'
-            daily_data.loc[gate_entry_mask, '활동분류'] = '출근'
+            daily_data.loc[gate_entry_mask, 'activity_type'] = activity_type.category if activity_type else 'movement'
+            daily_data.loc[gate_entry_mask, '활동분류'] = activity_type.name_ko if activity_type else '출근'
             daily_data.loc[gate_entry_mask, 'confidence'] = 95
             self.logger.info(f"정문 입문 {gate_entry_mask.sum()}개를 COMMUTE_IN으로 수정")
         
@@ -2472,22 +2688,20 @@ class IndividualDashboard:
             if current_row.get('INOUT_GB') == 'O' or current_row.get('activity_code') == 'EQUIPMENT_OPERATION':
                 duration = min(max(duration, 10), 30)
             
-            # 식사 활동의 최소 duration 설정
+            # 식사 활동의 duration 설정
             if current_row.get('activity_code') in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
                 # 실제 식사 태그가 있는 경우에만 식사로 처리
                 if current_row.get('is_actual_meal', False):
                     # 테이크아웃 여부 확인
                     is_takeout = current_row.get('is_takeout', False)
                     if is_takeout:
-                        # 테이크아웃은 최소 10분
-                        min_duration = 10
+                        # 테이크아웃은 30분 고정
+                        duration = 30
                     else:
-                        # 일반 식사는 최소 30분
-                        min_duration = 30
-                    
-                    # 계산된 duration이 최소값보다 작으면 최소값으로 설정
-                    if duration < min_duration:
-                        duration = min_duration
+                        # 식당 식사는 다음 이동태그까지 (최대 1시간)
+                        # duration은 이미 다음 태그까지의 시간으로 계산됨
+                        if duration > 60:
+                            duration = 60  # 최대 1시간으로 제한
                 else:
                     # 식사 태그가 없는데 식사로 분류된 경우 WORK로 변경
                     # 단, EQUIPMENT_OPERATION은 보존
@@ -2677,17 +2891,21 @@ class IndividualDashboard:
                         }
                         activity_code = meal_code_map.get(meal_category, 'LUNCH')
                         
+                        # M1/M2 태그 결정
+                        tag_code = 'M2' if is_takeout else 'M1'
+                        
                         # 식사 세그먼트 직접 추가
                         activity_segments.append({
                             'start_time': meal_time,
-                            'end_time': meal_time + timedelta(minutes=10 if is_takeout else 30),
+                            'end_time': meal_time + timedelta(minutes=30),  # 테이크아웃도 30분으로 통일
                             'activity': 'meal',
                             'activity_code': activity_code,
                             'location': restaurant_info,
                             'duration_minutes': None,  # 나중에 다음 태그와의 시간 차이로 계산
                             'confidence': 100,
                             'is_actual_meal': True,
-                            'is_takeout': is_takeout
+                            'is_takeout': is_takeout,
+                            'tag_code': tag_code  # M1/M2 태그 추가
                         })
                         self.logger.info(f"식사 세그먼트 직접 추가: {meal_time} - {meal_category} @ {restaurant_info}, takeout={is_takeout}, code={activity_code}")
             
@@ -2698,14 +2916,42 @@ class IndividualDashboard:
                 if pd.isna(end_time):
                     end_time = row['datetime'] + timedelta(minutes=5)
                 
-                # 입문/출문이 식사로 잘못 분류된 경우 수정
+                # 태그 기반 규칙이 적용된 후에는 activity_code를 건드리지 않음
+                # T2/T3 태그는 이미 COMMUTE_IN/COMMUTE_OUT으로 설정됨
                 inout_gb = row.get('INOUT_GB', '')
                 activity_code = row.get('activity_code', '')
-                activity_type = row.get('activity_type', 'work')
                 
-                # 입문/출문인데 식사로 잘못 분류된 경우만 수정
-                # COMMUTE_IN은 식사로 분류되지 않으므로 그대로 유지됨
-                if inout_gb == '출문' and activity_code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
+                # activity_code를 기반으로 올바른 activity_type 설정
+                if activity_code == 'COMMUTE_IN':
+                    activity_type = 'commute'
+                elif activity_code == 'COMMUTE_OUT':
+                    activity_type = 'commute'
+                elif activity_code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
+                    activity_type = 'meal'
+                elif activity_code in ['MEETING']:
+                    activity_type = 'meeting'
+                elif activity_code in ['REST', 'FITNESS']:
+                    activity_type = 'rest'
+                elif activity_code in ['MOVEMENT']:
+                    activity_type = 'movement'
+                elif activity_code in ['WORK', 'FOCUSED_WORK', 'EQUIPMENT_OPERATION', 'WORK_PREPARATION']:
+                    activity_type = 'work'
+                elif activity_code in ['NON_WORK']:
+                    activity_type = 'non_work'
+                else:
+                    activity_type = row.get('activity_type', 'work')
+                
+                # 디버깅: T2 태그 확인
+                if row.get('tag_code') == 'T2' or (row.get('DR_NM') and 'SPEED GATE' in str(row['DR_NM'])):
+                    self.logger.info(f"[SEGMENT생성] T2/GATE 태그 발견: {row['datetime']} - {row['DR_NM']}")
+                    self.logger.info(f"  - tag_code: {row.get('tag_code')}, activity_code: {activity_code}, 활동분류: {row.get('활동분류')}")
+                
+                # 태그 기반 규칙으로 이미 설정된 COMMUTE_IN/COMMUTE_OUT은 보호
+                if activity_code in ['COMMUTE_IN', 'COMMUTE_OUT']:
+                    # 이미 태그 기반 규칙으로 설정된 경우 변경하지 않음
+                    pass
+                # 입문/출문인데 식사로 잘못 분류된 경우만 수정 (태그 기반 규칙에서 버려진 경우)
+                elif inout_gb == '출문' and activity_code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
                     activity_code = 'MOVEMENT'
                     activity_type = 'movement'
                     self.logger.info(f"출문 수정: {row['datetime']} - 식사 -> {activity_code}")
@@ -2727,17 +2973,50 @@ class IndividualDashboard:
                 if activity_code in ['COMMUTE_IN', 'COMMUTE_OUT']:
                     self.logger.info(f"출퇴근 세그먼트 추가: {row['datetime']} - {row['DR_NM']}, activity_code={activity_code}, activity_type={activity_type}")
                 
-                activity_segments.append({
+                # T2 태그가 WORK로 잘못 설정되는 경우 추가 디버깅
+                if row.get('tag_code') == 'T2' and activity_code != 'COMMUTE_IN':
+                    self.logger.error(f"[ERROR] T2 태그가 COMMUTE_IN이 아님! activity_code={activity_code}")
+                    self.logger.error(f"  - row 전체 데이터: {row.to_dict()}")
+                
+                # activity_code가 빈 문자열이면 기본값 설정
+                if not activity_code:
+                    activity_code = 'WORK'
+                    self.logger.warning(f"[WARNING] activity_code가 비어있음: {row['datetime']} - {row['DR_NM']}")
+                
+                # 디버깅: 실제로 추가되는 값 확인
+                if row.get('tag_code') == 'T2' or 'SPEED GATE' in str(row.get('DR_NM', '')):
+                    self.logger.info(f"[SEGMENT추가] T2/GATE: activity_code={activity_code}, activity_type={activity_type}")
+                    # T2 태그인데 activity_code가 COMMUTE_IN이 아니면 강제 설정
+                    if row.get('tag_code') == 'T2' and activity_code != 'COMMUTE_IN':
+                        self.logger.warning(f"[WARNING] T2 태그인데 activity_code가 COMMUTE_IN이 아님! 강제 설정")
+                        activity_code = 'COMMUTE_IN'
+                        activity_type = 'commute'
+                
+                # 테이크아웃 식사 체크
+                if '테이크아웃' in str(row.get('DR_NM', '')):
+                    if not row.get('tag_code'):
+                        # Tag_Code가 없으면 M2로 설정
+                        row['tag_code'] = 'M2'
+                    is_takeout_value = True
+                
+                segment_data = {
                     'start_time': row['datetime'],
                     'end_time': end_time,
-                    'activity': activity_type,
+                    'activity': activity_code,  # activity_type 대신 activity_code 사용
                     'activity_code': activity_code,
                     'location': row['DR_NM'],
                     'duration_minutes': row.get('duration_minutes', 5),
                     'confidence': row.get('confidence', 80),  # 신뢰도 추가
                     'is_actual_meal': row.get('is_actual_meal', False),  # 실제 식사 여부
-                    'is_takeout': is_takeout_value  # 테이크아웃 여부
-                })
+                    'is_takeout': is_takeout_value,  # 테이크아웃 여부
+                    'tag_code': row.get('tag_code', '')  # tag_code도 전달
+                }
+                
+                # 디버깅: T2 태그(출근) 세그먼트 생성 확인
+                if row.get('tag_code') == 'T2' or activity_code == 'COMMUTE_IN':
+                    self.logger.info(f"[SEGMENT추가] 출근 세그먼트: {segment_data['start_time']} - activity_code={activity_code}, tag_code={row.get('tag_code')}")
+                
+                activity_segments.append(segment_data)
             
             # activity_segments를 시간순으로 정렬
             activity_segments = sorted(activity_segments, key=lambda x: x['start_time'])
@@ -2754,13 +3033,28 @@ class IndividualDashboard:
                     if i < len(activity_segments) - 1:
                         # 다음 세그먼트까지의 시간 계산
                         duration = (activity_segments[i+1]['start_time'] - activity_segments[i]['start_time']).total_seconds() / 60
+                        
+                        # 식사 세그먼트의 경우 특별 처리
+                        if activity_segments[i].get('activity_code') in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
+                            if activity_segments[i].get('is_takeout', False):
+                                # 테이크아웃은 30분 고정
+                                duration = 30
+                            else:
+                                # 식당 식사는 다음 태그까지의 시간 사용 (최대 1시간)
+                                if duration > 60:
+                                    duration = 60
+                        
                         activity_segments[i]['duration_minutes'] = duration
                         # end_time도 업데이트
-                        activity_segments[i]['end_time'] = activity_segments[i+1]['start_time']
+                        activity_segments[i]['end_time'] = activity_segments[i]['start_time'] + timedelta(minutes=duration)
                     else:
                         # 마지막 세그먼트인 경우
                         is_takeout = activity_segments[i].get('is_takeout', False)
-                        default_duration = 10 if is_takeout else 30
+                        if activity_segments[i].get('activity_code') in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
+                            # 식사인 경우 30분 고정
+                            default_duration = 30
+                        else:
+                            default_duration = 30  # 기본값 30분
                         activity_segments[i]['duration_minutes'] = default_duration
                         activity_segments[i]['end_time'] = activity_segments[i]['start_time'] + timedelta(minutes=default_duration)
             
@@ -2817,6 +3111,16 @@ class IndividualDashboard:
             
             # 식사 시간 분석
             meal_time_analysis = self.analyze_meal_times(classified_data)
+            
+            # 최종 반환 전 Gantt 차트용 데이터 다시 한 번 확인
+            self.logger.info("=== 최종 analysis_result activity_segments 확인 ===")
+            commute_segments = [seg for seg in activity_segments if seg.get('activity_code') in ['COMMUTE_IN', 'COMMUTE_OUT']]
+            if commute_segments:
+                self.logger.info(f"출퇴근 세그먼트 {len(commute_segments)}개 발견:")
+                for seg in commute_segments:
+                    self.logger.info(f"  - {seg['start_time']} : {seg['activity_code']} @ {seg.get('location', 'N/A')}")
+            else:
+                self.logger.warning("출퇴근 세그먼트가 없습니다!")
             
             return {
                 'employee_id': employee_id,
@@ -3092,6 +3396,13 @@ class IndividualDashboard:
                 # 활동 분류 수행 (employee_id와 selected_date 전달)
                 classified_data = self.classify_activities(daily_data, employee_id, selected_date)
                 
+                # 분류 후 T2 태그 상태 확인
+                t2_classified = classified_data[classified_data['tag_code'] == 'T2']
+                if not t2_classified.empty:
+                    self.logger.info(f"[classify_activities 후] T2 태그 {len(t2_classified)}건:")
+                    for idx, row in t2_classified.head(3).iterrows():
+                        self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code')}, activity_type={row.get('activity_type')}, DR_NM={row['DR_NM']}")
+                
                 # 분석 결과 생성
                 analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
                 
@@ -3196,7 +3507,11 @@ class IndividualDashboard:
         with col2:
             st.metric("퇴근 시각", analysis_result['work_end'].strftime('%H:%M'))
         with col3:
-            st.metric("총 근무시간", f"{analysis_result['total_hours']:.1f}시간")
+            # 체류시간을 HH:MM 형식으로 변환
+            total_hours = analysis_result['total_hours']
+            hours = int(total_hours)
+            minutes = int((total_hours - hours) * 60)
+            st.metric("총 체류시간", f"{hours:02d}:{minutes:02d}")
         with col4:
             st.metric("태그 기록 수", f"{analysis_result['total_records']}건")
         
@@ -3711,11 +4026,27 @@ class IndividualDashboard:
                      'WORKING', 'MEETING', 'TRAINING']
         work_minutes = sum(activity_summary.get(code, 0) for code in work_codes)
         
-        # 회의시간
-        meeting_minutes = activity_summary.get('MEETING', 0)
+        # 식사시간 (모든 식사 활동 합계)
+        meal_codes = ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']
+        meal_minutes = sum(activity_summary.get(code, 0) for code in meal_codes)
         
         # 이동시간 (출퇴근 제외)
         movement_minutes = activity_summary.get('MOVEMENT', 0)
+        
+        # 휴식시간
+        rest_codes = ['REST', 'FITNESS']
+        rest_minutes = sum(activity_summary.get(code, 0) for code in rest_codes)
+        
+        # 출퇴근 시간
+        commute_in_minutes = activity_summary.get('COMMUTE_IN', 0)
+        commute_out_minutes = activity_summary.get('COMMUTE_OUT', 0)
+        commute_minutes = commute_in_minutes + commute_out_minutes
+        
+        # 기타시간 (체류시간에서 다른 모든 활동 시간을 뺀 것)
+        accounted_minutes = work_minutes + meal_minutes + movement_minutes + rest_minutes + commute_minutes
+        other_minutes = total_minutes - accounted_minutes
+        if other_minutes < 0:
+            other_minutes = 0
         
         # 비업무시간 (비근무 + 휴식)
         non_work_minutes = activity_summary.get('NON_WORK', 0) + activity_summary.get('REST', 0)
@@ -3728,15 +4059,16 @@ class IndividualDashboard:
             claim_hours = 0
             claim_minutes = 0
         
-        # 실제 업무시간 (work_time_analysis에서 가져오기)
-        if 'work_time_analysis' in analysis_result:
-            actual_work_hours = analysis_result['work_time_analysis'].get('actual_work_hours', work_minutes / 60)
-        else:
-            actual_work_hours = work_minutes / 60
+        # 실제 업무시간은 activity_summary에서 직접 계산
+        actual_work_hours = work_minutes / 60
         
-        # 실제 업무시간이 체류시간을 초과하는 경우 제한
-        if actual_work_hours > analysis_result['total_hours']:
-            actual_work_hours = analysis_result['total_hours'] * 0.8  # 체류시간의 80%로 제한
+        # 작업시간 + 식사시간이 체류시간을 초과하는 경우 조정
+        if (work_minutes + meal_minutes) > total_minutes:
+            # 체류시간에서 식사시간을 먼저 보장하고 남은 시간을 작업시간으로
+            work_minutes = max(0, total_minutes - meal_minutes - rest_minutes - movement_minutes)
+            actual_work_hours = work_minutes / 60
+            non_work_total = (meal_minutes + rest_minutes + movement_minutes + commute_minutes) / 60
+            actual_work_hours = max(0, analysis_result['total_hours'] - non_work_total)
         
         # 업무 효율성 (실제 업무시간 / Claim 시간)
         efficiency = (actual_work_hours * 60 / claim_minutes * 100) if claim_minutes > 0 else 0
@@ -3777,19 +4109,19 @@ class IndividualDashboard:
         }
         .summary-metrics {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
             margin-bottom: 20px;
         }
         .metric-card {
             background-color: white;
-            padding: 20px;
+            padding: 15px 10px;
             border-radius: 8px;
             text-align: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .metric-value {
-            font-size: 32px;
+            font-size: 28px;
             font-weight: bold;
             margin-bottom: 5px;
         }
@@ -3860,10 +4192,10 @@ class IndividualDashboard:
             else:
                 st.markdown("**업무 효율성:** -", unsafe_allow_html=True)
         
-        # 주요 지표들
+        # 주요 지표들 - 5개 카드를 한 행으로
         st.markdown("<div class='summary-metrics'>", unsafe_allow_html=True)
         
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             # actual_work_hours를 사용하여 표시
@@ -3878,12 +4210,12 @@ class IndividualDashboard:
             """, unsafe_allow_html=True)
         
         with col2:
-            meeting_percent = (meeting_minutes / total_minutes * 100) if total_minutes > 0 else 0
+            meal_percent = (meal_minutes / total_minutes * 100) if total_minutes > 0 else 0
             st.markdown(f"""
                 <div class="metric-card">
-                    <div class="metric-value" style="color: #9C27B0;">{meeting_minutes/60:.1f}h</div>
-                    <div class="metric-label">회의시간</div>
-                    <div class="metric-percent">{meeting_percent:.1f}%</div>
+                    <div class="metric-value" style="color: #FF9800;">{meal_minutes/60:.1f}h</div>
+                    <div class="metric-label">식사시간</div>
+                    <div class="metric-percent">{meal_percent:.1f}%</div>
                 </div>
             """, unsafe_allow_html=True)
         
@@ -3891,13 +4223,23 @@ class IndividualDashboard:
             movement_percent = (movement_minutes / total_minutes * 100) if total_minutes > 0 else 0
             st.markdown(f"""
                 <div class="metric-card">
-                    <div class="metric-value" style="color: #FF9800;">{movement_minutes/60:.1f}h</div>
+                    <div class="metric-value" style="color: #00BCD4;">{movement_minutes/60:.1f}h</div>
                     <div class="metric-label">이동시간</div>
                     <div class="metric-percent">{movement_percent:.1f}%</div>
                 </div>
             """, unsafe_allow_html=True)
         
         with col4:
+            rest_percent = (rest_minutes / total_minutes * 100) if total_minutes > 0 else 0
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #4CAF50;">{rest_minutes/60:.1f}h</div>
+                    <div class="metric-label">휴식시간</div>
+                    <div class="metric-percent">{rest_percent:.1f}%</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col5:
             # 데이터 품질 점수 사용 (analyze_data_quality에서 계산된 값)
             data_quality_score = analysis_result.get('data_quality', {}).get('overall_quality_score', 80)
             st.markdown(f"""
@@ -3909,6 +4251,20 @@ class IndividualDashboard:
             """, unsafe_allow_html=True)
         
         st.markdown("</div>", unsafe_allow_html=True)
+        
+        # 시간 합계 확인 (디버깅용 - 숨김 처리 가능)
+        total_calculated = (actual_work_hours * 60 + meal_minutes + movement_minutes + 
+                           rest_minutes + other_minutes + commute_minutes)
+        if abs(total_calculated - total_minutes) > 1:  # 1분 이상 차이가 나는 경우
+            st.markdown(f"""
+                <div style="background-color: #ffecb3; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                    <small>
+                    총 체류시간: {total_minutes/60:.1f}h ({total_minutes:.0f}분)<br>
+                    계산된 합계: {total_calculated/60:.1f}h ({total_calculated:.0f}분)<br>
+                    차이: {(total_minutes - total_calculated):.0f}분
+                    </small>
+                </div>
+            """, unsafe_allow_html=True)
         
         # 비업무시간 섹션
         if non_work_minutes > 0:
@@ -4266,9 +4622,11 @@ class IndividualDashboard:
                             'work_area_type': 'N',
                             'work_status': 'M',
                             'activity_label': '',
-                            'duration_minutes': None,  # 나중에 다음 태그와의 시간 차이로 계산
+                            'tag_code': 'M2' if is_takeout else 'M1',  # M1/M2 태그 추가
+                            'Tag_Code': 'M2' if is_takeout else 'M1',  # 대문자 버전도 추가
+                            'duration_minutes': 30 if is_takeout else None,  # 테이크아웃은 30분 고정
                             'meal_type': '',
-                            'meal_time': meal_time,
+                            'meal_time': '',  # 여기는 비워둠 - 나중에 duration으로 채움
                             'restaurant': restaurant_info,
                             'is_takeout': is_takeout
                         }
@@ -4305,9 +4663,9 @@ class IndividualDashboard:
                         
                         # 마지막 행의 duration이 None인 경우 기본값 설정
                         if pd.isna(raw_data.iloc[-1]['duration_minutes']):
-                            # 테이크아웃이면 10분, 아니면 30분
+                            # 테이크아웃이면 30분, 아니면 30분 (식당 식사는 실제 다음 태그까지의 시간으로 계산됨)
                             is_takeout = raw_data.iloc[-1].get('is_takeout', False)
-                            raw_data.at[raw_data.index[-1], 'duration_minutes'] = 10 if is_takeout else 30
+                            raw_data.at[raw_data.index[-1], 'duration_minutes'] = 30
         
         # 태깅지점 마스터 정보 추가
         tag_location_master = self.get_tag_location_master()
@@ -4375,52 +4733,50 @@ class IndividualDashboard:
         # None 값을 0으로 처리한 후 반올림
         df_display['duration_minutes'] = df_display['duration_minutes'].fillna(0).round(1)
         
-        # 활동 코드를 한글명으로 변환 (테이크아웃 반영)
-        # 디버깅: raw_data 확인
-        if 'datetime' in df_display.columns:
-            # 문제가 되는 시간대 확인 (07:39, 12:16, 17:37)
-            problem_times = ['07:39', '12:16', '17:37']
-            for time_str in problem_times:
-                debug_mask = df_display['datetime'].str.contains(time_str, na=False)
-                if debug_mask.any():
-                    for idx in df_display[debug_mask].index:
-                        self.logger.info(f"raw_data 확인 - {idx}: 시간={df_display.loc[idx, 'datetime']}, activity_code={df_display.loc[idx, 'activity_code']}, INOUT_GB={df_display.loc[idx, 'INOUT_GB']}")
-        
-        # 원본 activity_code를 먼저 저장 (상태 매핑에도 사용)
+        # 원본 activity_code를 먼저 저장 (모든 경우에 대비)
         original_codes = None
         if 'activity_code' in df_display.columns:
-            # 테이크아웃 식사에 (T) 추가
-            # 원본 activity_code를 저장
             original_codes = df_display['activity_code'].copy()
-            
-            def format_activity_code(row):
-                # 원본 activity_code 가져오기
-                idx = row.name
-                if idx < len(original_codes):
-                    original_code = original_codes.iloc[idx]
-                else:
-                    original_code = row['activity_code']
-                
-                # 디버깅: 12:49:23 근처의 데이터 확인
-                if 'datetime' in row and '12:49' in str(row.get('datetime', '')):
-                    self.logger.info(f"디버깅 - 시간: {row.get('datetime')}, 원본코드: {original_code}, INOUT_GB: {row.get('INOUT_GB')}")
-                
-                activity = get_activity_name(original_code, 'ko')
-                
+        
+        # 활동분류 필드가 있으면 그것을 사용, 없으면 activity_code를 한글로 변환
+        if '활동분류' in df_display.columns and df_display['활동분류'].notna().any():
+            # 이미 한글로 설정된 활동봠6류 필드가 있으면 그것을 사용
+            self.logger.info("활동분류 필드를 사용")
+            # 테이크아웃 표시만 추가
+            def add_takeout_indicator(row):
+                activity = row['활동분류']
                 # 식사 태그이고 테이크아웃인 경우만 (T) 추가
-                # 중요: INOUT_GB가 '식사'인 경우만 (T) 추가
-                if (original_code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL'] and
+                if (activity in ['조식', '중식', '석식', '야식'] and
                     'is_takeout' in row and row['is_takeout'] and
                     'INOUT_GB' in row and row['INOUT_GB'] == '식사'):
                     activity += '(T)'
-                
-                # 디버깅: (T)가 추가된 경우 로그
-                if '(T)' in activity and original_code not in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
-                    self.logger.warning(f"잘못된 (T) 추가 발견 - 시간: {row.get('datetime')}, 코드: {original_code}, 활동: {activity}, INOUT_GB: {row.get('INOUT_GB')}")
-                
                 return activity
             
-            df_display['activity_code'] = df_display.apply(format_activity_code, axis=1)
+            df_display['activity_code'] = df_display.apply(add_takeout_indicator, axis=1)
+        else:
+            # 활동분류 필드가 없으면 activity_code를 한글로 변환
+            self.logger.info("activity_code를 한글로 변환")
+            
+            if original_codes is not None:
+                def format_activity_code(row):
+                    # 원본 activity_code 가져오기
+                    idx = row.name
+                    if idx < len(original_codes):
+                        original_code = original_codes.iloc[idx]
+                    else:
+                        original_code = row['activity_code']
+                    
+                    activity = get_activity_name(original_code, 'ko')
+                    
+                    # 식사 태그이고 테이크아웃인 경우만 (T) 추가
+                    if (original_code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL'] and
+                        'is_takeout' in row and row['is_takeout'] and
+                        'INOUT_GB' in row and row['INOUT_GB'] == '식사'):
+                        activity += '(T)'
+                    
+                    return activity
+                
+                df_display['activity_code'] = df_display.apply(format_activity_code, axis=1)
         
         # 입/출 컬럼을 태그 종류로 변환
         if 'INOUT_GB' in df_display.columns:
@@ -4448,9 +4804,21 @@ class IndividualDashboard:
             df_display['meal_type'] = df_display['meal_type'].map(meal_type_map).fillna('')
         
         if 'meal_time' in df_display.columns:
-            # 식사 시간 형식 변환
-            df_display['meal_time'] = pd.to_datetime(df_display['meal_time'], errors='coerce').dt.strftime('%H:%M')
-            df_display['meal_time'] = df_display['meal_time'].fillna('')
+            # 식사 시간을 체류시간으로 표시
+            for idx, row in df_display.iterrows():
+                if row['INOUT_GB'] == '식사' and pd.notna(row['duration_minutes']):
+                    # 테이크아웃 여부 확인
+                    is_takeout = ('is_takeout' in raw_data.columns and raw_data.loc[idx, 'is_takeout']) or '테이크아웃' in str(row.get('DR_NM', ''))
+                    if is_takeout:
+                        df_display.at[idx, 'meal_time'] = '30'  # 테이크아웃은 30분 고정
+                    else:
+                        # 식당 식사는 체류시간 표시 (최대 60분)
+                        duration = row['duration_minutes']
+                        if duration > 60:
+                            duration = 60
+                        df_display.at[idx, 'meal_time'] = f"{duration:.1f}"
+                else:
+                    df_display.at[idx, 'meal_time'] = ''
         
         if 'restaurant' in df_display.columns:
             # 식당 이름 축약 및 세부 정보 유지
@@ -4493,38 +4861,60 @@ class IndividualDashboard:
                 if not problem_row.empty:
                     self.logger.info(f"07:35 데이터 확인: work_area_type={problem_row['work_area_type'].values[0]}, DR_NM={problem_row['위치'].values[0]}")
         
-        # 상태 한글 변환 (확장) - activity_code 기반으로 상태 업데이트
-        if 'work_status' in df_display.columns and original_codes is not None:
-            # 원본 activity_code를 사용하여 상태 매핑
+        # 상태 한글 변환 (확장) - 현재 activity_code 기반으로 상태 업데이트
+        if 'work_status' in df_display.columns:
+            # 활동분류 필드가 있으면 그것을 매핑, 없으면 원본 activity_code 사용
             for idx in df_display.index:
-                if idx < len(original_codes):
+                # 현재 활동 분류 확인
+                if '활동분류' in df_display.columns and pd.notna(df_display.loc[idx, '활동분류']):
+                    # 활동분류를 기반으로 activity_code 매핑
+                    activity_name = df_display.loc[idx, '활동분류']
+                    # 한글명을 activity_code로 역매핑
+                    activity_mapping = {
+                        '출근': 'COMMUTE_IN',
+                        '퇴근': 'COMMUTE_OUT',
+                        '근무': 'WORK',
+                        '작업': 'WORK',
+                        '준비': 'WORK_PREPARATION',
+                        '회의': 'MEETING',
+                        '이동': 'MOVEMENT',
+                        '조식': 'BREAKFAST',
+                        '중식': 'LUNCH',
+                        '석식': 'DINNER',
+                        '야식': 'MIDNIGHT_MEAL',
+                        '휴식': 'REST'
+                    }
+                    activity_code = activity_mapping.get(activity_name, 'WORK')
+                elif original_codes is not None and idx < len(original_codes):
                     activity_code = original_codes.iloc[idx]
+                else:
+                    continue
                     
-                    # 근무 상태
-                    if activity_code in ['WORK', 'WORKING']:
-                        df_display.loc[idx, 'work_status'] = '근무중'
-                    elif activity_code == 'FOCUSED_WORK':
-                        df_display.loc[idx, 'work_status'] = '집중작업'
-                    elif activity_code == 'MEETING':
-                        df_display.loc[idx, 'work_status'] = '회의중'
-                    elif activity_code == 'EQUIPMENT_OPERATION':
-                        df_display.loc[idx, 'work_status'] = '장비조작'
-                    elif activity_code == 'WORK_PREPARATION':
-                        df_display.loc[idx, 'work_status'] = '작업준비'
-                    # 이동 상태
-                    elif activity_code == 'MOVEMENT':
-                        df_display.loc[idx, 'work_status'] = '이동중'
-                    elif activity_code == 'COMMUTE_IN':
-                        df_display.loc[idx, 'work_status'] = '출근중'
-                    elif activity_code == 'COMMUTE_OUT':
-                        df_display.loc[idx, 'work_status'] = '퇴근중'
-                    # 휴식 상태
-                    elif activity_code == 'REST':
-                        df_display.loc[idx, 'work_status'] = '휴식중'
-                    elif activity_code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
-                        df_display.loc[idx, 'work_status'] = '식사중'
-                    elif activity_code == 'FITNESS':
-                        df_display.loc[idx, 'work_status'] = '운동중'
+                # 근무 상태
+                if activity_code in ['WORK', 'WORKING']:
+                    df_display.loc[idx, 'work_status'] = '근무중'
+                elif activity_code == 'FOCUSED_WORK':
+                    df_display.loc[idx, 'work_status'] = '집중작업'
+                elif activity_code == 'MEETING':
+                    df_display.loc[idx, 'work_status'] = '회의중'
+                elif activity_code == 'EQUIPMENT_OPERATION':
+                    df_display.loc[idx, 'work_status'] = '장비조작'
+                elif activity_code == 'WORK_PREPARATION':
+                    df_display.loc[idx, 'work_status'] = '작업준비'
+                # 이동 상태
+                elif activity_code == 'MOVEMENT':
+                    df_display.loc[idx, 'work_status'] = '이동중'
+                elif activity_code == 'COMMUTE_IN':
+                    df_display.loc[idx, 'work_status'] = '출근중'
+                elif activity_code == 'COMMUTE_OUT':
+                    df_display.loc[idx, 'work_status'] = '퇴근중'
+                # 휴식 상태
+                elif activity_code == 'REST':
+                    df_display.loc[idx, 'work_status'] = '휴식중'
+                elif activity_code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
+                    df_display.loc[idx, 'work_status'] = '식사중'
+                elif activity_code == 'FITNESS':
+                    df_display.loc[idx, 'work_status'] = '운동중'
             else:
                 # 기본 매핑
                 status_map = {'W': '근무', 'M': '이동', 'N': '비근무'}

@@ -90,22 +90,18 @@ def render_improved_gantt_chart(analysis_result: dict):
         if pd.notna(segment['start_time']) and pd.notna(segment['end_time']):
             activity_code = segment.get('activity_code', 'UNKNOWN')
             
-            # activity_type을 activity_code로 매핑 (필요시)
-            if activity_code in ['work', 'meeting', 'movement', 'rest', 'breakfast', 'lunch', 'dinner', 'midnight_meal', 'commute', 'non_work']:
-                # activity_type을 activity_code로 변환
-                type_to_code = {
-                    'work': 'WORK',
-                    'meeting': 'MEETING',
-                    'movement': 'MOVEMENT',
-                    'rest': 'REST',
-                    'breakfast': 'BREAKFAST',
-                    'lunch': 'LUNCH',
-                    'dinner': 'DINNER',
-                    'midnight_meal': 'MIDNIGHT_MEAL',
-                    'commute': 'COMMUTE_IN',
-                    'non_work': 'NON_WORK'
-                }
-                activity_code = type_to_code.get(activity_code, activity_code)
+            # 디버깅: 상세 로깅
+            if i < 10 or activity_code in ['COMMUTE_IN', 'COMMUTE_OUT']:  # 처음 10개 또는 출퇴근 로깅
+                print(f"[GANTT] Segment {i}:")
+                print(f"  - activity: '{segment.get('activity', 'N/A')}'")
+                print(f"  - activity_code: '{activity_code}'")
+                print(f"  - location: '{segment.get('location', 'N/A')}'")
+                print(f"  - start_time: {segment.get('start_time')}")
+                print(f"  - tag_code: '{segment.get('tag_code', 'N/A')}'")
+            
+            # activity_code가 대문자가 아닌 경우만 확인 (하위호환성)
+            if activity_code and not activity_code.isupper():
+                print(f"[GANTT] WARNING: 비정상적인 activity_code 발견: '{activity_code}'")
             
             activity = activity_info.get(activity_code, activity_info['UNKNOWN'])
             

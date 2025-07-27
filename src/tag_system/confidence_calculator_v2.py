@@ -451,9 +451,13 @@ class ConfidenceCalculatorV2:
         
         total_hours = total_minutes / 60
         
-        # 업무시간이 체류시간을 초과하지 않도록 제한
-        if work_hours > total_hours:
-            work_hours = total_hours * 0.9  # 체류시간의 90%로 제한
+        # 식사시간 계산 (lunch_minutes + takeout_minutes는 이미 work_minutes에서 차감됨)
+        meal_hours = (lunch_minutes + takeout_minutes) / 60
+        
+        # 업무시간이 (체류시간 - 식사시간)을 초과하지 않도록 제한
+        max_work_hours = total_hours - meal_hours
+        if work_hours > max_work_hours:
+            work_hours = max(0, max_work_hours)
         
         activity_breakdown = {k: v/60 for k, v in activity_minutes.items()}
         
