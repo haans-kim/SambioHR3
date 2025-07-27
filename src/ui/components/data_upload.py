@@ -205,6 +205,12 @@ class DataUploadComponent:
         # 구분선
         st.markdown("---")
         
+        # 데이터 조회 섹션 추가
+        self._render_data_viewer_section()
+        
+        # 구분선
+        st.markdown("---")
+        
         # 옵션 설정
         with st.expander("⚙️ 로드 옵션", expanded=False):
             save_to_db = st.checkbox("데이터베이스에도 저장", value=False, 
@@ -611,6 +617,168 @@ class DataUploadComponent:
             
             with col2:
                 st.info("확인 버튼을 누르면 모든 캐시가 삭제됩니다.")
+    
+    def _render_data_viewer_section(self):
+        """데이터 조회 섹션 렌더링"""
+        st.markdown("#### 🔍 데이터 조회")
+        
+        # Pickle 파일이 있는 데이터 유형만 선택 가능하도록
+        available_types = []
+        for data_type, info in self.data_types.items():
+            pickle_files = self.pickle_manager.list_pickle_files(info['table_name'])
+            if pickle_files:
+                available_types.append(data_type)
+        
+        if not available_types:
+            st.info("조회 가능한 데이터가 없습니다. 먼저 데이터를 업로드하세요.")
+            return
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            selected_data_type = st.selectbox(
+                "조회할 데이터 선택",
+                available_types,
+                format_func=lambda x: self.data_types[x]['display_name'],
+                key="viewer_data_type"
+            )
+        
+        with col2:
+            if st.button("📊 데이터 보기", type="primary", use_container_width=True):
+                st.session_state.show_data_preview = True
+                st.session_state.selected_data_for_preview = selected_data_type
+        
+        # 데이터 미리보기를 별도 섹션에 표시
+        if st.session_state.get('show_data_preview', False):
+            self._show_data_preview(st.session_state.get('selected_data_for_preview'))
+    
+    def _show_data_preview(self, data_type: str):
+        """선택한 데이터의 미리보기 표시"""
+        info = self.data_types[data_type]
+        
+        try:
+            # 최신 pickle 파일 로드
+            pickle_files = self.pickle_manager.list_pickle_files(info['table_name'])
+            if not pickle_files:
+                st.warning("데이터를 찾을 수 없습니다.")
+                return
+            
+            latest_file = pickle_files[0]
+            
+            with st.spinner(f"{info['display_name']} 로딩 중..."):
+                df = self.pickle_manager.load_dataframe(
+                    name=info['table_name'],
+                    version=latest_file['version']
+                )
+            
+            if df is None:
+                st.error("데이터 로드 실패")
+                return
+            
+            # 새로운 전체 너비 컨테이너 생성
+            st.markdown("---")
+            
+            # 제목과 닫기 버튼을 같은 줄에 배치
+            col_title, col_close = st.columns([5, 1])
+            with col_title:
+                st.markdown(f"### 📊 {info['display_name']} 데이터 조회 결과")
+            with col_close:
+                if st.button("❌ 닫기", use_container_width=True):
+                    st.session_state.show_data_preview = False
+                    st.rerun()
+            
+            # 데이터 정보 표시
+            st.success(f"✅ {info['display_name']} 데이터 로드 완료")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("총 행 수", f"{len(df):,}")
+            with col2:
+                st.metric("총 열 수", f"{len(df.columns):,}")
+            with col3:
+                st.metric("메모리 사용량", f"{df.memory_usage(deep=True).sum() / 1024**2:.1f} MB")
+            with col4:
+                st.metric("마지막 업데이트", latest_file.get('created_at', '-')[:10])
+            
+            # 데이터 미리보기 탭
+            tab1, tab2, tab3, tab4 = st.tabs(["📋 데이터 미리보기", "📊 열 정보", "📈 기본 통계", "🔍 데이터 검색"])
+            
+            with tab1:
+                # 샘플 수 선택
+                sample_size = st.slider("표시할 행 수", min_value=10, max_value=min(1000, len(df)), value=100, step=10)
+                
+                # 데이터 표시
+                st.dataframe(df.head(sample_size), use_container_width=True, height=400)
+                
+                # CSV 다운로드 버튼
+                csv = df.head(sample_size).to_csv(index=False, encoding='utf-8-sig')
+                st.download_button(
+                    label="📥 샘플 데이터 다운로드 (CSV)",
+                    data=csv,
+                    file_name=f"{info['table_name']}_sample_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime='text/csv'
+                )
+            
+            with tab2:
+                # 열 정보 표시
+                col_info = pd.DataFrame({
+                    '열 이름': df.columns,
+                    '데이터 타입': df.dtypes.astype(str),
+                    'Null 값 개수': df.isnull().sum(),
+                    'Null 비율(%)': (df.isnull().sum() / len(df) * 100).round(2),
+                    '고유값 개수': df.nunique()
+                })
+                st.dataframe(col_info, use_container_width=True, height=400)
+            
+            with tab3:
+                # 숫자형 컬럼만 선택
+                numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+                
+                if numeric_cols:
+                    selected_cols = st.multiselect(
+                        "통계를 볼 컬럼 선택",
+                        numeric_cols,
+                        default=numeric_cols[:5] if len(numeric_cols) > 5 else numeric_cols
+                    )
+                    
+                    if selected_cols:
+                        stats_df = df[selected_cols].describe()
+                        st.dataframe(stats_df, use_container_width=True)
+                else:
+                    st.info("숫자형 컬럼이 없습니다.")
+            
+            with tab4:
+                # 검색 기능
+                search_col1, search_col2 = st.columns([1, 2])
+                
+                with search_col1:
+                    search_col = st.selectbox("검색할 컬럼", df.columns.tolist())
+                
+                with search_col2:
+                    search_value = st.text_input("검색어 입력")
+                
+                if search_value:
+                    # 문자열 컬럼인 경우 포함 검색, 숫자형인 경우 정확히 일치
+                    if df[search_col].dtype == 'object':
+                        mask = df[search_col].astype(str).str.contains(search_value, case=False, na=False)
+                    else:
+                        try:
+                            search_num = float(search_value)
+                            mask = df[search_col] == search_num
+                        except:
+                            mask = pd.Series([False] * len(df))
+                    
+                    filtered_df = df[mask]
+                    
+                    if len(filtered_df) > 0:
+                        st.success(f"검색 결과: {len(filtered_df)}개 행 발견")
+                        st.dataframe(filtered_df.head(100), use_container_width=True, height=300)
+                    else:
+                        st.warning("검색 결과가 없습니다.")
+            
+        except Exception as e:
+            st.error(f"데이터 조회 중 오류 발생: {e}")
+            self.logger.error(f"데이터 조회 오류: {e}", exc_info=True)
     
     def _auto_load_pickles(self):
         """자동으로 pickle 파일을 확인하고 로드"""

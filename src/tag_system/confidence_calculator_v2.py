@@ -96,6 +96,13 @@ class ConfidenceCalculatorV2:
     
     def _map_tag_to_category(self, tag_info: pd.Series) -> str:
         """현재 시스템의 태그를 G/N/T 카테고리로 매핑"""
+        # tag_code가 있으면 우선 사용 (가장 정확한 매핑)
+        tag_code = tag_info.get('tag_code', '') or tag_info.get('Tag_Code', '')
+        if tag_code:
+            # G1-G4, N1-N2, T1-T3, M1-M2, O 태그 직접 반환
+            if tag_code in ['G1', 'G2', 'G3', 'G4', 'N1', 'N2', 'T1', 'T2', 'T3', 'M1', 'M2', 'O']:
+                return tag_code
+        
         # DR_NM에서 키워드를 찾아 매핑
         dr_nm = str(tag_info.get('DR_NM', '')).upper()
         
@@ -112,13 +119,6 @@ class ConfidenceCalculatorV2:
             return 'N2'  # 비근무구역 (휴게)
         elif area_type == 'T':
             return 'T1'  # 이동구간
-        
-        # tag_code 기반 매핑
-        tag_code = tag_info.get('tag_code', '')
-        if tag_code == 'T2':
-            return 'T2'
-        elif tag_code == 'T3':
-            return 'T3'
         
         # 기본값
         return 'G1'
@@ -188,27 +188,50 @@ class ConfidenceCalculatorV2:
         """특수 케이스에 대한 확률 조정"""
         probs = base_probs.copy()
         
-        # 1. 장비 조작 (O 태그)
-        if current_tag.get('INOUT_GB') == 'O' or current_tag.get('activity_code') == 'EQUIPMENT_OPERATION':
-            probs['work'] = 0.95
-            probs['movement'] = 0.03
-            probs['non_work'] = 0.02
+        # tag_code 가져오기
+        tag_code = current_tag.get('tag_code', '') or current_tag.get('Tag_Code', '')
+        
+        # 1. T2 태그 (출입 IN) - 항상 출근
+        if tag_code == 'T2':
+            probs['movement'] = 0.95  # 출근
+            probs['work'] = 0.05
+            probs['non_work'] = 0.0
             probs['rest'] = 0.0
         
-        # 2. 식사 시간대 + 식당 위치
-        elif self._is_meal_time(current_tag['datetime']) and 'CAFETERIA' in str(current_tag.get('DR_NM', '')).upper():
+        # 2. T3 태그 (출입 OUT) - 항상 퇴근
+        elif tag_code == 'T3':
+            probs['movement'] = 0.95  # 퇴근
+            probs['work'] = 0.05
+            probs['non_work'] = 0.0
+            probs['rest'] = 0.0
+        
+        # 3. O 태그 (실제 업무 수행 로그)
+        elif tag_code == 'O' or current_tag.get('INOUT_GB') == 'O' or current_tag.get('activity_code') == 'EQUIPMENT_OPERATION':
+            probs['work'] = 0.98
+            probs['movement'] = 0.02
+            probs['non_work'] = 0.0
+            probs['rest'] = 0.0
+        
+        # 4. G1 태그 (주업무공간)
+        elif tag_code == 'G1':
+            probs['work'] = 0.85
+            probs['movement'] = 0.10
+            probs['rest'] = 0.05
+            probs['non_work'] = 0.0
+        
+        # 5. M1 태그 (식사)
+        elif tag_code == 'M1':
+            probs['work'] = 0.0
+            probs['rest'] = 1.0  # 식사는 휴게로 분류
+            probs['movement'] = 0.0
+            probs['non_work'] = 0.0
+        
+        # 6. 식사 시간대 + 식당 위치 (태그코드가 없는 경우)
+        elif not tag_code and self._is_meal_time(current_tag['datetime']) and 'CAFETERIA' in str(current_tag.get('DR_NM', '')).upper():
             probs['work'] = 0.05
             probs['rest'] = 0.90  # 식사는 휴게로 분류
             probs['movement'] = 0.05
             probs['non_work'] = 0.0
-        
-        # 3. 명확한 출퇴근
-        elif current_tag.get('tag_code') == 'T2' and prev_tag is None:
-            probs['movement'] = 0.95  # 출근
-            probs['work'] = 0.05
-        elif current_tag.get('tag_code') == 'T3' and next_tag is None:
-            probs['movement'] = 0.95  # 퇴근
-            probs['work'] = 0.05
         
         return probs
     
@@ -252,6 +275,89 @@ class ConfidenceCalculatorV2:
         
         tags_df = tags_df.sort_values('datetime').reset_index(drop=True)
         
+        # 점심시간 및 제외 구간 찾기
+        lunch_blocks = []  # [(start_idx, end_idx)]
+        takeout_blocks = []  # [(start_idx, end_idx)]
+        
+        # 연속된 작업 구간을 찾기 위한 변수
+        work_blocks = []  # [(start_idx, end_idx, activity_type)]
+        current_block_start = None
+        current_activity = None
+        
+        # 작업 관련 활동 코드 (대문자와 소문자 모두 포함)
+        work_activities = [
+            'work', 'meeting', 'training', 'preparation',  # 소문자 (신뢰지수 계산 결과)
+            'WORK', 'MEETING', 'TRAINING', 'PREPARATION',  # 대문자 (태그 기반 규칙)
+            'FOCUSED_WORK', 'EQUIPMENT_OPERATION'  # 추가 작업 활동
+        ]
+        
+        # 각 태그의 주요 활동 결정 및 연속 블록 찾기
+        for i in range(len(tags_df)):
+            current_tag = tags_df.iloc[i]
+            next_tag = tags_df.iloc[i+1] if i < len(tags_df) - 1 else None
+            prev_tag = tags_df.iloc[i-1] if i > 0 else None
+            
+            # 점심시간 체크 (11:00-14:00 사이의 식당)
+            is_lunch_time = False
+            hour = current_tag['datetime'].hour
+            if 11 <= hour < 14 and 'CAFETERIA' in str(current_tag.get('DR_NM', '')).upper():
+                is_lunch_time = True
+                
+                # 점심시간 블록 추가
+                if not lunch_blocks or i > lunch_blocks[-1][1] + 1:
+                    lunch_blocks.append((i, i))
+                else:
+                    lunch_blocks[-1] = (lunch_blocks[-1][0], i)
+            
+            # TAKEOUT 체크
+            is_takeout = 'TAKEOUT' in str(current_tag.get('DR_NM', '')).upper()
+            if is_takeout:
+                if not takeout_blocks or i > takeout_blocks[-1][1] + 1:
+                    takeout_blocks.append((i, i))
+                else:
+                    takeout_blocks[-1] = (takeout_blocks[-1][0], i)
+            
+            # 점심시간이나 TAKEOUT이 아닌 경우에만 작업 활동 체크
+            if not is_lunch_time and not is_takeout:
+                # activity_code가 이미 설정되어 있으면 그것을 사용
+                if 'activity_code' in current_tag and current_tag['activity_code']:
+                    is_work_activity = current_tag['activity_code'] in work_activities
+                else:
+                    # activity_code가 없으면 신뢰지수 계산
+                    confidence = self.calculate_confidence(current_tag, next_tag, prev_tag)
+                    
+                    # 가장 높은 확률의 활동 선택
+                    main_activity = max(confidence.items(), key=lambda x: x[1])[0]
+                    
+                    # 작업 관련 활동인지 확인
+                    is_work_activity = main_activity in work_activities
+                
+                # 블록 처리
+                if current_block_start is None:
+                    # 새 블록 시작
+                    if is_work_activity:
+                        current_block_start = i
+                        current_activity = 'work'
+                else:
+                    # 현재 블록 진행 중
+                    if not is_work_activity:
+                        # 작업 블록 종료
+                        work_blocks.append((current_block_start, i-1, current_activity))
+                        current_block_start = None
+                        current_activity = None
+            else:
+                # 점심시간이나 TAKEOUT인 경우 현재 작업 블록 종료
+                if current_block_start is not None:
+                    work_blocks.append((current_block_start, i-1, current_activity))
+                    current_block_start = None
+                    current_activity = None
+        
+        # 마지막 블록 처리
+        if current_block_start is not None:
+            work_blocks.append((current_block_start, len(tags_df)-1, current_activity))
+        
+        # 작업 시간 계산
+        total_work_minutes = 0.0
         activity_minutes = {
             'work': 0.0,
             'movement': 0.0,
@@ -264,47 +370,90 @@ class ConfidenceCalculatorV2:
         
         confidence_scores = []
         
-        for i in range(len(tags_df)):
-            current_tag = tags_df.iloc[i]
-            next_tag = tags_df.iloc[i+1] if i < len(tags_df) - 1 else None
-            prev_tag = tags_df.iloc[i-1] if i > 0 else None
+        # 작업 블록의 시간 계산
+        for start_idx, end_idx, activity_type in work_blocks:
+            # 블록의 시작과 끝 시간
+            start_time = tags_df.iloc[start_idx]['datetime']
+            if end_idx < len(tags_df) - 1:
+                # 다음 태그의 시간까지를 블록의 끝으로 설정
+                end_time = tags_df.iloc[end_idx + 1]['datetime']
+            else:
+                # 마지막 태그인 경우, duration_minutes를 사용하거나 기본값 5분 추가
+                last_duration = tags_df.iloc[end_idx].get('duration_minutes', 5)
+                end_time = tags_df.iloc[end_idx]['datetime'] + timedelta(minutes=last_duration)
             
-            # 신뢰지수 계산
-            confidence = self.calculate_confidence(current_tag, next_tag, prev_tag)
+            # 블록의 총 시간 (분 단위)
+            block_minutes = (end_time - start_time).total_seconds() / 60
+            total_work_minutes += block_minutes
+            activity_minutes['work'] += block_minutes
             
-            # 지속 시간
-            duration = current_tag.get('duration_minutes', 5)
-            
-            # 활동별 시간 누적 (확률 기반)
-            for activity, prob in confidence.items():
-                if activity in activity_minutes:
-                    activity_minutes[activity] += duration * prob
-            
-            # 작업 확률을 신뢰도로 사용
-            confidence_scores.append(confidence.get('work', 0) * 100)
+            # 블록 내 태그들의 신뢰도 수집
+            for idx in range(start_idx, end_idx + 1):
+                tag = tags_df.iloc[idx]
+                next_tag = tags_df.iloc[idx+1] if idx < len(tags_df) - 1 else None
+                prev_tag = tags_df.iloc[idx-1] if idx > 0 else None
+                confidence = self.calculate_confidence(tag, next_tag, prev_tag)
+                confidence_scores.append(confidence.get('work', 0) * 100)
         
-        # 실제 업무시간 계산 (work + meeting + training + preparation)
-        actual_work_minutes = (
-            activity_minutes['work'] + 
-            activity_minutes['meeting'] + 
-            activity_minutes['training'] + 
-            activity_minutes['preparation']
-        )
+        # 점심시간 계산 (1시간 고정 차감)
+        lunch_minutes = 0
+        if lunch_blocks:
+            # 점심시간은 블록 수와 관계없이 최대 1시간(60분)만 차감
+            lunch_minutes = min(60, len(lunch_blocks) * 5)  # 태그당 5분으로 가정
+        
+        # TAKEOUT 시간 계산 (30분 고정 차감)
+        takeout_minutes = 0
+        if takeout_blocks:
+            # TAKEOUT은 30분 고정 차감
+            takeout_minutes = 30
+        
+        # 작업시간에서 점심시간 및 TAKEOUT 시간 차감
+        total_work_minutes = max(0, total_work_minutes - lunch_minutes - takeout_minutes)
+        
+        # 비작업 시간의 활동 분류 (참고용)
+        for i in range(len(tags_df)):
+            # 작업 블록에 포함되지 않은 태그들에 대해서만 처리
+            in_work_block = any(start <= i <= end for start, end, _ in work_blocks)
+            in_lunch_block = any(start <= i <= end for start, end in lunch_blocks)
+            in_takeout_block = any(start <= i <= end for start, end in takeout_blocks)
+            
+            if not in_work_block and not in_lunch_block and not in_takeout_block:
+                current_tag = tags_df.iloc[i]
+                next_tag = tags_df.iloc[i+1] if i < len(tags_df) - 1 else None
+                prev_tag = tags_df.iloc[i-1] if i > 0 else None
+                
+                confidence = self.calculate_confidence(current_tag, next_tag, prev_tag)
+                duration = current_tag.get('duration_minutes', 5)
+                
+                # 주요 활동 결정
+                main_activity = max(confidence.items(), key=lambda x: x[1])[0]
+                if main_activity in activity_minutes and main_activity not in work_activities:
+                    activity_minutes[main_activity] += duration
+            elif in_lunch_block or in_takeout_block:
+                # 점심시간이나 TAKEOUT은 rest로 분류
+                activity_minutes['rest'] += current_tag.get('duration_minutes', 5)
         
         # 전체 신뢰도 계산 (0-100 범위로 제한)
         avg_confidence = np.mean(confidence_scores) if confidence_scores else 0
         avg_confidence = min(avg_confidence, 100.0)
         
         # 시간을 hours로 변환
-        work_hours = actual_work_minutes / 60
+        work_hours = total_work_minutes / 60
         
         # 총 체류시간 계산
-        total_minutes = sum(tags_df['duration_minutes']) if 'duration_minutes' in tags_df.columns else len(tags_df) * 5
+        if len(tags_df) > 1:
+            first_time = tags_df.iloc[0]['datetime']
+            last_time = tags_df.iloc[-1]['datetime']
+            last_duration = tags_df.iloc[-1].get('duration_minutes', 5)
+            total_minutes = (last_time - first_time).total_seconds() / 60 + last_duration
+        else:
+            total_minutes = tags_df.iloc[0].get('duration_minutes', 5) if len(tags_df) > 0 else 0
+        
         total_hours = total_minutes / 60
         
         # 업무시간이 체류시간을 초과하지 않도록 제한
         if work_hours > total_hours:
-            work_hours = total_hours * 0.8  # 체류시간의 80%로 제한
+            work_hours = total_hours * 0.9  # 체류시간의 90%로 제한
         
         activity_breakdown = {k: v/60 for k, v in activity_minutes.items()}
         

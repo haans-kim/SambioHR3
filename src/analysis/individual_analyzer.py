@@ -158,25 +158,75 @@ class IndividualAnalyzer:
     
     def _analyze_work_time(self, hmm_results: Dict[str, Any], 
                           claim_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """근무시간 분석"""
+        """근무시간 분석 - 연속된 작업 구간을 하나의 블록으로 처리"""
         timeline = hmm_results.get('timeline', [])
+        
+        if not timeline:
+            return {
+                'actual_work_hours': 0,
+                'claimed_work_hours': 0,
+                'difference_hours': 0,
+                'accuracy_ratio': 0,
+                'work_efficiency': 0
+            }
         
         # 근무 상태 시간 계산
         work_states = ['근무', '집중근무', '장비조작', '회의', '작업준비', '작업중']
-        work_time_total = 0
+        
+        # 연속된 작업 블록 찾기
+        work_blocks = []  # [(start_idx, end_idx)]
+        current_block_start = None
         
         for i, entry in enumerate(timeline):
             if entry['predicted_state'] in work_states:
-                # 다음 엔트리와의 시간 차이 계산
-                if i + 1 < len(timeline):
-                    next_timestamp = timeline[i + 1]['timestamp']
-                    current_timestamp = entry['timestamp']
-                    if next_timestamp and current_timestamp:
-                        duration = (next_timestamp - current_timestamp).total_seconds() / 3600
-                        work_time_total += duration
+                if current_block_start is None:
+                    # 새로운 작업 블록 시작
+                    current_block_start = i
+            else:
+                if current_block_start is not None:
+                    # 작업 블록 종료
+                    work_blocks.append((current_block_start, i - 1))
+                    current_block_start = None
+        
+        # 마지막 블록 처리
+        if current_block_start is not None:
+            work_blocks.append((current_block_start, len(timeline) - 1))
+        
+        # 각 블록의 시간 계산
+        work_time_total = 0
+        for start_idx, end_idx in work_blocks:
+            # 블록의 시작 시간
+            start_time = timeline[start_idx]['timestamp']
+            
+            # 블록의 끝 시간
+            if end_idx < len(timeline) - 1:
+                # 다음 엔트리의 시간을 블록의 끝으로 사용
+                end_time = timeline[end_idx + 1]['timestamp']
+            else:
+                # 마지막 엔트리인 경우, 평균 태그 간격을 추가
+                if len(timeline) > 1:
+                    # 평균 태그 간격 계산
+                    total_time_span = (timeline[-1]['timestamp'] - timeline[0]['timestamp']).total_seconds()
+                    avg_interval = total_time_span / (len(timeline) - 1) / 3600  # 시간 단위
+                    end_time = timeline[end_idx]['timestamp'] + timedelta(hours=avg_interval)
+                else:
+                    # 태그가 하나뿐인 경우 5분 추가
+                    end_time = timeline[end_idx]['timestamp'] + timedelta(minutes=5)
+            
+            # 블록의 총 시간 (시간 단위)
+            if start_time and end_time:
+                block_duration = (end_time - start_time).total_seconds() / 3600
+                work_time_total += block_duration
         
         # Claim 데이터와 비교
         claim_total = sum(float(c.get('actual_work_duration', 0)) for c in claim_data)
+        
+        # 전체 체류시간 계산 (참고용)
+        if len(timeline) > 1:
+            total_stay_time = (timeline[-1]['timestamp'] - timeline[0]['timestamp']).total_seconds() / 3600
+            # 작업시간이 체류시간을 초과하지 않도록 제한
+            if work_time_total > total_stay_time:
+                work_time_total = total_stay_time * 0.9
         
         return {
             'actual_work_hours': round(work_time_total, 2),
@@ -188,32 +238,71 @@ class IndividualAnalyzer:
     
     def _analyze_shift_patterns(self, hmm_results: Dict[str, Any], 
                                tag_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """교대 근무 패턴 분석"""
+        """교대 근무 패턴 분석 - 연속된 작업 블록 기준"""
         timeline = hmm_results.get('timeline', [])
         
         # 교대별 근무 시간 분석
         shift_analysis = {
-            '주간': {'work_hours': 0, 'activity_count': 0},
-            '야간': {'work_hours': 0, 'activity_count': 0}
+            '주간': {'work_hours': 0, 'activity_count': 0, 'blocks': []},
+            '야간': {'work_hours': 0, 'activity_count': 0, 'blocks': []}
         }
         
         work_states = ['근무', '집중근무', '장비조작', '회의', '작업준비', '작업중']
         
+        # 연속된 작업 블록 찾기 (교대별)
+        current_block_start = None
+        current_shift = None
+        
         for i, entry in enumerate(timeline):
             if entry['predicted_state'] in work_states:
                 shift_type = self._determine_shift_type(entry['timestamp'])
-                shift_analysis[shift_type]['activity_count'] += 1
                 
-                # 시간 계산
-                if i + 1 < len(timeline):
-                    next_timestamp = timeline[i + 1]['timestamp']
-                    current_timestamp = entry['timestamp']
-                    if next_timestamp and current_timestamp:
-                        duration = (next_timestamp - current_timestamp).total_seconds() / 3600
-                        shift_analysis[shift_type]['work_hours'] += duration
+                if current_block_start is None:
+                    # 새 블록 시작
+                    current_block_start = i
+                    current_shift = shift_type
+                elif current_shift != shift_type:
+                    # 교대가 바뀌면 이전 블록 종료하고 새 블록 시작
+                    shift_analysis[current_shift]['blocks'].append((current_block_start, i - 1))
+                    current_block_start = i
+                    current_shift = shift_type
+                
+                shift_analysis[shift_type]['activity_count'] += 1
+            else:
+                if current_block_start is not None:
+                    # 작업 블록 종료
+                    shift_analysis[current_shift]['blocks'].append((current_block_start, i - 1))
+                    current_block_start = None
+                    current_shift = None
         
-        # 교대별 효율성 계산
+        # 마지막 블록 처리
+        if current_block_start is not None:
+            shift_analysis[current_shift]['blocks'].append((current_block_start, len(timeline) - 1))
+        
+        # 각 교대의 블록 시간 계산
         for shift_type in shift_analysis:
+            total_hours = 0
+            for start_idx, end_idx in shift_analysis[shift_type]['blocks']:
+                start_time = timeline[start_idx]['timestamp']
+                
+                if end_idx < len(timeline) - 1:
+                    end_time = timeline[end_idx + 1]['timestamp']
+                else:
+                    # 마지막 엔트리인 경우
+                    if len(timeline) > 1:
+                        total_time_span = (timeline[-1]['timestamp'] - timeline[0]['timestamp']).total_seconds()
+                        avg_interval = total_time_span / (len(timeline) - 1) / 3600
+                        end_time = timeline[end_idx]['timestamp'] + timedelta(hours=avg_interval)
+                    else:
+                        end_time = timeline[end_idx]['timestamp'] + timedelta(minutes=5)
+                
+                if start_time and end_time:
+                    block_duration = (end_time - start_time).total_seconds() / 3600
+                    total_hours += block_duration
+            
+            shift_analysis[shift_type]['work_hours'] = round(total_hours, 2)
+            
+            # 평균 지속시간 계산
             if shift_analysis[shift_type]['activity_count'] > 0:
                 shift_analysis[shift_type]['avg_duration'] = (
                     shift_analysis[shift_type]['work_hours'] / 
@@ -221,6 +310,9 @@ class IndividualAnalyzer:
                 )
             else:
                 shift_analysis[shift_type]['avg_duration'] = 0
+            
+            # blocks 정보 제거 (반환값 간소화)
+            del shift_analysis[shift_type]['blocks']
         
         return {
             'shift_patterns': shift_analysis,
@@ -328,27 +420,82 @@ class IndividualAnalyzer:
     
     def _analyze_efficiency(self, hmm_results: Dict[str, Any], 
                            claim_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """효율성 분석"""
+        """효율성 분석 - 연속된 작업 블록 기준"""
         timeline = hmm_results.get('timeline', [])
+        
+        if not timeline:
+            return {
+                'focused_work_ratio': 0,
+                'total_work_time': 0,
+                'focused_work_time': 0,
+                'data_confidence': 0,
+                'productivity_score': 0
+            }
         
         # 집중 근무 시간 계산
         focused_states = ['집중근무', '작업중']
-        focused_time = 0
-        total_work_time = 0
-        
         work_states = ['근무', '집중근무', '장비조작', '회의', '작업준비', '작업중']
         
+        # 연속된 블록 찾기 (작업 블록과 집중 작업 블록)
+        work_blocks = []  # [(start_idx, end_idx)]
+        focused_blocks = []  # [(start_idx, end_idx)]
+        
+        current_work_start = None
+        current_focused_start = None
+        
         for i, entry in enumerate(timeline):
-            if entry['predicted_state'] in work_states:
-                if i + 1 < len(timeline):
-                    next_timestamp = timeline[i + 1]['timestamp']
-                    current_timestamp = entry['timestamp']
-                    if next_timestamp and current_timestamp:
-                        duration = (next_timestamp - current_timestamp).total_seconds() / 3600
-                        total_work_time += duration
-                        
-                        if entry['predicted_state'] in focused_states:
-                            focused_time += duration
+            state = entry['predicted_state']
+            
+            # 작업 블록 처리
+            if state in work_states:
+                if current_work_start is None:
+                    current_work_start = i
+            else:
+                if current_work_start is not None:
+                    work_blocks.append((current_work_start, i - 1))
+                    current_work_start = None
+            
+            # 집중 작업 블록 처리
+            if state in focused_states:
+                if current_focused_start is None:
+                    current_focused_start = i
+            else:
+                if current_focused_start is not None:
+                    focused_blocks.append((current_focused_start, i - 1))
+                    current_focused_start = None
+        
+        # 마지막 블록 처리
+        if current_work_start is not None:
+            work_blocks.append((current_work_start, len(timeline) - 1))
+        if current_focused_start is not None:
+            focused_blocks.append((current_focused_start, len(timeline) - 1))
+        
+        # 블록 시간 계산 함수
+        def calculate_block_time(blocks):
+            total_time = 0
+            for start_idx, end_idx in blocks:
+                start_time = timeline[start_idx]['timestamp']
+                
+                if end_idx < len(timeline) - 1:
+                    end_time = timeline[end_idx + 1]['timestamp']
+                else:
+                    # 마지막 엔트리인 경우
+                    if len(timeline) > 1:
+                        total_time_span = (timeline[-1]['timestamp'] - timeline[0]['timestamp']).total_seconds()
+                        avg_interval = total_time_span / (len(timeline) - 1) / 3600
+                        end_time = timeline[end_idx]['timestamp'] + timedelta(hours=avg_interval)
+                    else:
+                        end_time = timeline[end_idx]['timestamp'] + timedelta(minutes=5)
+                
+                if start_time and end_time:
+                    block_duration = (end_time - start_time).total_seconds() / 3600
+                    total_time += block_duration
+            
+            return total_time
+        
+        # 총 작업 시간과 집중 작업 시간 계산
+        total_work_time = calculate_block_time(work_blocks)
+        focused_time = calculate_block_time(focused_blocks)
         
         # 효율성 지표 계산
         efficiency_ratio = (focused_time / total_work_time * 100) if total_work_time > 0 else 0
@@ -497,17 +644,48 @@ class IndividualAnalyzer:
         return np.mean(regularity_scores) if regularity_scores else 0
     
     def _calculate_daily_work_duration(self, day_timeline: List[Dict[str, Any]]) -> float:
-        """일일 근무 지속시간 계산"""
+        """일일 근무 지속시간 계산 - 연속된 작업 블록 기준"""
         work_states = ['근무', '집중근무', '장비조작', '회의', '작업준비', '작업중']
-        total_duration = 0
+        
+        if not day_timeline:
+            return 0.0
+        
+        # 연속된 작업 블록 찾기
+        work_blocks = []  # [(start_idx, end_idx)]
+        current_block_start = None
         
         for i, entry in enumerate(day_timeline):
             if entry['predicted_state'] in work_states:
-                if i + 1 < len(day_timeline):
-                    next_timestamp = day_timeline[i + 1]['timestamp']
-                    current_timestamp = entry['timestamp']
-                    duration = (next_timestamp - current_timestamp).total_seconds() / 3600
-                    total_duration += duration
+                if current_block_start is None:
+                    current_block_start = i
+            else:
+                if current_block_start is not None:
+                    work_blocks.append((current_block_start, i - 1))
+                    current_block_start = None
+        
+        # 마지막 블록 처리
+        if current_block_start is not None:
+            work_blocks.append((current_block_start, len(day_timeline) - 1))
+        
+        # 각 블록의 시간 계산
+        total_duration = 0
+        for start_idx, end_idx in work_blocks:
+            start_time = day_timeline[start_idx]['timestamp']
+            
+            if end_idx < len(day_timeline) - 1:
+                end_time = day_timeline[end_idx + 1]['timestamp']
+            else:
+                # 마지막 엔트리인 경우
+                if len(day_timeline) > 1:
+                    total_time_span = (day_timeline[-1]['timestamp'] - day_timeline[0]['timestamp']).total_seconds()
+                    avg_interval = total_time_span / (len(day_timeline) - 1) / 3600
+                    end_time = day_timeline[end_idx]['timestamp'] + timedelta(hours=avg_interval)
+                else:
+                    end_time = day_timeline[end_idx]['timestamp'] + timedelta(minutes=5)
+            
+            if start_time and end_time:
+                block_duration = (end_time - start_time).total_seconds() / 3600
+                total_duration += block_duration
         
         return round(total_duration, 2)
     

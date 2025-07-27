@@ -57,6 +57,7 @@ def upload_tag_location_master(excel_path: str):
                 "근무구역여부" VARCHAR(10),
                 "근무" VARCHAR(10),
                 "라벨링" VARCHAR(20),
+                "Tag_Code" VARCHAR(10),
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """))
@@ -75,6 +76,7 @@ def upload_tag_location_master(excel_path: str):
         '근무구역여부': df['공간구분_code'],
         '근무': df['공간구분_NM'],
         '라벨링': df['라벨링_활동'],
+        'Tag_Code': df['Tag_Code'] if 'Tag_Code' in df.columns else df['공간구분_code'],  # Tag_Code 추가
         'created_at': datetime.now()
     })
     
