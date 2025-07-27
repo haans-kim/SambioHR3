@@ -288,7 +288,9 @@ class ConfidenceCalculatorV2:
         work_activities = [
             'work', 'meeting', 'training', 'preparation',  # 소문자 (신뢰지수 계산 결과)
             'WORK', 'MEETING', 'TRAINING', 'PREPARATION',  # 대문자 (태그 기반 규칙)
-            'FOCUSED_WORK', 'EQUIPMENT_OPERATION'  # 추가 작업 활동
+            'FOCUSED_WORK', 'EQUIPMENT_OPERATION',  # 추가 작업 활동
+            '업무', '회의', '교육', '준비',  # 한글 상태명
+            '업무(확실)'  # O 태그로 확정된 업무
         ]
         
         # 각 태그의 주요 활동 결정 및 연속 블록 찾기
@@ -319,11 +321,21 @@ class ConfidenceCalculatorV2:
             
             # 점심시간이나 TAKEOUT이 아닌 경우에만 작업 활동 체크
             if not is_lunch_time and not is_takeout:
-                # activity_code가 이미 설정되어 있으면 그것을 사용
+                # activity_code 또는 state 필드 확인
+                activity = None
                 if 'activity_code' in current_tag and current_tag['activity_code']:
-                    is_work_activity = current_tag['activity_code'] in work_activities
+                    activity = current_tag['activity_code']
+                elif 'state' in current_tag and current_tag['state']:
+                    activity = current_tag['state']
+                
+                if activity:
+                    # 이미 분류된 활동이 있으면 그것을 사용
+                    is_work_activity = activity in work_activities
+                    # 디버깅용 로그
+                    if i < 5:  # 처음 5개만 로그
+                        self.logger.debug(f"태그 {i}: activity={activity}, is_work={is_work_activity}")
                 else:
-                    # activity_code가 없으면 신뢰지수 계산
+                    # activity가 없으면 신뢰지수 계산
                     confidence = self.calculate_confidence(current_tag, next_tag, prev_tag)
                     
                     # 가장 높은 확률의 활동 선택
@@ -371,7 +383,8 @@ class ConfidenceCalculatorV2:
         confidence_scores = []
         
         # 작업 블록의 시간 계산
-        for start_idx, end_idx, activity_type in work_blocks:
+        self.logger.info(f"총 작업 블록 수: {len(work_blocks)}")
+        for block_idx, (start_idx, end_idx, activity_type) in enumerate(work_blocks):
             # 블록의 시작과 끝 시간
             start_time = tags_df.iloc[start_idx]['datetime']
             if end_idx < len(tags_df) - 1:
@@ -385,6 +398,10 @@ class ConfidenceCalculatorV2:
             # 블록의 총 시간 (분 단위)
             block_minutes = (end_time - start_time).total_seconds() / 60
             total_work_minutes += block_minutes
+            
+            # 첫 몇 개 블록만 로그
+            if block_idx < 3:
+                self.logger.info(f"작업 블록 {block_idx}: {start_time} ~ {end_time} ({block_minutes:.1f}분)")
             activity_minutes['work'] += block_minutes
             
             # 블록 내 태그들의 신뢰도 수집
@@ -460,5 +477,9 @@ class ConfidenceCalculatorV2:
             work_hours = max(0, max_work_hours)
         
         activity_breakdown = {k: v/60 for k, v in activity_minutes.items()}
+        
+        # 결과 로그
+        self.logger.info(f"작업시간 계산 완료: {work_hours:.2f}시간 (신뢰도: {avg_confidence:.2f})")
+        self.logger.info(f"활동별 시간: {activity_breakdown}")
         
         return work_hours, avg_confidence, activity_breakdown

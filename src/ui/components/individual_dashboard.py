@@ -3067,10 +3067,17 @@ class IndividualDashboard:
             # 신뢰지수 기반 근무시간 계산
             work_hours, avg_confidence, activity_breakdown = self.confidence_calculator.calculate_work_time(classified_data)
             
+            # 디버깅: 항상 activity_code 분포 출력
+            self.logger.info(f"calculate_work_time 호출 전 activity_code 분포: {classified_data['activity_code'].value_counts().to_dict()}")
+            self.logger.info(f"calculate_work_time 결과: work_hours={work_hours:.2f}, avg_confidence={avg_confidence:.2f}")
+            self.logger.info(f"activity_breakdown: {activity_breakdown}")
+            
             # 작업시간이 0인 경우 디버깅
             if work_hours == 0:
                 self.logger.warning(f"작업시간이 0으로 계산됨")
-                self.logger.info(f"activity_code 분포: {classified_data['activity_code'].value_counts().to_dict()}")
+                self.logger.info(f"classified_data 샘플 (처음 5개):")
+                for i, row in classified_data.head(5).iterrows():
+                    self.logger.info(f"  {row['datetime']} - {row['DR_NM'][:30]} - {row['activity_code']} ({row.get('duration_minutes', 0):.1f}분)")
                 work_activities = classified_data[classified_data['activity_code'].isin(['WORK', 'FOCUSED_WORK', 'EQUIPMENT_OPERATION', 'WORKING', 'WORK_PREPARATION', 'MEETING'])]
                 self.logger.info(f"작업 관련 활동 수: {len(work_activities)}")
                 if not work_activities.empty:
@@ -4017,14 +4024,24 @@ class IndividualDashboard:
         """활동별 시간 요약 패널 렌더링"""
         activity_summary = analysis_result['activity_summary']
         claim_data = analysis_result.get('claim_data', {})
+        work_time_analysis = analysis_result.get('work_time_analysis', {})
         
         # 주요 지표 계산 - 체류시간 사용
         total_minutes = analysis_result.get('total_hours', 0) * 60  # 체류시간을 분으로 변환
         
-        # 작업시간 (근무 관련 활동들)
-        work_codes = ['WORK', 'FOCUSED_WORK', 'EQUIPMENT_OPERATION', 'WORK_PREPARATION', 
-                     'WORKING', 'MEETING', 'TRAINING']
-        work_minutes = sum(activity_summary.get(code, 0) for code in work_codes)
+        # 작업시간 - work_time_analysis의 결과 우선 사용
+        if 'actual_work_hours' in work_time_analysis:
+            # 신뢰지수 계산기의 결과 사용
+            actual_work_hours = work_time_analysis['actual_work_hours']
+            work_minutes = actual_work_hours * 60
+            self.logger.info(f"[render_activity_summary] work_time_analysis 사용: {actual_work_hours:.2f}시간")
+        else:
+            # 폴백: activity_summary에서 직접 계산
+            work_codes = ['WORK', 'FOCUSED_WORK', 'EQUIPMENT_OPERATION', 'WORK_PREPARATION', 
+                         'WORKING', 'MEETING', 'TRAINING']
+            work_minutes = sum(activity_summary.get(code, 0) for code in work_codes)
+            actual_work_hours = work_minutes / 60
+            self.logger.info(f"[render_activity_summary] activity_summary에서 계산: {actual_work_hours:.2f}시간")
         
         # 식사시간 (모든 식사 활동 합계)
         meal_codes = ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']
@@ -4059,8 +4076,7 @@ class IndividualDashboard:
             claim_hours = 0
             claim_minutes = 0
         
-        # 실제 업무시간은 activity_summary에서 직접 계산
-        actual_work_hours = work_minutes / 60
+        # actual_work_hours는 위에서 이미 계산됨
         
         # 작업시간 + 식사시간이 체류시간을 초과하는 경우 조정
         if (work_minutes + meal_minutes) > total_minutes:

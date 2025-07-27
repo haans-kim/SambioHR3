@@ -218,6 +218,14 @@ class TagStateClassifier:
             elif duration_minutes < 10 or duration_minutes > 90:
                 return base_prob * 0.7
         
+        elif state == ActivityState.WORK:
+            if 30 <= duration_minutes <= 180:  # 30분 ~ 3시간
+                return min(base_prob * 1.2, 0.85) # 확률을 85%까지 올림
+            elif duration_minutes > 180: # 3시간 이상
+                return min(base_prob * 1.1, 0.75) # 장시간은 신뢰도 약간 감소
+            elif duration_minutes < 10: # 10분 미만
+                return base_prob * 0.8 # 짧은 시간은 업무 아닐 가능성
+
         return base_prob
     
     def _is_in_meal_window(self, current_time: time) -> bool:
