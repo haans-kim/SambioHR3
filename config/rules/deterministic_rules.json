@@ -1,0 +1,195 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2025-07-27",
+  "description": "확정적 규칙 설정 파일",
+  "legal_notice": "식사 시간 규칙은 법적 검토 후 변경될 수 있습니다",
+  "config": {
+    "meal_max_duration_minutes": 50,
+    "takeout_fixed_duration_minutes": 25,
+    "short_duration_threshold_minutes": 5,
+    "long_duration_threshold_minutes": 120,
+    "critical_confidence": 0.98,
+    "high_confidence": 0.95,
+    "medium_confidence": 0.9
+  },
+  "rule_definitions": {
+    "o_tag_rules": {
+      "priority": "CRITICAL",
+      "description": "O 태그 관련 규칙 (최우선)",
+      "rules": [
+        {
+          "id": "o_tag_exists",
+          "condition": "has_o_tag == true OR tag == 'O'",
+          "state": "WORK_CONFIRMED",
+          "confidence": 0.98,
+          "description": "O 태그 존재 시 업무 확정"
+        },
+        {
+          "id": "o_to_work_area",
+          "condition": "previous_tag == 'O' AND tag IN ['G1', 'G2', 'G3']",
+          "state": "WORK",
+          "confidence": 0.95,
+          "description": "O 태그 후 업무 공간 이동"
+        }
+      ]
+    },
+    "meal_rules": {
+      "priority": "HIGH",
+      "description": "식사 관련 규칙",
+      "rules": [
+        {
+          "id": "m1_onsite_meal",
+          "condition": "tag == 'M1'",
+          "state": "MEAL",
+          "confidence": 0.98,
+          "duration": "MIN(to_next_minutes, 60)",
+          "description": "현장 식사 - 다음 태그까지 또는 최대 60분"
+        },
+        {
+          "id": "m2_takeout",
+          "condition": "tag == 'M2'",
+          "state": "TRANSIT",
+          "confidence": 0.98,
+          "duration": 30,
+          "description": "테이크아웃 구매 - 고정 30분"
+        },
+        {
+          "id": "m2_to_n2_meal",
+          "condition": "previous_tag == 'M2' AND tag == 'N2'",
+          "state": "REST",
+          "confidence": 0.95,
+          "description": "테이크아웃 후 휴게실 식사"
+        }
+      ]
+    },
+    "entry_exit_rules": {
+      "priority": "HIGH",
+      "description": "출입 관련 규칙",
+      "rules": [
+        {
+          "id": "entry_gate",
+          "condition": "tag IN ['T2', 'T3'] AND is_entry_time",
+          "state": "ENTRY",
+          "confidence": 0.95,
+          "description": "출근 시간대 입문"
+        },
+        {
+          "id": "exit_gate",
+          "condition": "tag IN ['T2', 'T3'] AND is_exit_time",
+          "state": "EXIT",
+          "confidence": 0.95,
+          "description": "퇴근 시간대 출문"
+        }
+      ]
+    },
+    "meeting_rules": {
+      "priority": "MEDIUM",
+      "description": "회의 관련 규칙",
+      "rules": [
+        {
+          "id": "g3_long_stay",
+          "condition": "tag == 'G3' AND duration_minutes >= 30",
+          "state": "MEETING",
+          "confidence": 0.95,
+          "description": "회의실 장시간 체류"
+        },
+        {
+          "id": "shift_change_meeting",
+          "condition": "is_shift_change_time AND tag IN ['G1', 'G3']",
+          "state": "MEETING",
+          "confidence": 0.9,
+          "description": "교대 시간 인수인계"
+        }
+      ]
+    },
+    "education_rules": {
+      "priority": "MEDIUM",
+      "description": "교육 관련 규칙",
+      "rules": [
+        {
+          "id": "g4_long_stay",
+          "condition": "tag == 'G4' AND duration_minutes >= 60",
+          "state": "EDUCATION",
+          "confidence": 0.95,
+          "description": "교육장 장시간 체류"
+        }
+      ]
+    },
+    "preparation_rules": {
+      "priority": "MEDIUM",
+      "description": "준비/정리 관련 규칙",
+      "rules": [
+        {
+          "id": "entry_preparation",
+          "condition": "tag == 'G2' AND previous_tag == 'T2'",
+          "state": "PREPARATION",
+          "confidence": 0.95,
+          "description": "출근 후 작업 준비"
+        },
+        {
+          "id": "exit_preparation",
+          "condition": "tag == 'G2' AND next_tag == 'T3'",
+          "state": "PREPARATION",
+          "confidence": 0.95,
+          "description": "퇴근 전 정리"
+        }
+      ]
+    }
+  },
+  "time_windows": {
+    "meal_times": {
+      "breakfast": [
+        "06:30",
+        "09:00"
+      ],
+      "lunch": [
+        "11:20",
+        "13:20"
+      ],
+      "dinner": [
+        "17:00",
+        "20:00"
+      ],
+      "midnight": [
+        "23:30",
+        "01:00"
+      ]
+    },
+    "shift_times": {
+      "day": {
+        "start": "08:00",
+        "end": "20:30",
+        "entry_window": [
+          "07:00",
+          "09:00"
+        ],
+        "exit_window": [
+          "19:30",
+          "21:30"
+        ]
+      },
+      "night": {
+        "start": "20:00",
+        "end": "08:30",
+        "entry_window": [
+          "19:00",
+          "21:00"
+        ],
+        "exit_window": [
+          "07:30",
+          "09:30"
+        ]
+      }
+    },
+    "shift_change": {
+      "day_to_night": [
+        "20:00",
+        "20:30"
+      ],
+      "night_to_day": [
+        "08:00",
+        "08:30"
+      ]
+    }
+  }
+}

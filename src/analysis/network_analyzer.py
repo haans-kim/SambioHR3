@@ -131,76 +131,80 @@ class BuildingMapper:
             return None
             
         location_upper = location.upper()
+        location_lower = location.lower()
         
         import re
         
-        # 디버깅: P4_생산동_2층브릿지 확인
-        if 'P4_생산동' in location and '2층브릿지' in location:
-            print(f"DEBUG: P4 2층브릿지 발견: {location}")
+        # 1. 특수 케이스 먼저 처리
+        # P4 2층브릿지 -> P4_GATE
+        if 'P4' in location and ('2층브릿지' in location or '브릿지' in location_lower):
             return 'P4_GATE'
         
-        # 정문 체크를 먼저 수행 - 정문이 포함된 경우 체크
+        # 2. 스피드게이트 패턴 (P3, P4 등)
+        # "P4_생산동_SPEED GATE_OUT" 같은 패턴
+        speed_gate_pattern = re.search(r'P(\d).*SPEED\s*GATE', location_upper)
+        if speed_gate_pattern:
+            building_num = speed_gate_pattern.group(1)
+            return f'P{building_num}_GATE'
+        
+        # "P4 스피드게이트", "P4-스피드게이트" 같은 패턴
+        if '스피드게이트' in location_lower or '스피드 게이트' in location_lower:
+            p_pattern = re.search(r'P(\d)', location_upper)
+            if p_pattern:
+                building_num = p_pattern.group(1)
+                return f'P{building_num}_GATE'
+        
+        # BRIDGE 패턴 추가
+        if 'BRIDGE' in location_upper:
+            p_pattern = re.search(r'P(\d)', location_upper)
+            if p_pattern:
+                building_num = p_pattern.group(1)
+                return f'P{building_num}_GATE'
+        
+        # 3. 정문 패턴 처리
         if '정문' in location:
-            # P3 정문 패턴 - SPEED GATE 포함 처리
-            if 'P3' in location:
-                return 'P3_GATE'
-            # P4 정문 패턴 - SPEED GATE 포함 처리
-            elif 'P4' in location:
-                return 'P4_GATE'
-            # P2 정문 패턴
-            elif 'P2' in location:
-                return 'P2_GATE'
-            # P1 정문 패턴
-            elif 'P1' in location:
-                return 'P1_GATE'
-            # P5 정문 패턴
-            elif 'P5' in location:
-                return 'P5_GATE'
-            # 정문동 패턴
+            # "P3 정문", "P4_정문" 등
+            p_pattern = re.search(r'P(\d)', location_upper)
+            if p_pattern:
+                building_num = p_pattern.group(1)
+                return f'P{building_num}_GATE'
+            
+            # "정문동" -> MAIN_GATE
             elif '정문동' in location:
                 return 'MAIN_GATE'
-            # P 건물이 명시되지 않은 정문은 정문동으로
+            
+            # 단독 "정문" -> MAIN_GATE
             else:
                 return 'MAIN_GATE'
         
-        # P4 스피드 게이트 체크 - 다양한 패턴 인식 (정문이 아닌 경우)
-        if 'P4' in location_upper:
-            # SPEED GATE는 공백이 있으므로 별도 확인
-            if 'SPEED' in location_upper and 'GATE' in location_upper:
-                return 'P4_GATE'
-            elif any(keyword in location_upper for keyword in ['스피드게이트', '스피드 게이트', '-GATE', '_GATE', '브릿지', 'BRIDGE', '2층브릿지']):
-                return 'P4_GATE'
-        elif 'P4-GATE' in location_upper or 'P4_GATE' in location_upper:
-            return 'P4_GATE'
-        elif 'P4_생산동' in location and ('SPEED' in location_upper and 'GATE' in location_upper):
-            return 'P4_GATE'
+        # 4. GATE 키워드가 포함된 경우
+        if 'GATE' in location_upper or '게이트' in location:
+            # P 건물과 연관된 경우
+            p_pattern = re.search(r'P(\d)', location_upper)
+            if p_pattern:
+                building_num = p_pattern.group(1)
+                return f'P{building_num}_GATE'
+            
+            # 연관 건물이 없으면 MAIN_GATE
+            else:
+                return 'MAIN_GATE'
         
-        # P + 숫자 패턴을 찾기 (가장 구체적인 패턴)
-        # P4_생산동, P3_생산동, P2_DP동, P1-BP2 등의 패턴 매칭
-        # 단, SPEED GATE나 브릿지가 포함된 경우는 제외 (위에서 이미 처리)
-        if not any(keyword in location_upper for keyword in ['SPEED GATE', '브릿지', 'BRIDGE']):
-            p_building_pattern = re.search(r'P(\d)[\s\-_]', location_upper)
-            if p_building_pattern:
-                building_num = p_building_pattern.group(1)
-                building_code = f'P{building_num}'
-                if building_code in cls.BUILDING_COORDS_PCT:
-                    # P1-BP2 같은 경우 BP가 포함되어 있으면 P 건물로 인식
-                    if '-BP' in location_upper:
-                        return building_code
-                    # 일반적인 P 건물
-                    return building_code
-        
-        # BP 체크 (P 건물 패턴이 없는 경우) - BP2_2F도 BP로 매핑
-        if 'BP' in location_upper or 'B-P' in location_upper or '바이오프라자' in location_upper:
+        # 5. BP 체크 (BP2_2F 같은 패턴을 P2로 오인하지 않도록 먼저 체크)
+        if 'BP' in location_upper or 'B-P' in location_upper or '바이오플라자' in location_upper:
             return 'BP'
         
-        # 가상 이동 경로 처리
-        if 'MOVEMENT_TO_BP' in location_upper:
-            return 'BP'
-        elif 'BP_CAFETERIA' in location_upper:
-            return 'BP'
+        # 6. 일반 P 건물 패턴 (GATE가 아닌 경우)
+        # 이미 GATE 관련은 위에서 처리했으므로 일반 건물만
+        p_building_pattern = re.search(r'P(\d)(?:[\s\-_]|$)', location_upper)
+        if p_building_pattern:
+            building_num = p_building_pattern.group(1)
+            building_code = f'P{building_num}'
+            
+            # 좌표가 존재하는 건물인지 확인
+            if building_code in cls.BUILDING_COORDS_PCT:
+                return building_code
         
-        # 특정 건물 체크
+        # 7. 기타 건물들
         if 'HARMONY' in location_upper or '하모니' in location:
             return 'HARMONY'
         elif '연구동' in location or 'RESEARCH' in location_upper:
