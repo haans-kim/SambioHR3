@@ -205,28 +205,17 @@ class DataUploadComponent:
         # 구분선
         st.markdown("---")
         
-        # 옵션 설정과 데이터 조회를 같은 섹션에 배치
-        col1, col2 = st.columns([1, 1])
+        # 로드 옵션 섹션
+        with st.expander("⚙️ 로드 옵션", expanded=False):
+            save_to_db = st.checkbox("데이터베이스에도 저장", value=False, 
+                                   help="체크하면 Pickle 파일과 함께 SQLite 데이터베이스에도 저장됩니다.")
+            st.session_state.save_to_db = save_to_db
+            
+            process_data = st.checkbox("데이터 전처리 실행", value=False,
+                                     help="체크하면 데이터 로딩 후 전처리(분석)를 실행합니다. 대용량 데이터는 시간이 오래 걸릴 수 있습니다.")
+            st.session_state.process_data = process_data
         
-        with col1:
-            # 옵션 설정
-            with st.expander("로드 옵션", expanded=False):
-                save_to_db = st.checkbox("데이터베이스에도 저장", value=False, 
-                                       help="체크하면 Pickle 파일과 함께 SQLite 데이터베이스에도 저장됩니다.")
-                st.session_state.save_to_db = save_to_db
-                
-                process_data = st.checkbox("데이터 전처리 실행", value=False,
-                                         help="체크하면 데이터 로딩 후 전처리(분석)를 실행합니다. 대용량 데이터는 시간이 오래 걸릴 수 있습니다.")
-                st.session_state.process_data = process_data
-        
-        with col2:
-            # 데이터 조회 섹션
-            self._render_data_viewer_section()
-        
-        # 구분선
-        st.markdown("---")
-        
-        # 데이터 로드 버튼
+        # 액션 버튼들
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         with col1:
             if st.button("데이터 로드", type="primary", use_container_width=True):
@@ -245,6 +234,14 @@ class DataUploadComponent:
             if st.button("설정 저장", use_container_width=True):
                 self._save_upload_config()
                 st.success("설정이 저장되었습니다.")
+        
+        # 큰 구분선으로 섹션 분리
+        st.markdown("---")
+        st.markdown("---")
+        
+        # 데이터 조회 섹션 - 완전히 별도의 패널로
+        st.markdown("### 🔍 데이터 조회")
+        self._render_data_viewer_section()
     
     def _render_data_status_table(self):
         """데이터 상태 테이블 렌더링"""
@@ -635,8 +632,6 @@ class DataUploadComponent:
     
     def _render_data_viewer_section(self):
         """데이터 조회 섹션 렌더링"""
-        st.markdown("#### 데이터 조회")
-        
         # Pickle 파일이 있는 데이터 유형만 선택 가능하도록
         available_types = []
         for data_type, info in self.data_types.items():

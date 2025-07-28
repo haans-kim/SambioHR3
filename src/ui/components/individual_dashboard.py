@@ -3644,55 +3644,11 @@ class IndividualDashboard:
     
     def render_analysis_results(self, analysis_result: dict):
         """분석 결과 렌더링"""
-        st.markdown("---")
-        
-        # 세련된 분석 결과 헤더
-        st.markdown(f"""
-        <div style="background: linear-gradient(90deg, #f8f9fa 0%, #e9ecef 100%); 
-                    border-left: 4px solid #2E86AB; 
-                    padding: 1rem 1.5rem; 
-                    border-radius: 0 8px 8px 0; 
-                    margin: 1rem 0;">
-            <h3 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.3rem;">
-                {analysis_result['analysis_date']} Analysis Report
-            </h3>
-            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
-                Daily productivity and activity analysis
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # 기본 정보
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("출근 시각", analysis_result['work_start'].strftime('%H:%M'))
-        with col2:
-            st.metric("퇴근 시각", analysis_result['work_end'].strftime('%H:%M'))
-        with col3:
-            # 체류시간을 HH:MM 형식으로 변환
-            total_hours = analysis_result['total_hours']
-            hours = int(total_hours)
-            minutes = int((total_hours - hours) * 60)
-            st.metric("총 체류시간", f"{hours:02d}:{minutes:02d}")
-        with col4:
-            st.metric("태그 기록 수", f"{analysis_result['total_records']}건")
-        
         # 근태 정보 표시 (있는 경우)
         if 'attendance_data' in analysis_result:
             self.render_attendance_info(analysis_result['attendance_data'])
         
-        # 활동별 시간 요약
-        st.markdown("""
-        <div style="background: #f8f9fa; 
-                    border-left: 3px solid #2E86AB; 
-                    padding: 0.8rem 1.2rem; 
-                    border-radius: 0 6px 6px 0; 
-                    margin: 1rem 0 0.5rem 0;">
-            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
-                Activity Time Analysis
-            </h4>
-        </div>
-        """, unsafe_allow_html=True)
+        # 활동별 시간 요약 렌더링
         self.render_activity_summary(analysis_result)
         
         
@@ -3728,9 +3684,10 @@ class IndividualDashboard:
         st.markdown("### 📈 일일 활동 요약")
         
         work_analysis = analysis_result['work_time_analysis']
+        claim_data = analysis_result.get('claim_data', {})
         
         # 주요 지표 대시보드
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             st.metric(
@@ -3747,17 +3704,28 @@ class IndividualDashboard:
             )
         
         with col3:
+            # 근무 형태 표시 (WORKSCHDTYPNM 필드 사용)
+            work_type = claim_data.get('claim_type', '선택근무제')
+            st.metric(
+                "근무 형태",
+                work_type,
+                ""
+            )
+        
+        with col4:
             st.metric(
                 "데이터 신뢰도",
                 f"{analysis_result['data_quality']['overall_quality_score']}%",
                 "1.5%"
             )
         
-        with col4:
+        with col5:
+            # 초과근무 표시
+            overtime = claim_data.get('overtime', 0)
             st.metric(
-                "활동 다양성",
-                f"{len(work_analysis['work_breakdown'])}개",
-                "1개"
+                "초과근무",
+                f"{overtime:.1f}h" if overtime > 0 else "없음",
+                ""
             )
         
         # 활동 분류별 시간 분포 (프로그레스 바 스타일)
@@ -4341,8 +4309,29 @@ class IndividualDashboard:
         """, unsafe_allow_html=True)
         
         # Summary Panel
-        st.markdown('<div class="summary-panel">', unsafe_allow_html=True)
+
         st.markdown('<div class="summary-title">일일 활동 요약</div>', unsafe_allow_html=True)
+        
+        # 상단 5개 주요 지표 추가
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.metric("출근 시각", analysis_result['work_start'].strftime('%H:%M'))
+        with col2:
+            st.metric("퇴근 시각", analysis_result['work_end'].strftime('%H:%M'))
+        with col3:
+            # 근무 형태 표시 (WORKSCHDTYPNM 필드 사용)
+            work_type = claim_data.get('claim_type', '선택근무제')
+            st.metric("근무 형태", work_type)
+        with col4:
+            # 체류시간을 HH:MM 형식으로 변환
+            total_hours = analysis_result.get('total_hours', 0)
+            hours = int(total_hours)
+            minutes = int((total_hours - hours) * 60)
+            st.metric("총 체류시간", f"{hours:02d}:{minutes:02d}")
+        with col5:
+            st.metric("태그 기록 수", f"{analysis_result['total_records']}건")
+            
+        st.markdown("---")  # 구분선 추가
         
         # 근무제 정보 및 컴플라이언스 체크
         work_compliance = self.check_work_hour_compliance(
@@ -4351,11 +4340,12 @@ class IndividualDashboard:
             actual_work_hours
         )
         
-        # 근무제 정보 표시
+        # 근무제 정보 표시 - CLAIM 데이터의 실제 근무형태 사용
+        actual_work_type = claim_data.get('claim_type', '선택근무제')
         work_type_color = '#4CAF50' if work_compliance['is_compliant'] else '#F44336'
         st.markdown(f"""
             <div style="background: {work_type_color}22; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
-                <strong>근무제:</strong> {work_compliance['work_type_name']}
+                <strong>근무제:</strong> {actual_work_type}
                 {' ✅' if work_compliance['is_compliant'] else ' ⚠️ ' + ', '.join(work_compliance['violations'])}
             </div>
         """, unsafe_allow_html=True)
