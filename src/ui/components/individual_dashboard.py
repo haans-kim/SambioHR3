@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import sqlite3
 from sqlalchemy import text
 from .improved_gantt_chart import render_improved_gantt_chart
+from ...utils.recent_views_manager import RecentViewsManager, render_recent_views_section
 # HMM 제거됨 - 태그 기반 규칙만 사용
 # from .hmm_classifier import HMMActivityClassifier
 
@@ -96,6 +97,49 @@ class IndividualDashboard:
         except Exception as e:
             self.logger.warning(f"직원 목록 로드 실패: {e}")
             return []
+    
+    def get_employee_info(self, employee_id: str) -> dict:
+        """직원 정보 조회"""
+        try:
+            from ...database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
+            
+            # 조직현황 데이터에서 직원 정보 조회
+            org_data = pickle_manager.load_dataframe(name='organization_data')
+            if org_data is not None and '사번' in org_data.columns:
+                # 사번 형식 맞추기
+                if ' - ' in str(employee_id):
+                    employee_id = employee_id.split(' - ')[0].strip()
+                
+                # 직원 정보 찾기 (사번 타입 맞춰서 비교)
+                org_data['사번'] = org_data['사번'].astype(str)
+                emp_info = org_data[org_data['사번'] == str(employee_id)]
+                if not emp_info.empty:
+                    row = emp_info.iloc[0]
+                    return {
+                        'id': employee_id,
+                        'name': row.get('성명', employee_id),
+                        'department': row.get('조', row.get('팀', row.get('BU', 'N/A'))),
+                        'center': row.get('센터', 'N/A'),
+                        'bu': row.get('BU', 'N/A'),
+                        'team': row.get('팀', 'N/A'),
+                        'position': row.get('직급', 'N/A')
+                    }
+            
+            # 조직 데이터에서 찾을 수 없으면 기본값 반환
+            return {
+                'id': employee_id,
+                'name': employee_id,
+                'department': 'N/A',
+                'center': 'N/A',
+                'bu': 'N/A',
+                'team': 'N/A',
+                'position': 'N/A'
+            }
+            
+        except Exception as e:
+            self.logger.warning(f"직원 정보 조회 실패: {e}")
+            return {'id': employee_id, 'name': employee_id, 'department': 'N/A'}
     
     def get_organization_hierarchy(self):
         """조직 계층 구조 데이터 가져오기"""
@@ -3421,8 +3465,17 @@ class IndividualDashboard:
         """대시보드 렌더링"""
         st.markdown("### 👤 개인별 근무 분석")
         
+        # 최근 조회 관리자 초기화
+        if 'recent_views_manager' not in st.session_state:
+            st.session_state.recent_views_manager = RecentViewsManager()
+        
         # 직원 선택 및 기간 설정
         self.render_controls()
+        
+        # 빠른 조회가 트리거된 경우 자동 실행
+        if st.session_state.get('quick_load_triggered'):
+            st.session_state.quick_load_triggered = False
+            self.execute_analysis()
         
         # 분석 실행 버튼
         if st.button("🔍 분석 실행", type="primary"):
@@ -3451,11 +3504,14 @@ class IndividualDashboard:
                         employee_list,
                         key="individual_employee_select"
                     )
-                    # "사번 - 이름" 형식에서 사번만 추출
+                    # "사번 - 이름" 형식에서 사번과 이름 추출
                     if " - " in selected_employee:
                         employee_id = selected_employee.split(" - ")[0]
+                        employee_name = selected_employee.split(" - ")[1]
+                        st.session_state.selected_employee_name = employee_name
                     else:
                         employee_id = selected_employee
+                        st.session_state.selected_employee_name = None
                 else:
                     st.warning("로드된 직원 데이터가 없습니다.")
                     employee_id = st.text_input("직원 ID 입력", key="manual_employee_input")
@@ -3502,14 +3558,43 @@ class IndividualDashboard:
             st.session_state.analysis_date = selected_date
         
         with col3:
-            # 분석 옵션
-            analysis_options = st.multiselect(
-                "분석 옵션",
-                ["근무시간 분석", "식사시간 분석", "교대 근무 분석", "효율성 분석"],
-                default=["근무시간 분석", "효율성 분석"],
-                key="individual_analysis_options"
-            )
-            st.session_state.analysis_options = analysis_options
+            # 최근 조회 섹션
+            st.markdown("**최근 조회**")
+            
+            recent_views = st.session_state.recent_views_manager.get_recent_views()
+            
+            if not recent_views:
+                st.info("최근 조회 기록이 없습니다.")
+            else:
+                # 최근 조회 리스트 표시
+                for idx, view in enumerate(recent_views):
+                    # 사번 - 이름 형식으로 표시
+                    display_text = f"{view['employee_id']} - {view['employee_name']}"
+                    
+                    col_btn, col_del = st.columns([5, 1])
+                    with col_btn:
+                        if st.button(
+                            display_text,
+                            key=f"recent_{idx}",
+                            use_container_width=True,
+                            help=f"📅 {view['analysis_date']} | 🏢 {view.get('department', 'N/A')}"
+                        ):
+                            # 세션 상태에 선택된 정보 저장
+                            st.session_state['selected_employee'] = view['employee_id']
+                            st.session_state['selected_employee_name'] = view['employee_name']
+                            st.session_state['analysis_date'] = datetime.fromisoformat(view['analysis_date']).date()
+                            st.session_state['quick_load_triggered'] = True
+                            st.rerun()
+                    
+                    with col_del:
+                        if st.button("❌", key=f"del_{idx}", help="삭제"):
+                            st.session_state.recent_views_manager.remove_view(view['view_key'])
+                            st.rerun()
+                
+                # 전체 삭제 버튼
+                if st.button("🗑️ 전체 삭제", key="clear_all_recent", use_container_width=True):
+                    st.session_state.recent_views_manager.clear_all()
+                    st.rerun()
     
     def execute_analysis(self):
         """분석 실행"""
@@ -3560,6 +3645,21 @@ class IndividualDashboard:
                 # 근태 데이터를 분석 결과에 추가
                 if attendance_data is not None and not attendance_data.empty:
                     analysis_result['attendance_data'] = attendance_data
+                
+                # 직원 정보 추가 (최근 조회 기록 저장용)
+                employee_info = self.get_employee_info(employee_id)
+                analysis_result['employee_info'] = employee_info
+                
+                # 최근 조회 기록에 추가
+                if 'recent_views_manager' in st.session_state:
+                    employee_name = employee_info.get('name', employee_id)
+                    department = employee_info.get('department', 'N/A')
+                    st.session_state.recent_views_manager.add_view(
+                        employee_id=employee_id,
+                        employee_name=employee_name,
+                        analysis_date=selected_date.isoformat(),
+                        department=department
+                    )
                 
                 # 결과 렌더링
                 self.render_analysis_results(analysis_result)
