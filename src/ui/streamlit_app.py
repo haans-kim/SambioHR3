@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, date
 import logging
 import sys
 from pathlib import Path
+from src.utils.recent_views_manager import RecentViewsManager
 
 # 프로젝트 루트 경로 추가
 project_root = Path(__file__).parent.parent.parent
@@ -177,36 +178,49 @@ class SambioHumanApp:
         </div>
         """, unsafe_allow_html=True)
         
+        # 데이터 현황 가져오기
+        try:
+            from src.database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
+            
+            # 조직현황 데이터
+            org_data = pickle_manager.load_dataframe(name='organization_data')
+            total_employees = len(org_data) if org_data is not None else 0
+            
+            # 조직 구조 분석
+            if org_data is not None:
+                center_count = org_data['센터'].nunique() if '센터' in org_data.columns else 0
+                bu_count = org_data['BU'].nunique() if 'BU' in org_data.columns else 0
+                team_count = org_data['팀'].nunique() if '팀' in org_data.columns else 0
+            else:
+                center_count = bu_count = team_count = 0
+            
+            # 가용 데이터 기간 하드코딩
+            date_range = "2025.06.01 ~ 2025.06.30"
+        except:
+            total_employees = 0
+            center_count = bu_count = team_count = 0
+            date_range = "데이터 없음"
+        
         # 주요 KPI 카드
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2 = st.columns(2)
         
         with col1:
             st.metric(
-                label="분석 완료 직원",
-                value="1,234",
-                delta="12"
+                label="전체 대상 직원",
+                value=f"{total_employees:,}명"
+            )
+            st.metric(
+                label="가용 데이터 기간",
+                value=date_range
             )
         
         with col2:
             st.metric(
                 label="활성 조직",
-                value="56",
-                delta="3"
+                value=f"{center_count}개 센터"
             )
-        
-        with col3:
-            st.metric(
-                label="평균 효율성",
-                value="89.5%",
-                delta="2.3%"
-            )
-        
-        with col4:
-            st.metric(
-                label="시스템 가동률",
-                value="99.8%",
-                delta="0.1%"
-            )
+            st.caption(f"{bu_count}개 BU, {team_count}개 팀")
         
         # 시스템 개요
         st.markdown("---")
@@ -227,10 +241,20 @@ class SambioHumanApp:
             """, unsafe_allow_html=True)
             
             st.markdown("""
-            • 개인별 분석: 2교대 근무 패턴 분석
-            • 조직별 분석: 팀/부서 단위 생산성 분석  
-            • 조직 분석: 워크플로우 최적화 분석
-            • 4번 식사시간: 정교한 활동 분류 처리
+            • **개인별 근무 분석**  
+              실제 근무시간과 신고시간 비교, 신뢰지수 계산
+              
+            • **2교대 근무체계 지원**  
+              주간(08:00-20:00)/야간(20:00-08:00) 근무 분석
+              
+            • **태그 기반 활동 분류**  
+              T1(work)/T2(non-work), M1/M2(식사) 태그 시스템
+              
+            • **자동 식사시간 인식**  
+              4개 식사(조/중/석/야식) 시간대와 위치 매칭
+              
+            • **활동 분류 규칙 관리**  
+              DR_NM 기반 활동 분류 규칙 편집 기능
             """)
         
         with col2:
@@ -247,13 +271,23 @@ class SambioHumanApp:
             """, unsafe_allow_html=True)
             
             st.markdown("""
-            • 태그 데이터: 위치 기반 활동 추적
-            • 근무시간 분석: 실제 작업시간 신뢰도 측정
-            • 조직 효율성: 부서별 성과 지표 
-            • 교대 근무: 주간/야간 교대 최적화
+            • **대용량 데이터 처리**  
+              100MB+ Excel 파일 및 수백만건 태그 데이터
+              
+            • **피클 캐싱 시스템**  
+              빠른 데이터 로드를 위한 중간 저장소
+              
+            • **다차원 분석**  
+              개인/팀/BU/센터 단위 계층적 분석
+              
+            • **장비 사용 통합**  
+              LAMS/MES 시스템 로그 연동
+              
+            • **근태 데이터 연계**  
+              휴가/출장 등 근태 정보 반영
             """)
         
-        # 최근 활동
+        # 시스템 특징
         st.markdown("---")
         st.markdown("""
         <div style="background: #f8f9fa; 
@@ -262,20 +296,30 @@ class SambioHumanApp:
                     border-radius: 0 6px 6px 0; 
                     margin: 1rem 0 0.5rem 0;">
             <h4 style="margin: 0; color: #495057; font-weight: 600; font-size: 1.1rem;">
-                최근 활동
+                시스템 특징
             </h4>
         </div>
         """, unsafe_allow_html=True)
         
-        recent_activities = [
-            {"시간": "2025-01-18 14:30", "활동": "개인별 분석 완료", "대상": "직원 ID: E001234", "결과": "성공"},
-            {"시간": "2025-01-18 14:15", "활동": "데이터 업로드", "대상": "tag_data_24.6.xlsx", "결과": "성공"},
-            {"시간": "2025-01-18 13:45", "활동": "태그 분류 처리", "대상": "100개 태그", "결과": "성공"},
-            {"시간": "2025-01-18 13:30", "활동": "조직 분석", "대상": "Production Team", "결과": "성공"}
-        ]
+        col1, col2 = st.columns(2)
         
-        df_activities = pd.DataFrame(recent_activities)
-        st.dataframe(df_activities, use_container_width=True)
+        with col1:
+            st.markdown("""
+            **핵심 기술**
+            - SQLite 데이터베이스 (13개 테이블)
+            - Streamlit 웹 인터페이스
+            - Pandas/NumPy 데이터 처리
+            - Plotly 시각화
+            """)
+            
+        with col2:
+            st.markdown("""
+            **주요 개발 성과**
+            - 신뢰지수 기반 근무시간 계산 알고리즘
+            - 2교대 근무 패턴 자동 인식
+            - 실시간 데이터 처리 최적화
+            - 최근 조회 기록 관리 기능
+            """)
     
     def render_individual_analysis(self):
         """개인 분석 페이지 렌더링"""
