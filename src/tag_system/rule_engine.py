@@ -31,7 +31,7 @@ class RuleConfig:
     """규칙 설정"""
     # 식사 시간 설정
     meal_max_duration_minutes: int = 60  # M1 최대 식사 시간
-    takeout_fixed_duration_minutes: int = 30  # M2 테이크아웃 고정 시간
+    takeout_fixed_duration_minutes: int = 10  # M2 테이크아웃 고정 시간
     
     # 시간 임계값
     short_duration_threshold_minutes: int = 5  # 경유로 판단하는 짧은 체류

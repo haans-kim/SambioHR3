@@ -25,6 +25,7 @@ from src.ui.components.organization_dashboard import OrganizationDashboard
 from src.ui.components.data_upload import DataUploadComponent
 from src.ui.components.model_config import ModelConfigComponent
 from src.ui.components.transition_rule_editor import TransitionRuleEditor
+from src.ui.components.rule_editor import RuleEditorComponent
 try:
     from src.ui.components.network_analysis_dashboard_optimized import NetworkAnalysisDashboard
 except ImportError:
@@ -108,8 +109,8 @@ class SambioHumanApp:
             if st.button("모델 설정", use_container_width=True):
                 st.session_state.current_page = "모델 설정"
                 
-            if st.button("전이 룰 관리", use_container_width=True):
-                st.session_state.current_page = "전이 룰 관리"
+            if st.button("활동 분류 규칙 관리", use_container_width=True):
+                st.session_state.current_page = "활동 분류 규칙 관리"
                 
             if st.button("네트워크 분석", use_container_width=True):
                 st.session_state.current_page = "네트워크 분석"
@@ -155,8 +156,8 @@ class SambioHumanApp:
             self.render_data_upload()
         elif current_page == '모델 설정':
             self.render_model_config()
-        elif current_page == '전이 룰 관리':
-            self.render_transition_rules()
+        elif current_page == '활동 분류 규칙 관리':
+            self.render_activity_rules()
         elif current_page == '네트워크 분석':
             self.render_network_analysis()
         elif current_page == '실시간 모니터링':
@@ -352,24 +353,10 @@ class SambioHumanApp:
         else:
             st.error("모델 설정 컴포넌트가 초기화되지 않았습니다.")
     
-    def render_transition_rules(self):
-        """전이 룰 관리 페이지 렌더링"""
-        # 세련된 비즈니스 스타일 헤더
-        st.markdown("""
-        <div style="background: linear-gradient(90deg, #2E86AB 0%, #4A9BC6 100%); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">
-                Transition Rules
-            </h2>
-            <p style="color: rgba(255,255,255,0.9); margin: 0.3rem 0 0 0; font-size: 0.95rem;">
-                활동 전이 규칙 관리
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if self.transition_rule_editor:
-            self.transition_rule_editor.render()
-        else:
-            st.error("전이 룰 편집기가 초기화되지 않았습니다.")
+    def render_activity_rules(self):
+        """활동 분류 규칙 관리 페이지 렌더링"""
+        rule_editor = RuleEditorComponent()
+        rule_editor.render()
     
     def render_network_analysis(self):
         """네트워크 분석 페이지 렌더링"""
