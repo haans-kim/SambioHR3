@@ -4190,6 +4190,39 @@ class IndividualDashboard:
         meal_codes = ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']
         meal_minutes = sum(activity_summary.get(code, 0) for code in meal_codes)
         
+        # 실제 식사 데이터에서 직접 계산
+        meal_data = self.get_meal_data(analysis_result.get('employee_id'), analysis_result.get('analysis_date'))
+        if meal_data is not None and not meal_data.empty:
+            # 실제 식사별로 시간 계산
+            calculated_meal_minutes = 0
+            date_column = '취식일시' if '취식일시' in meal_data.columns else 'meal_datetime'
+            
+            for _, meal in meal_data.iterrows():
+                meal_type = meal.get('식사대분류', meal.get('meal_category', ''))
+                배식구 = meal.get('배식구', '')
+                테이크아웃 = meal.get('테이크아웃', '')
+                
+                # 배식구 기준 테이크아웃 판단
+                is_takeout = False
+                if 배식구:
+                    if any(keyword in str(배식구).lower() for keyword in ['테이크아웃', 'takeout', 'take out', 'to go']):
+                        is_takeout = True
+                if str(테이크아웃).lower() in ['y', 'yes', '1', 'true']:
+                    is_takeout = True
+                
+                if is_takeout:
+                    # 테이크아웃은 10분으로 계산
+                    calculated_meal_minutes += 10
+                    self.logger.info(f"[render_activity_summary] 테이크아웃 식사: 10분")
+                else:
+                    # 일반 식사는 30분으로 계산
+                    calculated_meal_minutes += 30
+                    self.logger.info(f"[render_activity_summary] 일반 식사: 30분")
+            
+            self.logger.info(f"[render_activity_summary] 식사 데이터 기준 총 식사시간: {calculated_meal_minutes}분")
+            # 실제 식사 데이터 기준으로 사용
+            meal_minutes = calculated_meal_minutes
+        
         # 디버깅: 식사시간 계산 상세
         self.logger.info(f"[render_activity_summary] 식사시간 계산:")
         for code in meal_codes:
