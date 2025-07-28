@@ -13,11 +13,12 @@ from datetime import datetime, timedelta, date
 import logging
 import sys
 from pathlib import Path
-from src.utils.recent_views_manager import RecentViewsManager
 
 # 프로젝트 루트 경로 추가
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
+
+from src.utils.recent_views_manager import RecentViewsManager
 
 from src.database import get_database_manager
 from src.analysis import IndividualAnalyzer, OrganizationAnalyzer

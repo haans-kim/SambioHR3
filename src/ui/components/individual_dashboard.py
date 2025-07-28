@@ -3499,9 +3499,24 @@ class IndividualDashboard:
             
             if selection_method == "목록에서 선택":
                 if employee_list:
+                    # 세션 상태에서 선택된 직원 확인
+                    default_index = 0
+                    if 'selected_employee' in st.session_state and st.session_state.selected_employee:
+                        # 선택된 직원 ID로 리스트에서 매칭되는 항목 찾기
+                        for idx, emp in enumerate(employee_list):
+                            if " - " in emp:
+                                emp_id = emp.split(" - ")[0]
+                                if emp_id == st.session_state.selected_employee:
+                                    default_index = idx
+                                    break
+                            elif emp == st.session_state.selected_employee:
+                                default_index = idx
+                                break
+                    
                     selected_employee = st.selectbox(
                         f"직원 선택 (총 {len(employee_list)}명)",
                         employee_list,
+                        index=default_index,
                         key="individual_employee_select"
                     )
                     # "사번 - 이름" 형식에서 사번과 이름 추출
@@ -3537,8 +3552,14 @@ class IndividualDashboard:
             if date_range_info:
                 st.info(f"데이터 범위: {date_range_info['min_date']} ~ {date_range_info['max_date']}")
                 
-                # 기본값을 데이터 범위 내로 설정
-                default_date = min(date_range_info['max_date'], date.today())
+                # 세션 상태에서 날짜 확인, 없으면 기본값 설정
+                if 'analysis_date' in st.session_state and st.session_state.analysis_date:
+                    default_date = st.session_state.analysis_date
+                    # 데이터 범위 내에 있는지 확인
+                    if default_date < date_range_info['min_date'] or default_date > date_range_info['max_date']:
+                        default_date = min(date_range_info['max_date'], date.today())
+                else:
+                    default_date = min(date_range_info['max_date'], date.today())
                 
                 selected_date = st.date_input(
                     "날짜 선택",
@@ -3549,9 +3570,14 @@ class IndividualDashboard:
                 )
             else:
                 # 데이터가 없을 경우 기본값 사용
+                if 'analysis_date' in st.session_state and st.session_state.analysis_date:
+                    default_date = st.session_state.analysis_date
+                else:
+                    default_date = date.today()
+                    
                 selected_date = st.date_input(
                     "날짜 선택",
-                    value=date.today(),
+                    value=default_date,
                     key="individual_analysis_date_default"
                 )
             
@@ -3571,25 +3597,18 @@ class IndividualDashboard:
                     # 사번 - 이름 형식으로 표시
                     display_text = f"{view['employee_id']} - {view['employee_name']}"
                     
-                    col_btn, col_del = st.columns([5, 1])
-                    with col_btn:
-                        if st.button(
-                            display_text,
-                            key=f"recent_{idx}",
-                            use_container_width=True,
-                            help=f"📅 {view['analysis_date']} | 🏢 {view.get('department', 'N/A')}"
-                        ):
-                            # 세션 상태에 선택된 정보 저장
-                            st.session_state['selected_employee'] = view['employee_id']
-                            st.session_state['selected_employee_name'] = view['employee_name']
-                            st.session_state['analysis_date'] = datetime.fromisoformat(view['analysis_date']).date()
-                            st.session_state['quick_load_triggered'] = True
-                            st.rerun()
-                    
-                    with col_del:
-                        if st.button("❌", key=f"del_{idx}", help="삭제"):
-                            st.session_state.recent_views_manager.remove_view(view['view_key'])
-                            st.rerun()
+                    if st.button(
+                        display_text,
+                        key=f"recent_{idx}",
+                        use_container_width=True,
+                        help=f"📅 {view['analysis_date']} | 🏢 {view.get('department', 'N/A')}"
+                    ):
+                        # 세션 상태에 선택된 정보 저장
+                        st.session_state['selected_employee'] = view['employee_id']
+                        st.session_state['selected_employee_name'] = view['employee_name']
+                        st.session_state['analysis_date'] = datetime.fromisoformat(view['analysis_date']).date()
+                        st.session_state['quick_load_triggered'] = True
+                        st.rerun()
                 
                 # 전체 삭제 버튼
                 if st.button("🗑️ 전체 삭제", key="clear_all_recent", use_container_width=True):
@@ -4351,7 +4370,7 @@ class IndividualDashboard:
         # 비업무시간 (비근무 + 휴식)
         non_work_minutes = activity_summary.get('NON_WORK', 0) + activity_summary.get('REST', 0)
         
-        # Claim 시간
+        # 근태기록시간
         if claim_data:
             claim_hours = claim_data.get('claim_hours', 0)
             claim_minutes = claim_hours * 60
@@ -4369,7 +4388,7 @@ class IndividualDashboard:
             non_work_total = (meal_minutes + rest_minutes + movement_minutes + commute_minutes) / 60
             actual_work_hours = max(0, analysis_result['total_hours'] - non_work_total)
         
-        # 업무 효율성 (실제 업무시간 / Claim 시간)
+        # 업무 효율성 (실제 업무시간 / 근태기록시간)
         efficiency = (actual_work_hours * 60 / claim_minutes * 100) if claim_minutes > 0 else 0
         
         # 일일 활동 요약 스타일
@@ -4487,9 +4506,9 @@ class IndividualDashboard:
         
         with col1:
             if claim_hours > 0:
-                st.markdown(f"**Claim 시간:** {claim_hours:.1f}h")
+                st.markdown(f"**근태기록시간:** {claim_hours:.1f}h")
             else:
-                st.markdown("**Claim 시간:** 데이터 없음")
+                st.markdown("**근태기록시간:** 데이터 없음")
         
         with col2:
             # 진행 바 HTML
@@ -5297,11 +5316,11 @@ class IndividualDashboard:
                 return f"{hours:.1f}h"
             return str(hours)
         
-        # 실제 근무시간과 Claim 시간 비교
+        # 실제 근무시간과 근태기록시간 비교
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("**🏷️ Claim 데이터**")
+            st.markdown("**🏷️ 근태기록 데이터**")
             st.write(f"• 신고 출근: {claim_data['claim_start']}")
             st.write(f"• 신고 퇴근: {claim_data['claim_end']}")
             st.write(f"• 신고 근무시간: {format_hours_to_hhmm(claim_data['claim_hours'])}")
@@ -5334,7 +5353,7 @@ class IndividualDashboard:
         """시간대별 비교 차트"""
         fig = go.Figure()
         
-        # Claim 시간대
+        # 근태기록 시간대
         claim_start_str = str(claim_data['claim_start'])
         claim_end_str = str(claim_data['claim_end'])
         
@@ -5361,7 +5380,7 @@ class IndividualDashboard:
         actual_start = analysis_result['work_start'].hour + analysis_result['work_start'].minute / 60
         actual_end = analysis_result['work_end'].hour + analysis_result['work_end'].minute / 60
         
-        # Claim 근무시간
+        # 근태기록 근무시간
         claim_start = claim_start_hour + claim_start_min / 60
         claim_end = claim_end_hour + claim_end_min / 60
         
@@ -5381,7 +5400,7 @@ class IndividualDashboard:
             x=[claim_end - claim_start],
             y=['신고 근무'],
             orientation='h',
-            name='Claim',
+            name='근태기록',
             marker_color='lightgreen',
             base=claim_start,
             text=f"{claim_start_hour:02d}:{claim_start_min:02d} - {claim_end_hour:02d}:{claim_end_min:02d}",
