@@ -4312,27 +4312,6 @@ class IndividualDashboard:
 
         st.markdown('<div class="summary-title">일일 활동 요약</div>', unsafe_allow_html=True)
         
-        # 상단 5개 주요 지표 추가
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            st.metric("출근 시각", analysis_result['work_start'].strftime('%H:%M'))
-        with col2:
-            st.metric("퇴근 시각", analysis_result['work_end'].strftime('%H:%M'))
-        with col3:
-            # 근무 형태 표시 (WORKSCHDTYPNM 필드 사용)
-            work_type = claim_data.get('claim_type', '선택근무제')
-            st.metric("근무 형태", work_type)
-        with col4:
-            # 체류시간을 HH:MM 형식으로 변환
-            total_hours = analysis_result.get('total_hours', 0)
-            hours = int(total_hours)
-            minutes = int((total_hours - hours) * 60)
-            st.metric("총 체류시간", f"{hours:02d}:{minutes:02d}")
-        with col5:
-            st.metric("태그 기록 수", f"{analysis_result['total_records']}건")
-            
-        st.markdown("---")  # 구분선 추가
-        
         # 근무제 정보 및 컴플라이언스 체크
         work_compliance = self.check_work_hour_compliance(
             analysis_result['employee_id'], 
@@ -4340,15 +4319,35 @@ class IndividualDashboard:
             actual_work_hours
         )
         
-        # 근무제 정보 표시 - CLAIM 데이터의 실제 근무형태 사용
+        # 근무제 정보와 주요 지표를 하나의 박스에 통합 표시
         actual_work_type = claim_data.get('claim_type', '선택근무제')
         work_type_color = '#4CAF50' if work_compliance['is_compliant'] else '#F44336'
+        
+        # 근무제 정보 박스
         st.markdown(f"""
-            <div style="background: {work_type_color}22; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
-                <strong>근무제:</strong> {actual_work_type}
+            <div style="background: {work_type_color}22; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                <strong style="font-size: 1.1rem;">근무제:</strong> 
+                <span style="font-size: 1.1rem;">{actual_work_type}</span>
                 {' ✅' if work_compliance['is_compliant'] else ' ⚠️ ' + ', '.join(work_compliance['violations'])}
             </div>
         """, unsafe_allow_html=True)
+        
+        # 4개 메트릭 표시 (근무 형태 제외)
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("출근 시각", analysis_result['work_start'].strftime('%H:%M'))
+        with col2:
+            st.metric("퇴근 시각", analysis_result['work_end'].strftime('%H:%M'))
+        with col3:
+            # 체류시간을 HH:MM 형식으로 변환
+            total_hours = analysis_result.get('total_hours', 0)
+            hours = int(total_hours)
+            minutes = int((total_hours - hours) * 60)
+            st.metric("총 체류시간", f"{hours:02d}:{minutes:02d}")
+        with col4:
+            st.metric("태그 기록 수", f"{analysis_result['total_records']}건")
+        
+        st.markdown("---")  # 구분선 추가
         
         # 메인 진행 바
         col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
