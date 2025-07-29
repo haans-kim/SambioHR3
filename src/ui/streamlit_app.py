@@ -78,13 +78,13 @@ class SambioHumanApp:
         """애플리케이션 실행"""
         # 페이지 설정
         st.set_page_config(
-            page_title="Sambio Human Analytics",
+            page_title="AI 기반 인력운영 고도화",
             page_icon="📊",
             layout="wide",
             initial_sidebar_state="expanded"
         )
         
-        # 사이드바 네비게이션
+        # 사이드바 네비게이션ㄴ
         self.render_sidebar()
         
         # 메인 콘텐츠 렌더링
