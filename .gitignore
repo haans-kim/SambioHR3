@@ -104,4 +104,7 @@ node_modules/
 # OS specific
 # Task files
 tasks.json
-tasks/ 
+tasks/
+
+# Claude Code 캐시
+.claude_cache/ 

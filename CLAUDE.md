@@ -105,3 +105,37 @@ Key states include: WORK, FOCUSED_WORK, EQUIPMENT_OPERATION, MEETING, BREAKFAST,
 - Version 1.0.0 (2025-01-18)
 - Basic functionality implemented
 - Active development per doc/plan.md (Phases 1-4 complete)
+
+## Development History & Documentation
+
+### 개발 일지 위치
+- `/doc/dev_logs/`: 일별 개발 로그
+- `/doc/changes/`: 주요 변경사항 기록
+- `CHANGELOG.md`: 버전별 변경사항
+
+### 문서화 규칙
+1. **일일 작업 기록**: `/doc/dev_logs/YYYY-MM-DD.md`
+2. **기능별 문서**: `/doc/features/기능명.md`
+3. **변경사항 추적**: Git 커밋 메시지 + 상세 문서
+
+### 개발 컨텍스트 유지 방법
+1. **작업 시작 시**: 이전 작업 내용 확인 (`/doc/dev_logs/`)
+2. **작업 중**: TodoWrite 도구로 진행사항 추적
+3. **작업 완료 시**: 일일 로그 업데이트, 변경사항 문서화
+
+### 주요 작업 영역
+- **최근 작업**: 전환 규칙 통합 (transition_rule_integration_summary.md)
+- **진행 중**: 룰 관리 시스템 개선
+- **계획됨**: doc/plan.md Phase 5-6
+
+### 기술 문서 위치
+- **데이터베이스 설계**: `/doc/technical/database_design.md`
+- **API 설계**: `/doc/technical/api_design.md`
+- **시스템 아키텍처**: 컴포넌트 기반 (Streamlit)
+- **변경 추적 가이드**: `/doc/technical/change_tracking_guide.md`
+
+### API 변경 추적
+Claude Code 작업 시 자동으로 API/DB 변경사항이 추적됩니다:
+- **추적 스크립트**: `/scripts/track_changes.py`
+- **변경 로그**: `/doc/changes/LATEST.md`
+- **수동 실행**: `python scripts/track_changes.py`

@@ -78,7 +78,7 @@ class SambioHumanApp:
         """애플리케이션 실행"""
         # 페이지 설정
         st.set_page_config(
-            page_title="Sambio Human Analytics",
+            page_title="AI 기반 인력운영 고도화",
             page_icon="📊",
             layout="wide",
             initial_sidebar_state="expanded"
@@ -142,7 +142,7 @@ class SambioHumanApp:
             # 버전 정보
             st.markdown("---")
             st.markdown("**Version:** 1.0.0")
-            st.markdown("**Updated:** 2025-01-18")
+            st.markdown("**Updated:** 2025-07-30")
     
     def render_main_content(self):
         """메인 콘텐츠 렌더링"""
@@ -171,7 +171,7 @@ class SambioHumanApp:
         st.markdown("""
         <div style="background: linear-gradient(90deg, #2E86AB 0%, #4A9BC6 100%); padding: 2rem; border-radius: 10px; margin-bottom: 2rem;">
             <h1 style="color: white; margin: 0; font-size: 2.5rem; font-weight: 600;">
-                Sambio Human Analytics
+                AI 기반 인력운영 고도화
             </h1>
             <p style="color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0; font-size: 1.1rem;">
                 Enterprise Workforce Intelligence Platform
