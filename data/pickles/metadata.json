@@ -543,5 +543,54 @@
       "취식이벤트": "category",
       "취식번호": "int32"
     }
+  },
+  "data\\pickles\\lams_data_v20250729_175725.pkl.gz": {
+    "name": "lams_data",
+    "version": "20250729_175725",
+    "file_path": "data\\pickles\\lams_data_v20250729_175725.pkl.gz",
+    "rows": 2245,
+    "columns": 3,
+    "size_mb": 0.012242317199707031,
+    "created_at": "2025-07-29T17:57:26.028030",
+    "data_hash": null,
+    "description": "Combined from 1 files",
+    "dtypes": {
+      "User_No": "float64",
+      "DATE": "object",
+      "Task": "object"
+    }
+  },
+  "data\\pickles\\eam_data_v20250729_175755.pkl.gz": {
+    "name": "eam_data",
+    "version": "20250729_175755",
+    "file_path": "data\\pickles\\eam_data_v20250729_175755.pkl.gz",
+    "rows": 213700,
+    "columns": 4,
+    "size_mb": 1.0294342041015625,
+    "created_at": "2025-07-29T17:57:56.881852",
+    "data_hash": null,
+    "description": "Combined from 1 files",
+    "dtypes": {
+      "ATTEMPTDATE": "object",
+      "USERNO": "object",
+      "ATTEMPTRESULT": "object",
+      "APP": "object"
+    }
+  },
+  "data\\pickles\\mes_data_v20250729_175835.pkl.gz": {
+    "name": "mes_data",
+    "version": "20250729_175835",
+    "file_path": "data\\pickles\\mes_data_v20250729_175835.pkl.gz",
+    "rows": 76040,
+    "columns": 3,
+    "size_mb": 0.2257556915283203,
+    "created_at": "2025-07-29T17:58:36.255698",
+    "data_hash": null,
+    "description": "Combined from 1 files",
+    "dtypes": {
+      "session": "object",
+      "login_time": "datetime64[ns]",
+      "USERNo": "int64"
+    }
   }
 }

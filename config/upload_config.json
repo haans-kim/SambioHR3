@@ -35,11 +35,6 @@
       "display_name": "식사 태그 데이터",
       "process_func_name": "process_meal_data"
     },
-    "조직현황 자료": {
-      "table_name": "organization_data",
-      "display_name": "조직현황",
-      "process_func_name": "process_organization_data"
-    },
     "EAM": {
       "table_name": "eam_data",
       "display_name": "EAM(안전설비시스템) 로그인 이력",
@@ -54,13 +49,18 @@
       "table_name": "mes_data",
       "display_name": "MES(생산시스템) 로그인 이력",
       "process_func_name": "process_mes_data"
+    },
+    "조직현황 자료": {
+      "table_name": "organization_data",
+      "display_name": "조직현황",
+      "process_func_name": "process_organization_data"
     }
   },
   "upload_config": {
     "Tagging Data": {
       "files": [],
       "file_names": [
-        "입출문기록(25.6).xlsx"
+        "Tag_data_25.6.xlsx"
       ],
       "pickle_exists": true,
       "dataframe_name": "tag_data",
@@ -70,7 +70,7 @@
     "태깅지점": {
       "files": [],
       "file_names": [
-        "태깅지점(IG정리)_20250724_1100.xlsx"
+        "Tag_Location_20250724_1100.xlsx"
       ],
       "pickle_exists": true,
       "dataframe_name": "tag_location_master",
@@ -80,7 +80,7 @@
     "근무시간_Claim": {
       "files": [],
       "file_names": [
-        "Pickle 파일 (154,849행)"
+        "claim_data_2506.xlsx"
       ],
       "pickle_exists": true,
       "dataframe_name": "claim_data",
@@ -90,7 +90,7 @@
     "근태사용": {
       "files": [],
       "file_names": [
-        "Pickle 파일 (6,450행)"
+        "Attendance_data_2506.xlsx"
       ],
       "pickle_exists": true,
       "dataframe_name": "attendance_data",
@@ -100,7 +100,7 @@
     "비근무시간": {
       "files": [],
       "file_names": [
-        "Pickle 파일 (201,964행)"
+        "NoneWork_data_2506.xlsx"
       ],
       "pickle_exists": true,
       "dataframe_name": "non_work_time",
@@ -110,7 +110,7 @@
     "ABC데이터": {
       "files": [],
       "file_names": [
-        "data_ABC데이터 리스트_2506.xlsx"
+        "ABC_data_2506.xlsx"
       ],
       "pickle_exists": true,
       "dataframe_name": "abc_data",
@@ -120,53 +120,52 @@
     "식사 데이터": {
       "files": [],
       "file_names": [
-        "식사 250401-0630.xlsx"
+        "Meal_250401-0630.xlsx"
       ],
       "pickle_exists": true,
       "dataframe_name": "meal_data",
       "last_modified": "2025-07-24T10:34:00.899685",
       "row_count": 710583
     },
+    "EAM": {
+      "files": [],
+      "file_names": [
+        "EAM_250601-250715.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "eam_data",
+      "last_modified": "2025-07-29T17:57:56.881852",
+      "row_count": 213700
+    },
+    "LAMS": {
+      "files": [],
+      "file_names": [
+        "LAMS__2506.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "lams_data",
+      "last_modified": "2025-07-29T17:57:26.028030",
+      "row_count": 2245
+    },
+    "MES": {
+      "files": [],
+      "file_names": [
+        "MES_2_250601~0717.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "mes_data",
+      "last_modified": "2025-07-29T17:58:36.255698",
+      "row_count": 76040
+    },
     "조직현황 자료": {
       "files": [],
       "file_names": [
-        "25년 6월말 인원현황.xlsx"
+        "2025_Organization.xlsx"
       ],
       "pickle_exists": true,
       "dataframe_name": "organization_data",
       "last_modified": "2025-07-22T11:02:53.643340",
       "row_count": 5142
-    },
-    "EAM": {
-      "files": [],
-      "file_names": [
-        "EAM(안전설비시스템)_로그인 이력_250601~250715.xlsx"
-      ],
-      "pickle_exists": false,
-      "dataframe_name": "eam_data",
-      "last_modified": "-",
-      "row_count": 0
-    },
-    "LAMS": {
-      "files": [],
-      "file_names": [
-        "LAMS(품질시스템) 스케쥴 작성, 수정 이력_2506.xlsx"
-      ],
-      "pickle_exists": false,
-      "dataframe_name": "lams_data",
-      "last_modified": "-",
-      "row_count": 0
-    },
-    "MES": {
-      "files": [],
-      "file_names": [
-        "MES(생산시스템)_003 로그인 이력_250601~0717.xlsx",
-        "MES(생산시스템)_005 로그인 이력_250601~0717.xlsx"
-      ],
-      "pickle_exists": false,
-      "dataframe_name": "mes_data",
-      "last_modified": "-",
-      "row_count": 0
     }
   }
 }

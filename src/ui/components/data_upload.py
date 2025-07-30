@@ -79,6 +79,21 @@ class DataUploadComponent:
                 "table_name": "meal_data",
                 "display_name": "식사 태그 데이터",
                 "process_func_name": "process_meal_data"
+            },
+            "EAM": {
+                "table_name": "eam_data",
+                "display_name": "EAM(안전설비시스템) 로그인 이력",
+                "process_func_name": "process_eam_data"
+            },
+            "LAMS": {
+                "table_name": "lams_data",
+                "display_name": "LAMS(품질시스템) 스케쥴 작성/수정 이력",
+                "process_func_name": "process_lams_data"
+            },
+            "MES": {
+                "table_name": "mes_data",
+                "display_name": "MES(생산시스템) 로그인 이력",
+                "process_func_name": "process_mes_data"
             }
         }
         
@@ -228,7 +243,10 @@ class DataUploadComponent:
         with col3:
             if st.button("새로고침", use_container_width=True):
                 self._refresh_data_status()
-                st.rerun()
+                if hasattr(st, 'rerun'):
+                    st.rerun()
+                else:
+                    st.experimental_rerun()
                 
         with col4:
             if st.button("설정 저장", use_container_width=True):
@@ -439,6 +457,8 @@ class DataUploadComponent:
     
     def _load_from_excel(self, data_type: str, info: Dict, config: Dict, detail_text=None):
         """엑셀 파일에서 데이터 로드"""
+        temp_files_to_delete = []  # 나중에 삭제할 임시 파일 목록
+        
         try:
             all_dfs = []
             
@@ -465,11 +485,19 @@ class DataUploadComponent:
                     self.logger.info(f"{file_info['name']} 로드 완료: {len(df):,}행")
                     if detail_text:
                         detail_text.text(f"{file_info['name']} 로드 완료: {len(df):,}행")
-                finally:
-                    # 임시 파일 삭제
+                    
+                    # 삭제 대상으로 추가
+                    temp_files_to_delete.append(tmp_path)
+                    
+                except Exception as e:
+                    # 오류 발생 시 임시 파일 삭제 시도
                     import os
-                    if os.path.exists(tmp_path):
-                        os.unlink(tmp_path)
+                    try:
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
+                    except:
+                        pass  # 삭제 실패해도 무시
+                    raise e
             
             # 데이터프레임 병합
             if all_dfs:
@@ -533,6 +561,19 @@ class DataUploadComponent:
         except Exception as e:
             st.error(f"{info['display_name']} 로드 실패: {e}")
             self.logger.error(f"{data_type} 로드 오류: {e}")
+        finally:
+            # 모든 처리가 끝난 후 임시 파일 삭제
+            import os
+            import time
+            for tmp_path in temp_files_to_delete:
+                try:
+                    # Windows에서 파일이 아직 사용 중일 수 있으므로 잠시 대기
+                    time.sleep(0.5)
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+                        self.logger.debug(f"임시 파일 삭제 성공: {tmp_path}")
+                except Exception as del_error:
+                    self.logger.warning(f"임시 파일 삭제 실패 (무시): {tmp_path} - {del_error}")
     
     def _load_from_pickle(self, data_type: str, info: Dict):
         """Pickle 파일에서 데이터 로드"""
