@@ -1,13 +1,197 @@
+2025-07-30 18:05:21.063 "theme.palette" is not a valid config option. If you previously had this config option set, it may have been removed.
+2025-07-30 18:05:21.064 "runner.installTracer" is not a valid config option. If you previously had this config option set, it may have been removed.
+2025-07-30 18:05:21.064 "runner.fixMatplotlib" is not a valid config option. If you previously had this config option set, it may have been removed.
 
   You can now view your Streamlit app in your browser.
 
-  Local URL: http://localhost:8504
-  Network URL: http://182.198.212.173:8504
-  External URL: http://122.101.19.125:8504
+  Local URL: http://localhost:8501
+  Network URL: http://182.198.212.173:8501
+  External URL: http://122.101.19.125:8501
 
   For better performance, install the Watchdog module:
 
   $ xcode-select --install
   $ pip install watchdog
             
-  Stopping...
+2025-07-30 18:05:25.927 "rem" is an invalid value for theme.base. Allowed values include ['light', 'dark']. Setting theme.base to "light".
+INFO:src.database.schema:모든 테이블 생성 완료
+INFO:src.database.db_manager:데이터베이스 초기화 완료
+INFO:src.database.db_manager:Pickle 데이터 자동 로드 시작...
+INFO:src.data_processing.pickle_manager:PickleManager 초기화 - base_path: data/pickles
+INFO:src.database.db_manager:태깅 데이터 이미 데이터 존재: 1,799,769행
+INFO:src.database.db_manager:태깅 지점 마스터 이미 데이터 존재: 3,640행
+INFO:src.database.db_manager:근무시간 Claim 데이터 이미 데이터 존재: 154,849행
+INFO:src.database.db_manager:근태 사용 데이터 pickle 파일 발견: 6,450행
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/attendance_data_v20250721_115843.pkl.gz (6,450행 x 23열)
+INFO:src.database.db_manager:attendance_data 처리 완료: 6449행
+ERROR:src.database.db_manager:attendance_data 테이블 저장 실패: (sqlite3.InterfaceError) Error binding parameter 10 - probably unsupported type.
+[SQL: INSERT INTO attendance_data (employee_id, employee_name, department_name, position_name, attendance_code, attendance_name, start_date, end_date, attendance_days, start_time, end_time, attendance_hours, reason, reason_detail, destination, contact, contact_relation, created_date, approval_status, last_modifier, first_approver, second_approver, third_approver) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: [(20170102, '오진호', 'Open Innovation그룹', 'G4(Principal Specialist)', 'CG', '공용외출', '2025-01-01 00:00:00.000000', '2025-06-30 00:00:00.000000', 181.0, '07:30:00', '17:30:00', 10.0, None, '바이오신사업 TF 파견', '서울/송도', '010-8777-8636', '3A', '2025-06-30 00:00:00.000000', '완결', '오진호', '유소영', None, None), (20240590, '원동녘', '배양4A-OP1', 'E1(Engineer)', 'JA', '사외파견', '2025-01-06 00:00:00.000000', '2025-06-30 00:00:00.000000', 176.0, None, None, 0.0, None, '채용TF 서초 사옥 파견', None, '010-7170-8096', '3A', '2025-06-30 00:00:00.000000', '완결', '원동녘', '김형준', None, None), (20211288, '김소연', 'Separation시험파트', 'S1(Scientist)', 'CN', '직무외병결', '2025-03-06 00:00:00.000000', '2025-06-05 00:00:00.000000', 63.0, None, None, 0.0, None, 'F432/ 직장 스트레스로 인한 적응장애를 진단받아 안정가료를 위한 약 3개월간의 치료를 위해 직무 외 병결을 신청 드리오니 확인 후 재가 부탁 드립니다.', '자택', '010-3310-6851', '3A', '2025-06-05 00:00:00.000000', '완결', '김소연', '오창업', '명승환', '김슬기'), (20150322, '이민철', '재경팀', 'G4(Principal Specialist)', 'CN', '직무외병결', '2025-03-06 00:00:00.000000', '2025-06-05 00:00:00.000000', 63.0, None, None, 0.0, None, "진단명 (H1518), 상세불명의 상공막염으로 '25.2/24 명동성모안과 방문, 3개월 이상의 추가 안정가료 진단", None, '010-5064-7235', '3A', '2025-06-05 00:00:00.000000', '완결', '심포근', '백종인', '허도영', None), (20210499, '이종찬', 'Validation Operation 2파트', 'E2(Senior Engineer)', 'CN', '직무외병결', '2025-03-17 00:00:00.000000', '2025-06-12 00:00:00.000000', 60.0, None, None, 0.0, None, '직무 외 병결 상신드리오니 승인 부탁드립니다\n우울증으로 인한 3개월 가량의 휴식이 필요하다는 의사 소견 첨부 함', '자택', '010-5314-8270', '3A', '2025-06-12 00:00:00.000000', '완결', '이종찬', '박동혁', '박동선', '제본시아오'), (20150429, '신은주', '미생물시험운영파트', 'S2(Senior Scientist)', 'BB', '출산전후휴가(유급)', '2025-03-31 00:00:00.000000', '2025-06-13 00:00:00.000000', 75.0, None, None, 0.0, None, None, None, None, None, '2025-06-13 00:00:00.000000', '완결', '박수인', None, None, None), (20180133, '송현동', '바이오연구소', 'G3(Lead Specialist)', 'JA', '사외파견', '2025-04-01 00:00:00.000000', '2025-06-30 00:00:00.000000', 91.0, None, None, 0.0, None, '바이오신사업 TF 사외파견 근태 신청 건 입니다. 재가 부탁드립니다.', None, '010-6898-3710', '3A', '2025-06-30 00:00:00.000000', '완결', '송현동', '민호성', None, None), (20210557, '박세희', 'Filling-OP1', 'E1(Engineer)', 'BB', '출산전후휴가(유급)', '2025-04-07 00:00:00.000000', '2025-06-05 00:00:00.000000', 60.0, None, None, 0.0, None, None, None, None, None, '2025-06-05 00:00:00.000000', '완결', '박수인', None, None, None)  ... displaying 10 of 6449 total bound parameter sets ...  (20190468, '이희중', '공급망운영파트', 'G2(Senior Specialist)', 'CG', '공용외출', '2025-06-30 00:00:00.000000', '2025-06-30 00:00:00.000000', 1.0, '08:00:00', '17:00:00', 9.0, None, '한국바이오의약품협회 기술 교류회 참석 件', '서울', '010-6303-6914', '3A', '2025-06-30 00:00:00.000000', '완결', '이희중', '남희선', None, None), (20150393, '이세령', '진단2파트', 'G3(Lead Specialist)', 'AA', '년차', '2025-06-30 00:00:00.000000', '2025-06-30 00:00:00.000000', 1.0, None, None, 0.0, None, '휴가', '휴가', '010-7700-0772', '3A', '2025-06-30 00:00:00.000000', '완결', '이세령', '신민철', None, None)]]
+(Background on this error at: https://sqlalche.me/e/20/rvf5)
+WARNING:src.database.db_manager:근태 사용 데이터 자동 로드 실패: (sqlite3.InterfaceError) Error binding parameter 10 - probably unsupported type.
+[SQL: INSERT INTO attendance_data (employee_id, employee_name, department_name, position_name, attendance_code, attendance_name, start_date, end_date, attendance_days, start_time, end_time, attendance_hours, reason, reason_detail, destination, contact, contact_relation, created_date, approval_status, last_modifier, first_approver, second_approver, third_approver) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: [(20170102, '오진호', 'Open Innovation그룹', 'G4(Principal Specialist)', 'CG', '공용외출', '2025-01-01 00:00:00.000000', '2025-06-30 00:00:00.000000', 181.0, '07:30:00', '17:30:00', 10.0, None, '바이오신사업 TF 파견', '서울/송도', '010-8777-8636', '3A', '2025-06-30 00:00:00.000000', '완결', '오진호', '유소영', None, None), (20240590, '원동녘', '배양4A-OP1', 'E1(Engineer)', 'JA', '사외파견', '2025-01-06 00:00:00.000000', '2025-06-30 00:00:00.000000', 176.0, None, None, 0.0, None, '채용TF 서초 사옥 파견', None, '010-7170-8096', '3A', '2025-06-30 00:00:00.000000', '완결', '원동녘', '김형준', None, None), (20211288, '김소연', 'Separation시험파트', 'S1(Scientist)', 'CN', '직무외병결', '2025-03-06 00:00:00.000000', '2025-06-05 00:00:00.000000', 63.0, None, None, 0.0, None, 'F432/ 직장 스트레스로 인한 적응장애를 진단받아 안정가료를 위한 약 3개월간의 치료를 위해 직무 외 병결을 신청 드리오니 확인 후 재가 부탁 드립니다.', '자택', '010-3310-6851', '3A', '2025-06-05 00:00:00.000000', '완결', '김소연', '오창업', '명승환', '김슬기'), (20150322, '이민철', '재경팀', 'G4(Principal Specialist)', 'CN', '직무외병결', '2025-03-06 00:00:00.000000', '2025-06-05 00:00:00.000000', 63.0, None, None, 0.0, None, "진단명 (H1518), 상세불명의 상공막염으로 '25.2/24 명동성모안과 방문, 3개월 이상의 추가 안정가료 진단", None, '010-5064-7235', '3A', '2025-06-05 00:00:00.000000', '완결', '심포근', '백종인', '허도영', None), (20210499, '이종찬', 'Validation Operation 2파트', 'E2(Senior Engineer)', 'CN', '직무외병결', '2025-03-17 00:00:00.000000', '2025-06-12 00:00:00.000000', 60.0, None, None, 0.0, None, '직무 외 병결 상신드리오니 승인 부탁드립니다\n우울증으로 인한 3개월 가량의 휴식이 필요하다는 의사 소견 첨부 함', '자택', '010-5314-8270', '3A', '2025-06-12 00:00:00.000000', '완결', '이종찬', '박동혁', '박동선', '제본시아오'), (20150429, '신은주', '미생물시험운영파트', 'S2(Senior Scientist)', 'BB', '출산전후휴가(유급)', '2025-03-31 00:00:00.000000', '2025-06-13 00:00:00.000000', 75.0, None, None, 0.0, None, None, None, None, None, '2025-06-13 00:00:00.000000', '완결', '박수인', None, None, None), (20180133, '송현동', '바이오연구소', 'G3(Lead Specialist)', 'JA', '사외파견', '2025-04-01 00:00:00.000000', '2025-06-30 00:00:00.000000', 91.0, None, None, 0.0, None, '바이오신사업 TF 사외파견 근태 신청 건 입니다. 재가 부탁드립니다.', None, '010-6898-3710', '3A', '2025-06-30 00:00:00.000000', '완결', '송현동', '민호성', None, None), (20210557, '박세희', 'Filling-OP1', 'E1(Engineer)', 'BB', '출산전후휴가(유급)', '2025-04-07 00:00:00.000000', '2025-06-05 00:00:00.000000', 60.0, None, None, 0.0, None, None, None, None, None, '2025-06-05 00:00:00.000000', '완결', '박수인', None, None, None)  ... displaying 10 of 6449 total bound parameter sets ...  (20190468, '이희중', '공급망운영파트', 'G2(Senior Specialist)', 'CG', '공용외출', '2025-06-30 00:00:00.000000', '2025-06-30 00:00:00.000000', 1.0, '08:00:00', '17:00:00', 9.0, None, '한국바이오의약품협회 기술 교류회 참석 件', '서울', '010-6303-6914', '3A', '2025-06-30 00:00:00.000000', '완결', '이희중', '남희선', None, None), (20150393, '이세령', '진단2파트', 'G3(Lead Specialist)', 'AA', '년차', '2025-06-30 00:00:00.000000', '2025-06-30 00:00:00.000000', 1.0, None, None, 0.0, None, '휴가', '휴가', '010-7700-0772', '3A', '2025-06-30 00:00:00.000000', '완결', '이세령', '신민철', None, None)]]
+(Background on this error at: https://sqlalche.me/e/20/rvf5)
+INFO:src.database.db_manager:비근무시간 데이터 이미 데이터 존재: 201,964행
+INFO:src.database.db_manager:ABC 활동 데이터 이미 데이터 존재: 14,026행
+INFO:src.database.db_manager:식사 데이터 이미 데이터 존재: 710,583행
+INFO:src.database.db_manager:조직현황 자료 이미 데이터 존재: 5,142행
+INFO:src.database.db_manager:Pickle 데이터 자동 로드 완료
+INFO:src.database.singleton_manager:SingletonDatabaseManager 초기화 완료
+INFO:src.database.singleton_manager:SingletonDatabaseManager 싱글톤 인스턴스 생성
+INFO:src.data_processing.pickle_manager:PickleManager 초기화 - base_path: data/pickles
+ERROR:src.tag_system.confidence_calculator_v2:전이 확률 데이터 로드 실패: [Errno 2] No such file or directory: '/Users/hanskim/Projects/SambioHR2/./data/tag_transition_probabilities.json'
+INFO:src.data_processing.pickle_manager:PickleManager 초기화 - base_path: data/pickles
+INFO:src.database.singleton_manager:SingletonPickleManager 초기화 완료
+INFO:src.database.singleton_manager:SingletonPickleManager 싱글톤 인스턴스 생성
+INFO:src.ui.components.data_upload:Pickle 파일 자동 로드 시작...
+INFO:src.ui.components.data_upload:Tagging Data 메타데이터 로드 완료: 1,799,769행
+INFO:src.ui.components.data_upload:태깅지점 메타데이터 로드 완료: 3,640행
+INFO:src.ui.components.data_upload:근무시간_Claim 메타데이터 로드 완료: 154,849행
+INFO:src.ui.components.data_upload:근태사용 메타데이터 로드 완료: 6,450행
+INFO:src.ui.components.data_upload:비근무시간 메타데이터 로드 완료: 201,964행
+INFO:src.ui.components.data_upload:ABC데이터 메타데이터 로드 완료: 14,026행
+INFO:src.ui.components.data_upload:식사 데이터 메타데이터 로드 완료: 710,583행
+INFO:src.ui.components.data_upload:EAM 메타데이터 로드 완료: 213,700행
+INFO:src.ui.components.data_upload:LAMS 메타데이터 로드 완료: 2,245행
+INFO:src.ui.components.data_upload:MES 메타데이터 로드 완료: 76,040행
+INFO:src.ui.components.data_upload:조직현황 자료 메타데이터 로드 완료: 5,142행
+INFO:src.hmm.hmm_model:전이 규칙 61개 로드됨: config/rules/hmm_transition_rules.json
+INFO:src.hmm.hmm_model:JSON 규칙으로부터 전이 행렬 업데이트 완료
+INFO:src.hmm.hmm_model:룰 매니저 연결 완료: 61개 룰 로드
+INFO:src.hmm.hmm_model:HMM 모델 초기화 완료: work_activity_hmm
+INFO:__main__:애플리케이션 컴포넌트 초기화 완료
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/organization_data_v20250722_110253.pkl.gz (5,142행 x 25열)
+INFO:src.database.singleton_manager:캐시에 저장: organization_data_latest
+2025-07-30 18:05:29.129 "rem" is an invalid value for theme.base. Allowed values include ['light', 'dark']. Setting theme.base to "light".
+INFO:src.data_processing.pickle_manager:PickleManager 초기화 - base_path: data/pickles
+ERROR:src.tag_system.confidence_calculator_v2:전이 확률 데이터 로드 실패: [Errno 2] No such file or directory: '/Users/hanskim/Projects/SambioHR2/./data/tag_transition_probabilities.json'
+INFO:src.hmm.hmm_model:전이 규칙 61개 로드됨: config/rules/hmm_transition_rules.json
+INFO:src.hmm.hmm_model:JSON 규칙으로부터 전이 행렬 업데이트 완료
+INFO:src.hmm.hmm_model:룰 매니저 연결 완료: 61개 룰 로드
+INFO:src.hmm.hmm_model:HMM 모델 초기화 완료: work_activity_hmm
+INFO:__main__:애플리케이션 컴포넌트 초기화 완료
+INFO:src.ui.components.data_upload:데이터 상태 새로고침 시작...
+INFO:src.ui.components.data_upload:Tagging Data 상태 업데이트: 1,799,769행
+INFO:src.ui.components.data_upload:태깅지점 상태 업데이트: 3,640행
+INFO:src.ui.components.data_upload:근무시간_Claim 상태 업데이트: 154,849행
+INFO:src.ui.components.data_upload:근태사용 상태 업데이트: 6,450행
+INFO:src.ui.components.data_upload:비근무시간 상태 업데이트: 201,964행
+INFO:src.ui.components.data_upload:ABC데이터 상태 업데이트: 14,026행
+INFO:src.ui.components.data_upload:식사 데이터 상태 업데이트: 710,583행
+INFO:src.ui.components.data_upload:EAM 상태 업데이트: 213,700행
+INFO:src.ui.components.data_upload:LAMS 상태 업데이트: 2,245행
+INFO:src.ui.components.data_upload:MES 상태 업데이트: 76,040행
+INFO:src.ui.components.data_upload:조직현황 자료 상태 업데이트: 5,142행
+INFO:src.ui.components.data_upload:데이터 상태 새로고침 완료
+INFO:src.ui.components.data_upload:Tagging Data saved_file_names: ['Tag_data_25.6.xlsx']
+INFO:src.ui.components.data_upload:태깅지점 saved_file_names: ['Tag_Location_20250724_1100.xlsx']
+INFO:src.ui.components.data_upload:근무시간_Claim saved_file_names: ['claim_data_2506.xlsx']
+INFO:src.ui.components.data_upload:근태사용 saved_file_names: ['Attendance_data_2506.xlsx']
+INFO:src.ui.components.data_upload:비근무시간 saved_file_names: ['NoneWork_data_2506.xlsx']
+INFO:src.ui.components.data_upload:ABC데이터 saved_file_names: ['ABC_data_2506.xlsx']
+INFO:src.ui.components.data_upload:식사 데이터 saved_file_names: ['Meal_250401-0630.xlsx']
+INFO:src.ui.components.data_upload:EAM saved_file_names: ['EAM_250601-250715.xlsx']
+INFO:src.ui.components.data_upload:LAMS saved_file_names: ['LAMS__2506.xlsx']
+INFO:src.ui.components.data_upload:MES saved_file_names: ['MES_2_250601~0717.xlsx']
+INFO:src.ui.components.data_upload:조직현황 자료 saved_file_names: ['2025_Organization.xlsx']
+2025-07-30 18:05:31.317 "rem" is an invalid value for theme.base. Allowed values include ['light', 'dark']. Setting theme.base to "light".
+INFO:src.data_processing.pickle_manager:PickleManager 초기화 - base_path: data/pickles
+ERROR:src.tag_system.confidence_calculator_v2:전이 확률 데이터 로드 실패: [Errno 2] No such file or directory: '/Users/hanskim/Projects/SambioHR2/./data/tag_transition_probabilities.json'
+INFO:src.hmm.hmm_model:전이 규칙 61개 로드됨: config/rules/hmm_transition_rules.json
+INFO:src.hmm.hmm_model:JSON 규칙으로부터 전이 행렬 업데이트 완료
+INFO:src.hmm.hmm_model:룰 매니저 연결 완료: 61개 룰 로드
+INFO:src.hmm.hmm_model:HMM 모델 초기화 완료: work_activity_hmm
+INFO:__main__:애플리케이션 컴포넌트 초기화 완료
+INFO:src.ui.components.data_upload:Tagging Data saved_file_names: ['Tag_data_25.6.xlsx']
+INFO:src.ui.components.data_upload:태깅지점 saved_file_names: ['Tag_Location_20250724_1100.xlsx']
+INFO:src.ui.components.data_upload:근무시간_Claim saved_file_names: ['claim_data_2506.xlsx']
+INFO:src.ui.components.data_upload:근태사용 saved_file_names: ['Attendance_data_2506.xlsx']
+INFO:src.ui.components.data_upload:비근무시간 saved_file_names: ['NoneWork_data_2506.xlsx']
+INFO:src.ui.components.data_upload:ABC데이터 saved_file_names: ['ABC_data_2506.xlsx']
+INFO:src.ui.components.data_upload:식사 데이터 saved_file_names: ['Meal_250401-0630.xlsx']
+INFO:src.ui.components.data_upload:EAM saved_file_names: ['EAM_250601-250715.xlsx']
+INFO:src.ui.components.data_upload:LAMS saved_file_names: ['LAMS__2506.xlsx']
+INFO:src.ui.components.data_upload:MES saved_file_names: ['MES_2_250601~0717.xlsx']
+INFO:src.ui.components.data_upload:조직현황 자료 saved_file_names: ['2025_Organization.xlsx']
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/tag_data_v20250721_171550.pkl.gz (1,799,769행 x 15열)
+INFO:src.database.singleton_manager:캐시에 저장: tag_data_20250721_171550
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/tag_location_master_v20250721_171717.pkl.gz (3,640행 x 13열)
+INFO:src.database.singleton_manager:캐시에 저장: tag_location_master_20250721_171717
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/claim_data_v20250721_115652.pkl.gz (154,849행 x 17열)
+INFO:src.database.singleton_manager:캐시에 저장: claim_data_20250721_115652
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/attendance_data_v20250721_115843.pkl.gz (6,450행 x 23열)
+INFO:src.database.singleton_manager:캐시에 저장: attendance_data_20250721_115843
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/non_work_time_v20250721_115955.pkl.gz (201,964행 x 10열)
+INFO:src.database.singleton_manager:캐시에 저장: non_work_time_20250721_115955
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/abc_data_v20250721_153122.pkl.gz (14,026행 x 19열)
+INFO:src.database.singleton_manager:캐시에 저장: abc_data_20250721_153122
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/meal_data_v20250724_103353.pkl.gz (710,583행 x 30열)
+INFO:src.database.singleton_manager:캐시에 저장: meal_data_20250724_103353
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/eam_data_v20250729_175755.pkl.gz (213,700행 x 4열)
+INFO:src.database.singleton_manager:캐시에 저장: eam_data_20250729_175755
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/lams_data_v20250729_175725.pkl.gz (2,245행 x 3열)
+INFO:src.database.singleton_manager:캐시에 저장: lams_data_20250729_175725
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/mes_data_v20250729_175835.pkl.gz (76,040행 x 3열)
+INFO:src.database.singleton_manager:캐시에서 제거: organization_data_latest
+INFO:src.database.singleton_manager:캐시에 저장: mes_data_20250729_175835
+INFO:src.data_processing.pickle_manager:DataFrame 로드 완료: data/pickles/organization_data_v20250722_110253.pkl.gz (5,142행 x 25열)
+INFO:src.database.singleton_manager:캐시에서 제거: tag_data_20250721_171550
+INFO:src.database.singleton_manager:캐시에 저장: organization_data_20250722_110253
+INFO:src.ui.components.data_upload:데이터 로드 완료 - 설정 저장됨
+2025-07-30 18:05:50.171 "rem" is an invalid value for theme.base. Allowed values include ['light', 'dark']. Setting theme.base to "light".
+INFO:src.data_processing.pickle_manager:PickleManager 초기화 - base_path: data/pickles
+ERROR:src.tag_system.confidence_calculator_v2:전이 확률 데이터 로드 실패: [Errno 2] No such file or directory: '/Users/hanskim/Projects/SambioHR2/./data/tag_transition_probabilities.json'
+INFO:src.hmm.hmm_model:전이 규칙 61개 로드됨: config/rules/hmm_transition_rules.json
+INFO:src.hmm.hmm_model:JSON 규칙으로부터 전이 행렬 업데이트 완료
+INFO:src.hmm.hmm_model:룰 매니저 연결 완료: 61개 룰 로드
+INFO:src.hmm.hmm_model:HMM 모델 초기화 완료: work_activity_hmm
+INFO:__main__:애플리케이션 컴포넌트 초기화 완료
+INFO:src.ui.components.data_upload:Tagging Data saved_file_names: ['Tag_data_25.6.xlsx']
+INFO:src.ui.components.data_upload:태깅지점 saved_file_names: ['Tag_Location_20250724_1100.xlsx']
+INFO:src.ui.components.data_upload:근무시간_Claim saved_file_names: ['claim_data_2506.xlsx']
+INFO:src.ui.components.data_upload:근태사용 saved_file_names: ['Attendance_data_2506.xlsx']
+INFO:src.ui.components.data_upload:비근무시간 saved_file_names: ['NoneWork_data_2506.xlsx']
+INFO:src.ui.components.data_upload:ABC데이터 saved_file_names: ['ABC_data_2506.xlsx']
+INFO:src.ui.components.data_upload:식사 데이터 saved_file_names: ['Meal_250401-0630.xlsx']
+INFO:src.ui.components.data_upload:EAM saved_file_names: ['EAM_250601-250715.xlsx']
+INFO:src.ui.components.data_upload:LAMS saved_file_names: ['LAMS__2506.xlsx']
+INFO:src.ui.components.data_upload:MES saved_file_names: ['MES_2_250601~0717.xlsx']
+INFO:src.ui.components.data_upload:조직현황 자료 saved_file_names: ['2025_Organization.xlsx']
+2025-07-30 18:05:51.257 "rem" is an invalid value for theme.base. Allowed values include ['light', 'dark']. Setting theme.base to "light".
+INFO:src.data_processing.pickle_manager:PickleManager 초기화 - base_path: data/pickles
+ERROR:src.tag_system.confidence_calculator_v2:전이 확률 데이터 로드 실패: [Errno 2] No such file or directory: '/Users/hanskim/Projects/SambioHR2/./data/tag_transition_probabilities.json'
+INFO:src.hmm.hmm_model:전이 규칙 61개 로드됨: config/rules/hmm_transition_rules.json
+INFO:src.hmm.hmm_model:JSON 규칙으로부터 전이 행렬 업데이트 완료
+INFO:src.hmm.hmm_model:룰 매니저 연결 완료: 61개 룰 로드
+INFO:src.hmm.hmm_model:HMM 모델 초기화 완료: work_activity_hmm
+INFO:__main__:애플리케이션 컴포넌트 초기화 완료
+INFO:src.ui.components.data_upload:Tagging Data saved_file_names: ['Tag_data_25.6.xlsx']
+INFO:src.ui.components.data_upload:태깅지점 saved_file_names: ['Tag_Location_20250724_1100.xlsx']
+INFO:src.ui.components.data_upload:근무시간_Claim saved_file_names: ['claim_data_2506.xlsx']
+INFO:src.ui.components.data_upload:근태사용 saved_file_names: ['Attendance_data_2506.xlsx']
+INFO:src.ui.components.data_upload:비근무시간 saved_file_names: ['NoneWork_data_2506.xlsx']
+INFO:src.ui.components.data_upload:ABC데이터 saved_file_names: ['ABC_data_2506.xlsx']
+INFO:src.ui.components.data_upload:식사 데이터 saved_file_names: ['Meal_250401-0630.xlsx']
+INFO:src.ui.components.data_upload:EAM saved_file_names: ['EAM_250601-250715.xlsx']
+INFO:src.ui.components.data_upload:LAMS saved_file_names: ['LAMS__2506.xlsx']
+INFO:src.ui.components.data_upload:MES saved_file_names: ['MES_2_250601~0717.xlsx']
+INFO:src.ui.components.data_upload:조직현황 자료 saved_file_names: ['2025_Organization.xlsx']
+INFO:src.database.singleton_manager:캐시에서 데이터프레임 로드: eam_data_20250729_175755
+2025-07-30 18:05:51.320 Serialization of dataframe to Arrow table was unsuccessful. Applying automatic fixes for column types to make the dataframe Arrow-compatible.
+Traceback (most recent call last):
+  File "/Users/hanskim/Projects/SambioHR2/.venv/lib/python3.10/site-packages/streamlit/dataframe_util.py", line 821, in convert_pandas_df_to_arrow_bytes
+    table = pa.Table.from_pandas(df)
+  File "pyarrow/table.pxi", line 4795, in pyarrow.lib.Table.from_pandas
+  File "/Users/hanskim/Projects/SambioHR2/.venv/lib/python3.10/site-packages/pyarrow/pandas_compat.py", line 637, in dataframe_to_arrays
+    arrays = [convert_column(c, f)
+  File "/Users/hanskim/Projects/SambioHR2/.venv/lib/python3.10/site-packages/pyarrow/pandas_compat.py", line 637, in <listcomp>
+    arrays = [convert_column(c, f)
+  File "/Users/hanskim/Projects/SambioHR2/.venv/lib/python3.10/site-packages/pyarrow/pandas_compat.py", line 625, in convert_column
+    raise e
+  File "/Users/hanskim/Projects/SambioHR2/.venv/lib/python3.10/site-packages/pyarrow/pandas_compat.py", line 619, in convert_column
+    result = pa.array(col, type=type_, from_pandas=True, safe=safe)
+  File "pyarrow/array.pxi", line 365, in pyarrow.lib.array
+  File "pyarrow/array.pxi", line 91, in pyarrow.lib._ndarray_to_array
+  File "pyarrow/error.pxi", line 92, in pyarrow.lib.check_status
+pyarrow.lib.ArrowInvalid: ("Could not convert 'system' with type str: tried to convert to int64", 'Conversion failed for column USERNO with type object')

@@ -544,10 +544,10 @@
       "취식번호": "int32"
     }
   },
-  "data\\pickles\\lams_data_v20250729_175725.pkl.gz": {
+  "data/pickles/lams_data_v20250729_175725.pkl.gz": {
     "name": "lams_data",
     "version": "20250729_175725",
-    "file_path": "data\\pickles\\lams_data_v20250729_175725.pkl.gz",
+    "file_path": "data/pickles/lams_data_v20250729_175725.pkl.gz",
     "rows": 2245,
     "columns": 3,
     "size_mb": 0.012242317199707031,
@@ -560,10 +560,10 @@
       "Task": "object"
     }
   },
-  "data\\pickles\\eam_data_v20250729_175755.pkl.gz": {
+  "data/pickles/eam_data_v20250729_175755.pkl.gz": {
     "name": "eam_data",
     "version": "20250729_175755",
-    "file_path": "data\\pickles\\eam_data_v20250729_175755.pkl.gz",
+    "file_path": "data/pickles/eam_data_v20250729_175755.pkl.gz",
     "rows": 213700,
     "columns": 4,
     "size_mb": 1.0294342041015625,
@@ -577,10 +577,10 @@
       "APP": "object"
     }
   },
-  "data\\pickles\\mes_data_v20250729_175835.pkl.gz": {
+  "data/pickles/mes_data_v20250729_175835.pkl.gz": {
     "name": "mes_data",
     "version": "20250729_175835",
-    "file_path": "data\\pickles\\mes_data_v20250729_175835.pkl.gz",
+    "file_path": "data/pickles/mes_data_v20250729_175835.pkl.gz",
     "rows": 76040,
     "columns": 3,
     "size_mb": 0.2257556915283203,

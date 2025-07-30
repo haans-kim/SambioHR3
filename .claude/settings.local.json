@@ -11,7 +11,12 @@
       "Bash(venv/Scripts/python.exe -m pip install:*)",
       "Bash(del nul)",
       "Bash(git add:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(streamlit run:*)",
+      "Bash(source:*)",
+      "Bash(pip3 install:*)",
+      "Bash(kill:*)"
     ],
     "deny": []
   }
