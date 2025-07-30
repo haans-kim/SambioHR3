@@ -1,0 +1,648 @@
+{
+  "timestamp": "2025-07-29T10:27:56.298685",
+  "apis": {
+    "src/analysis/individual_analyzer.py": {
+      "__init__": {
+        "line": 20,
+        "args": [
+          "self",
+          "db_manager",
+          "hmm_model"
+        ],
+        "docstring": "Args:\n    db_manager: 데이터베이스 매니저\n    hmm_model: HMM 모델 (deprecated, 태그 기반 시스템 사용)",
+        "is_async": false
+      },
+      "analyze_individual": {
+        "line": 48,
+        "args": [
+          "self",
+          "employee_id",
+          "start_date",
+          "end_date"
+        ],
+        "docstring": "개인별 종합 분석\n\nArgs:\n    employee_id: 직원 ID\n    start_date: 분석 시작일\n    end_date: 분석 종료일\n    \nReturns:\n    Dict: 분석 결과",
+        "is_async": false
+      },
+      "_get_data": {
+        "line": 100,
+        "args": [
+          "self",
+          "table_name",
+          "employee_id",
+          "start_date",
+          "end_date"
+        ],
+        "docstring": "데이터 조회 (캐시 우선)",
+        "is_async": false
+      },
+      "_apply_tag_based_analysis": {
+        "line": 134,
+        "args": [
+          "self",
+          "tag_data"
+        ],
+        "docstring": "정교한 분류기를 사용한 태그 기반 분석.\n꼬리물기 등 특수 패턴을 후처리로 보정.",
+        "is_async": false
+      },
+      "_handle_tailgating": {
+        "line": 163,
+        "args": [
+          "self",
+          "sequence"
+        ],
+        "docstring": "T1(경유)이 장시간 지속되는 '꼬리물기' 패턴을 감지하고 '업무'로 상태를 보정.",
+        "is_async": false
+      },
+      "_analyze_work_time": {
+        "line": 177,
+        "args": [
+          "self",
+          "analysis_results",
+          "claim_data"
+        ],
+        "docstring": "근무시간 분석 - timeline의 duration_minutes을 직접 합산",
+        "is_async": false
+      }
+    },
+    "src/analysis/organization_analyzer.py": {
+      "__init__": {
+        "line": 20,
+        "args": [
+          "self",
+          "db_manager",
+          "individual_analyzer"
+        ],
+        "docstring": "Args:\n    db_manager: 데이터베이스 매니저\n    individual_analyzer: 개인별 분석기",
+        "is_async": false
+      },
+      "analyze_organization": {
+        "line": 33,
+        "args": [
+          "self",
+          "org_id",
+          "org_level",
+          "start_date",
+          "end_date"
+        ],
+        "docstring": "조직별 종합 분석\n\nArgs:\n    org_id: 조직 ID\n    org_level: 조직 레벨 (center, bu, team, group, part)\n    start_date: 분석 시작일\n    end_date: 분석 종료일\n    \nReturns:\n    Dict: 분석 결과",
+        "is_async": false
+      },
+      "_get_organization_info": {
+        "line": 89,
+        "args": [
+          "self",
+          "org_id",
+          "org_level"
+        ],
+        "docstring": "조직 정보 조회",
+        "is_async": false
+      },
+      "_get_organization_employees": {
+        "line": 112,
+        "args": [
+          "self",
+          "org_id",
+          "org_level"
+        ],
+        "docstring": "조직 구성원 조회",
+        "is_async": false
+      },
+      "_collect_individual_analyses": {
+        "line": 132,
+        "args": [
+          "self",
+          "employees",
+          "start_date",
+          "end_date"
+        ],
+        "docstring": "개인별 분석 결과 수집",
+        "is_async": false
+      },
+      "_analyze_workforce": {
+        "line": 158,
+        "args": [
+          "self",
+          "employees",
+          "individual_analyses"
+        ],
+        "docstring": "인력 분석",
+        "is_async": false
+      },
+      "_analyze_productivity": {
+        "line": 187,
+        "args": [
+          "self",
+          "individual_analyses"
+        ],
+        "docstring": "생산성 분석",
+        "is_async": false
+      },
+      "_analyze_organization_shifts": {
+        "line": 217,
+        "args": [
+          "self",
+          "individual_analyses"
+        ],
+        "docstring": "조직 교대 근무 분석",
+        "is_async": false
+      },
+      "_analyze_organization_efficiency": {
+        "line": 254,
+        "args": [
+          "self",
+          "individual_analyses"
+        ],
+        "docstring": "조직 효율성 분석",
+        "is_async": false
+      },
+      "_analyze_time_utilization": {
+        "line": 289,
+        "args": [
+          "self",
+          "individual_analyses"
+        ],
+        "docstring": "시간 활용 분석",
+        "is_async": false
+      },
+      "_calculate_comparison_metrics": {
+        "line": 326,
+        "args": [
+          "self",
+          "individual_analyses"
+        ],
+        "docstring": "비교 지표 계산",
+        "is_async": false
+      },
+      "_analyze_trends": {
+        "line": 356,
+        "args": [
+          "self",
+          "org_id",
+          "org_level",
+          "start_date",
+          "end_date"
+        ],
+        "docstring": "트렌드 분석",
+        "is_async": false
+      },
+      "_generate_recommendations": {
+        "line": 370,
+        "args": [
+          "self",
+          "individual_analyses"
+        ],
+        "docstring": "개선 권장사항 생성",
+        "is_async": false
+      },
+      "_identify_top_performers": {
+        "line": 401,
+        "args": [
+          "self",
+          "individual_analyses"
+        ],
+        "docstring": "우수 직원 식별",
+        "is_async": false
+      },
+      "_identify_improvement_candidates": {
+        "line": 418,
+        "args": [
+          "self",
+          "individual_analyses"
+        ],
+        "docstring": "개선 필요 직원 식별",
+        "is_async": false
+      },
+      "_calculate_productivity_distribution": {
+        "line": 435,
+        "args": [
+          "self",
+          "productivity_scores"
+        ],
+        "docstring": "생산성 분포 계산",
+        "is_async": false
+      },
+      "_calculate_shift_balance": {
+        "line": 459,
+        "args": [
+          "self",
+          "shift_data"
+        ],
+        "docstring": "교대 균형 계산",
+        "is_async": false
+      },
+      "_calculate_shift_efficiency": {
+        "line": 471,
+        "args": [
+          "self",
+          "shift_data"
+        ],
+        "docstring": "교대별 효율성 계산",
+        "is_async": false
+      },
+      "_calculate_organization_efficiency_score": {
+        "line": 483,
+        "args": [
+          "self",
+          "efficiency_metrics"
+        ],
+        "docstring": "조직 효율성 점수 계산",
+        "is_async": false
+      },
+      "_calculate_quartiles": {
+        "line": 500,
+        "args": [
+          "self",
+          "values"
+        ],
+        "docstring": "사분위수 계산",
+        "is_async": false
+      },
+      "_identify_outliers": {
+        "line": 511,
+        "args": [
+          "self",
+          "metrics"
+        ],
+        "docstring": "이상치 식별",
+        "is_async": false
+      },
+      "_calculate_performance_correlation": {
+        "line": 533,
+        "args": [
+          "self",
+          "metrics"
+        ],
+        "docstring": "성과 지표 간 상관관계 계산",
+        "is_async": false
+      },
+      "_check_shift_imbalance": {
+        "line": 552,
+        "args": [
+          "self",
+          "individual_analyses"
+        ],
+        "docstring": "교대 근무 불균형 확인",
+        "is_async": false
+      },
+      "_identify_performance_issues": {
+        "line": 572,
+        "args": [
+          "self",
+          "analysis"
+        ],
+        "docstring": "개인 성과 문제 식별",
+        "is_async": false
+      },
+      "_save_organization_analysis": {
+        "line": 593,
+        "args": [
+          "self",
+          "org_id",
+          "org_level",
+          "analysis_result"
+        ],
+        "docstring": "조직 분석 결과 저장",
+        "is_async": false
+      },
+      "generate_organization_report": {
+        "line": 603,
+        "args": [
+          "self",
+          "org_id",
+          "analysis_result"
+        ],
+        "docstring": "조직별 분석 보고서 생성",
+        "is_async": false
+      },
+      "compare_organizations": {
+        "line": 636,
+        "args": [
+          "self",
+          "org_comparisons"
+        ],
+        "docstring": "조직 간 비교 분석",
+        "is_async": false
+      }
+    },
+    "src/analysis/network_analyzer.py": {
+      "find_korean_font": {
+        "line": 23,
+        "args": [],
+        "docstring": "macOS에서 사용 가능한 한글 폰트 찾기",
+        "is_async": false
+      },
+      "get_building_from_location": {
+        "line": 128,
+        "args": [
+          "cls",
+          "location"
+        ],
+        "docstring": "Extract building code from location string.",
+        "is_async": false
+      },
+      "get_coordinates": {
+        "line": 225,
+        "args": [
+          "cls",
+          "building",
+          "img_width",
+          "img_height"
+        ],
+        "docstring": "Get coordinates for a building scaled to image dimensions.",
+        "is_async": false
+      },
+      "__init__": {
+        "line": 236,
+        "args": [
+          "self",
+          "db_path"
+        ],
+        "docstring": "",
+        "is_async": false
+      },
+      "get_employee_movements": {
+        "line": 240,
+        "args": [
+          "self",
+          "employee_id",
+          "start_date",
+          "end_date",
+          "include_meal_data"
+        ],
+        "docstring": "Get movement data for an employee within date range.",
+        "is_async": false
+      },
+      "analyze_movement_patterns": {
+        "line": 437,
+        "args": [
+          "self",
+          "movements_df"
+        ],
+        "docstring": "Analyze movement patterns from tag data.",
+        "is_async": false
+      },
+      "create_network_graph": {
+        "line": 565,
+        "args": [
+          "self",
+          "analysis_results",
+          "img_width",
+          "img_height"
+        ],
+        "docstring": "Create a directed graph from movement analysis.",
+        "is_async": false
+      },
+      "visualize_movement_network": {
+        "line": 595,
+        "args": [
+          "self",
+          "analysis_results",
+          "employee_name",
+          "date_range",
+          "facility_image_path",
+          "save_path"
+        ],
+        "docstring": "Visualize movement network on facility map.",
+        "is_async": false
+      },
+      "get_frequent_paths": {
+        "line": 758,
+        "args": [
+          "self",
+          "analysis_results",
+          "top_n"
+        ],
+        "docstring": "Get most frequent movement paths.",
+        "is_async": false
+      }
+    },
+    "src/database/db_manager.py": {
+      "__init__": {
+        "line": 24,
+        "args": [
+          "self",
+          "database_url"
+        ],
+        "docstring": "Args:\n    database_url: 데이터베이스 연결 URL",
+        "is_async": false
+      },
+      "_initialize_database": {
+        "line": 44,
+        "args": [
+          "self"
+        ],
+        "docstring": "데이터베이스 초기화 및 pickle 파일 자동 로드",
+        "is_async": false
+      },
+      "get_session": {
+        "line": 59,
+        "args": [
+          "self"
+        ],
+        "docstring": "데이터베이스 세션 컨텍스트 매니저\n\nUsage:\n    with db_manager.get_session() as session:\n        # 세션 사용\n        pass",
+        "is_async": false
+      },
+      "execute_query": {
+        "line": 79,
+        "args": [
+          "self",
+          "query",
+          "params"
+        ],
+        "docstring": "SQL 쿼리 실행\n\nArgs:\n    query: 실행할 SQL 쿼리\n    params: 쿼리 파라미터\n    \nReturns:\n    List[Dict]: 쿼리 결과",
+        "is_async": false
+      },
+      "bulk_insert": {
+        "line": 108,
+        "args": [
+          "self",
+          "table_name",
+          "data",
+          "batch_size"
+        ],
+        "docstring": "대용량 데이터 배치 삽입\n\nArgs:\n    table_name: 테이블명\n    data: 삽입할 데이터 리스트\n    batch_size: 배치 크기\n    \nReturns:\n    int: 삽입된 행 수",
+        "is_async": false
+      },
+      "bulk_update": {
+        "line": 160,
+        "args": [
+          "self",
+          "table_name",
+          "data",
+          "batch_size"
+        ],
+        "docstring": "대용량 데이터 배치 업데이트\n\nArgs:\n    table_name: 테이블명\n    data: 업데이트할 데이터 리스트 (id 포함)\n    batch_size: 배치 크기\n    \nReturns:\n    int: 업데이트된 행 수",
+        "is_async": false
+      },
+      "dataframe_to_table": {
+        "line": 208,
+        "args": [
+          "self",
+          "df",
+          "table_name",
+          "if_exists",
+          "batch_size"
+        ],
+        "docstring": "DataFrame을 테이블에 삽입\n\nArgs:\n    df: 삽입할 DataFrame\n    table_name: 대상 테이블명\n    if_exists: 'append', 'replace', 'fail'\n    batch_size: 배치 크기\n    \nReturns:\n    int: 삽입된 행 수",
+        "is_async": false
+      },
+      "table_to_dataframe": {
+        "line": 246,
+        "args": [
+          "self",
+          "table_name",
+          "query",
+          "params"
+        ],
+        "docstring": "테이블을 DataFrame으로 조회\n\nArgs:\n    table_name: 조회할 테이블명\n    query: 사용자 정의 쿼리 (없으면 전체 조회)\n    params: 쿼리 파라미터\n    \nReturns:\n    pd.DataFrame: 조회 결과",
+        "is_async": false
+      },
+      "get_table_stats": {
+        "line": 273,
+        "args": [
+          "self",
+          "table_name"
+        ],
+        "docstring": "테이블 통계 정보 조회",
+        "is_async": false
+      },
+      "cleanup_old_data": {
+        "line": 304,
+        "args": [
+          "self",
+          "table_name",
+          "date_column",
+          "days_to_keep"
+        ],
+        "docstring": "오래된 데이터 정리",
+        "is_async": false
+      },
+      "backup_table": {
+        "line": 327,
+        "args": [
+          "self",
+          "table_name",
+          "backup_path"
+        ],
+        "docstring": "테이블 백업",
+        "is_async": false
+      },
+      "restore_table": {
+        "line": 345,
+        "args": [
+          "self",
+          "table_name",
+          "backup_path",
+          "if_exists"
+        ],
+        "docstring": "테이블 복원",
+        "is_async": false
+      },
+      "get_table_class": {
+        "line": 360,
+        "args": [
+          "self",
+          "table_name"
+        ],
+        "docstring": "테이블명으로 SQLAlchemy 클래스 찾기",
+        "is_async": false
+      },
+      "get_database_info": {
+        "line": 387,
+        "args": [
+          "self"
+        ],
+        "docstring": "데이터베이스 전체 정보 조회",
+        "is_async": false
+      },
+      "close": {
+        "line": 416,
+        "args": [
+          "self"
+        ],
+        "docstring": "데이터베이스 연결 종료",
+        "is_async": false
+      },
+      "_auto_load_pickle_data": {
+        "line": 424,
+        "args": [
+          "self"
+        ],
+        "docstring": "Pickle 파일에서 데이터를 자동으로 로드하여 데이터베이스에 저장",
+        "is_async": false
+      },
+      "get_table_row_count": {
+        "line": 485,
+        "args": [
+          "self",
+          "table_name"
+        ],
+        "docstring": "테이블의 행 수를 반환",
+        "is_async": false
+      },
+      "_process_attendance_data": {
+        "line": 495,
+        "args": [
+          "self",
+          "df"
+        ],
+        "docstring": "attendance_data의 datetime.time 타입을 처리",
+        "is_async": false
+      },
+      "save_dataframe": {
+        "line": 565,
+        "args": [
+          "self",
+          "df",
+          "table_name",
+          "if_exists"
+        ],
+        "docstring": "DataFrame을 데이터베이스에 저장",
+        "is_async": false
+      }
+    }
+  },
+  "pages": {},
+  "models": {
+    "src/database/schema.py": [
+      "DailyWorkData",
+      "ShiftWorkData",
+      "OrganizationSummary",
+      "TagLogs",
+      "AbcActivityData",
+      "ClaimData",
+      "AttendanceData",
+      "NonWorkTimeData",
+      "EmployeeInfo",
+      "TagLocationMaster",
+      "OrganizationData",
+      "OrganizationMapping",
+      "HmmModelConfig",
+      "ProcessingLog"
+    ],
+    "src/database/models.py": [
+      "Employee",
+      "DailyWorkSummary",
+      "OrgSummary",
+      "ProcessedTagData",
+      "HMMModel",
+      "InteractionNetwork",
+      "MovementNetwork",
+      "DailyActivity"
+    ],
+    "src/database/tag_schema.py": [
+      "TagMaster",
+      "LocationTagMapping",
+      "StateTransitionRules",
+      "ActivityStates",
+      "TagSequencePatterns",
+      "TagProcessingLog"
+    ]
+  },
+  "files": {
+    "src/analysis/individual_analyzer.py": "59481f30690741d3e5ff4f7ecf9a7000",
+    "src/analysis/organization_analyzer.py": "0f8d56728c1baea47f1724be0ed808b7",
+    "src/analysis/network_analyzer.py": "244958ea280b387b97f4a81068ce8765",
+    "src/database/db_manager.py": "cfdd891eb42897765677a7d0a227a451"
+  }
+}

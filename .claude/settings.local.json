@@ -16,7 +16,13 @@
       "Bash(streamlit run:*)",
       "Bash(source:*)",
       "Bash(pip3 install:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(git lfs:*)",
+      "Bash(brew install:*)",
+      "Bash(gh release create:*)",
+      "Bash(gh release view:*)"
     ],
     "deny": []
   }
