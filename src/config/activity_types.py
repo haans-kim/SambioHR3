@@ -112,8 +112,8 @@ ACTIVITY_TYPES = {
         name_ko='결재업무',
         name_en='Knox Approval',
         category='work',
-        color='#607D8B',  # 회색-파란색
-        priority=55,
+        color='#8E24AA',  # 보라색
+        priority=70,
         keywords=['결재', 'APPROVAL', 'Knox결재'],
         location_patterns=['KNOX_APPROVAL']
     ),
@@ -122,8 +122,8 @@ ACTIVITY_TYPES = {
         name_ko='메일업무',
         name_en='Knox Mail',
         category='work',
-        color='#795548',  # 갈색
-        priority=55,
+        color='#AB47BC',  # 보라색
+        priority=70,
         keywords=['메일', 'MAIL', 'Knox메일'],
         location_patterns=['KNOX_MAIL']
     ),

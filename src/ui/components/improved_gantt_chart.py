@@ -28,9 +28,10 @@ def render_improved_gantt_chart(analysis_result: dict):
         'WORK': {'name': '작업중', 'color': '#2196F3', 'y_pos': 5, 'category': 'work'},
         'FOCUSED_WORK': {'name': '집중작업', 'color': '#1976D2', 'y_pos': 5, 'category': 'work'},
         'EQUIPMENT_OPERATION': {'name': '장비작업', 'color': '#0D47A1', 'y_pos': 5, 'category': 'work'},
-        'O_TAG_WORK': {'name': 'O태그작업', 'color': '#3F51B5', 'y_pos': 5, 'category': 'work'},  # O태그 작업
-        'KNOX_APPROVAL': {'name': '결재업무', 'color': '#607D8B', 'y_pos': 5, 'category': 'work'},  # Knox 결재
-        'KNOX_MAIL': {'name': '메일업무', 'color': '#795548', 'y_pos': 5, 'category': 'work'},  # Knox 메일
+        'O_TAG_WORK': {'name': 'O태그작업', 'color': '#8E24AA', 'y_pos': 5, 'category': 'work'},  # O태그 작업 - Knox 포함하여 보라색
+        'O_KNOX_APPROVAL': {'name': 'Knox결재', 'color': '#8E24AA', 'y_pos': 5, 'category': 'work'},  # Knox 결재 - 보라색
+        'KNOX_APPROVAL': {'name': '결재업무', 'color': '#8E24AA', 'y_pos': 5, 'category': 'work'},  # Knox 결재 - 보라색
+        'KNOX_MAIL': {'name': '메일업무', 'color': '#AB47BC', 'y_pos': 5, 'category': 'work'},  # Knox 메일 - 보라색
         'EAM_WORK': {'name': '안전설비', 'color': '#009688', 'y_pos': 5, 'category': 'work'},  # EAM
         'LAMS_WORK': {'name': '품질시스템', 'color': '#00ACC1', 'y_pos': 5, 'category': 'work'},  # LAMS
         'MES_WORK': {'name': '생산시스템', 'color': '#00897B', 'y_pos': 5, 'category': 'work'},  # MES
@@ -97,20 +98,39 @@ def render_improved_gantt_chart(analysis_result: dict):
         if pd.notna(segment['start_time']) and pd.notna(segment['end_time']):
             activity_code = segment.get('activity_code', 'UNKNOWN')
             
-            # 디버깅: 상세 로깅
-            if i < 10 or activity_code in ['COMMUTE_IN', 'COMMUTE_OUT']:  # 처음 10개 또는 출퇴근 로깅
+            # 디버깅: 상세 로깅 (Knox 관련 우선)
+            is_knox_related = 'knox' in str(segment.get('location', '')).lower() or 'knox' in str(segment.get('activity', '')).lower()
+            if i < 10 or activity_code in ['COMMUTE_IN', 'COMMUTE_OUT'] or is_knox_related:
                 print(f"[GANTT] Segment {i}:")
                 print(f"  - activity: '{segment.get('activity', 'N/A')}'")
                 print(f"  - activity_code: '{activity_code}'")
                 print(f"  - location: '{segment.get('location', 'N/A')}'")
                 print(f"  - start_time: {segment.get('start_time')}")
                 print(f"  - tag_code: '{segment.get('tag_code', 'N/A')}'")
+                if is_knox_related:
+                    print(f"  - [KNOX DETECTED] Color will be: {activity_info.get(activity_code, activity_info['UNKNOWN'])['color']}")
             
             # activity_code가 대문자가 아닌 경우만 확인 (하위호환성)
             if activity_code and not activity_code.isupper():
                 print(f"[GANTT] WARNING: 비정상적인 activity_code 발견: '{activity_code}'")
             
             activity = activity_info.get(activity_code, activity_info['UNKNOWN'])
+            
+            # Knox 관련 색상 강제 오버라이드
+            location = str(segment.get('location', '')).lower()
+            if 'knox' in location:
+                if '결재' in location or 'approval' in location:
+                    activity = activity.copy()
+                    activity['color'] = '#8E24AA'  # Knox 결재는 보라색
+                    activity['name'] = 'Knox결재'
+                elif '메일' in location or 'mail' in location:
+                    activity = activity.copy()
+                    activity['color'] = '#AB47BC'  # Knox 메일은 연보라색
+                    activity['name'] = 'Knox메일'
+                elif 'pims' in location or 'g3' in location:
+                    activity = activity.copy()
+                    activity['color'] = '#7B1FA2'  # Knox PIMS는 진보라색
+                    activity['name'] = 'G3회의'
             
             # 시작과 끝 시간의 중간점 계산
             mid_time = segment['start_time'] + (segment['end_time'] - segment['start_time']) / 2
