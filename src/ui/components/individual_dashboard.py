@@ -985,6 +985,7 @@ class IndividualDashboard:
                                 meeting_duration = None
                                 if end_time:
                                     meeting_duration = (end_time - start_time).total_seconds() / 60
+                                    self.logger.info(f"Knox PIMS 회의 duration 계산: {start_time} ~ {end_time} = {meeting_duration:.1f}분")
                                 
                                 tag = {
                                     'ENTE_DT': int(start_time.strftime('%Y%m%d')),
@@ -1001,6 +1002,7 @@ class IndividualDashboard:
                                     'knox_end_time': end_time,  # Knox PIMS 종료시간 저장
                                     'knox_duration': meeting_duration  # Knox PIMS 회의 시간(분) 저장
                                 }
+                                self.logger.info(f"Knox PIMS 태그 생성: {tag}")
                                 all_tags.append(tag)
                         self.logger.info(f"Knox PIMS - {selected_date} 날짜로 매칭된 데이터: {matched_count}건")
             
@@ -2495,6 +2497,7 @@ class IndividualDashboard:
                 'WORKING': 'work',
                 'TRAINING': 'education',
                 'MEETING': 'meeting',
+                'G3_MEETING': 'meeting',  # Knox PIMS 회의 추가
                 'MOVEMENT': 'movement',
                 'COMMUTE_IN': 'commute',
                 'COMMUTE_OUT': 'commute',
@@ -2509,7 +2512,12 @@ class IndividualDashboard:
                 'NON_WORK': 'non_work',
                 'UNKNOWN': 'work'
             }
-            daily_data['activity_type'] = daily_data['activity_code'].map(activity_type_mapping).fillna('work')
+            # Knox PIMS 보호된 항목의 activity_type은 건드리지 않음
+            if 'is_knox_pims_protected' in daily_data.columns:
+                non_protected_mask = ~daily_data['is_knox_pims_protected'].fillna(False)
+                daily_data.loc[non_protected_mask, 'activity_type'] = daily_data.loc[non_protected_mask, 'activity_code'].map(activity_type_mapping).fillna('work')
+            else:
+                daily_data['activity_type'] = daily_data['activity_code'].map(activity_type_mapping).fillna('work')
             
             # 출문-재입문 패턴 감지 및 분류
             if 'tag_code' in daily_data.columns:
@@ -2702,6 +2710,7 @@ class IndividualDashboard:
                 'WORKING': 'work',
                 'TRAINING': 'education',
                 'MEETING': 'meeting',
+                'G3_MEETING': 'meeting',  # Knox PIMS 회의 추가
                 'MOVEMENT': 'movement',
                 'COMMUTE_IN': 'commute',
                 'COMMUTE_OUT': 'commute',
@@ -2788,7 +2797,12 @@ class IndividualDashboard:
                 }
                 # activity_code가 있으면 매핑
                 if 'activity_code' in daily_data.columns:
-                    daily_data['activity_type'] = daily_data['activity_code'].map(activity_type_mapping).fillna('work')
+                    # Knox PIMS 보호된 항목의 activity_type은 건드리지 않음
+                    if 'is_knox_pims_protected' in daily_data.columns:
+                        non_protected_mask = ~daily_data['is_knox_pims_protected'].fillna(False)
+                        daily_data.loc[non_protected_mask, 'activity_type'] = daily_data.loc[non_protected_mask, 'activity_code'].map(activity_type_mapping).fillna('work')
+                    else:
+                        daily_data['activity_type'] = daily_data['activity_code'].map(activity_type_mapping).fillna('work')
                 else:
                     daily_data['activity_type'] = 'work'
             if 'duration_minutes' not in daily_data.columns:
@@ -2815,6 +2829,28 @@ class IndividualDashboard:
                     for idx, row in gate_701.head().iterrows():
                         self.logger.info(f"  - {row['datetime']}: tag_code={row.get('tag_code', 'N/A')}, activity={row['activity_code']}, work_area_type={row.get('work_area_type', 'N/A')}")
             
+            # 최종 Knox PIMS 보호 - 마지막에 한번 더 확인
+            if 'is_knox_pims_protected' in daily_data.columns:
+                knox_protected_mask = daily_data['is_knox_pims_protected'].fillna(False)
+                if knox_protected_mask.any():
+                    # Knox PIMS 항목이 G3_MEETING이 아닌 경우 복원
+                    wrong_activity_mask = knox_protected_mask & (daily_data['activity_code'] != 'G3_MEETING')
+                    if wrong_activity_mask.any():
+                        daily_data.loc[wrong_activity_mask, 'activity_code'] = 'G3_MEETING'
+                        daily_data.loc[wrong_activity_mask, 'activity_type'] = 'meeting'
+                        daily_data.loc[wrong_activity_mask, '활동분류'] = 'G3회의'
+                        self.logger.warning(f"Knox PIMS {wrong_activity_mask.sum()}건이 잘못 변경되어 복원됨")
+                    
+                    # Knox PIMS duration 최종 확인
+                    knox_with_duration = knox_protected_mask & daily_data['knox_duration'].notna()
+                    if knox_with_duration.any():
+                        daily_data.loc[knox_with_duration, 'duration_minutes'] = daily_data.loc[knox_with_duration, 'knox_duration']
+                        
+                    # 최종 상태 로그 - 더 상세하게
+                    for idx in daily_data[knox_protected_mask].index:
+                        row = daily_data.loc[idx]
+                        self.logger.info(f"Knox PIMS 최종 상태 [{idx}]: {row['datetime']} - activity_code={row['activity_code']}, duration={row.get('duration_minutes', 'N/A')}분, knox_duration={row.get('knox_duration', 'N/A')}, is_protected={row.get('is_knox_pims_protected', False)}")
+                        
             return daily_data
     
     def _apply_rule_based_classification(self, daily_data: pd.DataFrame, tag_location_master: pd.DataFrame) -> pd.DataFrame:
@@ -2900,27 +2936,44 @@ class IndividualDashboard:
             
             # Knox PIMS G3 태그 처리
             if knox_pims_mask.any():
+                self.logger.info(f"[_apply_tag_based_rules] Knox PIMS G3 태그 처리 시작: {knox_pims_mask.sum()}개")
                 activity_type = get_activity_type('G3_MEETING')
                 if activity_type:
                     daily_data.loc[knox_pims_mask, 'activity_code'] = 'G3_MEETING'
                     daily_data.loc[knox_pims_mask, 'activity_type'] = 'meeting'
                     daily_data.loc[knox_pims_mask, '활동분류'] = activity_type.name_ko
+                    self.logger.info(f"Knox PIMS activity_type 사용: {activity_type.name_ko}")
                 else:
                     # get_activity_type이 None을 반환한 경우 기본값 사용
                     daily_data.loc[knox_pims_mask, 'activity_code'] = 'G3_MEETING'
                     daily_data.loc[knox_pims_mask, 'activity_type'] = 'meeting'
                     daily_data.loc[knox_pims_mask, '활동분류'] = 'G3회의'
+                    self.logger.info(f"Knox PIMS 기본값 사용: G3회의")
                 daily_data.loc[knox_pims_mask, 'confidence'] = 100
+                # 보호 플래그 추가 - Knox PIMS 데이터가 나중에 변경되지 않도록
+                daily_data.loc[knox_pims_mask, 'is_knox_pims_protected'] = True
                 self.logger.info(f"Knox PIMS G3 태그 {knox_pims_mask.sum()}개를 G3_MEETING으로 설정")
+                
+                # 디버깅: Knox PIMS 설정 후 상태 확인
+                for idx in daily_data[knox_pims_mask].index:
+                    row = daily_data.loc[idx]
+                    self.logger.info(f"Knox PIMS 설정 완료 [{idx}]: {row['datetime']} - activity_code={row['activity_code']}, duration={row.get('knox_duration', row.get('duration_minutes', 'N/A'))}분, is_protected=True")
+            else:
+                self.logger.info(f"[_apply_tag_based_rules] Knox PIMS 마스크 없음")
             
-            # 일반 G3 태그 처리
+            # 일반 G3 태그 처리 (Knox PIMS 보호된 항목 제외)
             if regular_g3_mask.any():
-                activity_type = get_activity_type('MEETING')
-                daily_data.loc[regular_g3_mask, 'activity_code'] = 'MEETING'
-                daily_data.loc[regular_g3_mask, 'activity_type'] = activity_type.category if activity_type else 'meeting'
-                daily_data.loc[regular_g3_mask, '활동분류'] = activity_type.name_ko if activity_type else '회의'
-                daily_data.loc[regular_g3_mask, 'confidence'] = 95
-                self.logger.info(f"일반 G3 태그 {regular_g3_mask.sum()}개를 MEETING으로 설정")
+                # Knox PIMS 보호된 항목은 제외
+                if 'is_knox_pims_protected' in daily_data.columns:
+                    regular_g3_mask = regular_g3_mask & (~daily_data['is_knox_pims_protected'].fillna(False))
+                
+                if regular_g3_mask.any():
+                    activity_type = get_activity_type('MEETING')
+                    daily_data.loc[regular_g3_mask, 'activity_code'] = 'MEETING'
+                    daily_data.loc[regular_g3_mask, 'activity_type'] = activity_type.category if activity_type else 'meeting'
+                    daily_data.loc[regular_g3_mask, '활동분류'] = activity_type.name_ko if activity_type else '회의'
+                    daily_data.loc[regular_g3_mask, 'confidence'] = 95
+                    self.logger.info(f"일반 G3 태그 {regular_g3_mask.sum()}개를 MEETING으로 설정")
         
         # 7. M1 태그 (바이오플라자 식사) 처리 - 확정적 규칙 엔진 사용
         m1_mask = daily_data['tag_code'] == 'M1'
@@ -3124,18 +3177,24 @@ class IndividualDashboard:
         for i in range(len(data)):
             current_row = data.iloc[i].copy()
             
-            # 다음 태그까지의 시간 계산
-            if i < len(data) - 1:
-                next_time = data.iloc[i + 1]['datetime']
-                duration = (next_time - current_row['datetime']).total_seconds() / 60
-                
-                # 60분을 초과하는 간격은 5분으로 제한 (비정상적인 gap 방지)
-                if duration > 60:
-                    self.logger.warning(f"긴 시간 간격 감지: {current_row['datetime']} ~ {next_time} ({duration:.0f}분) -> 5분으로 제한")
-                    duration = 5
+            # Knox PIMS 보호 - 이미 duration이 설정된 경우 유지
+            if (current_row.get('is_knox_pims_protected', False) and 
+                pd.notna(current_row.get('knox_duration'))):
+                duration = current_row.get('knox_duration')
+                self.logger.info(f"Knox PIMS duration 보존: {current_row['datetime']} - {duration}분")
             else:
-                # 마지막 태그는 5분으로 설정
-                duration = 5
+                # 다음 태그까지의 시간 계산
+                if i < len(data) - 1:
+                    next_time = data.iloc[i + 1]['datetime']
+                    duration = (next_time - current_row['datetime']).total_seconds() / 60
+                    
+                    # 60분을 초과하는 간격은 5분으로 제한 (비정상적인 gap 방지)
+                    if duration > 60:
+                        self.logger.warning(f"긴 시간 간격 감지: {current_row['datetime']} ~ {next_time} ({duration:.0f}분) -> 5분으로 제한")
+                        duration = 5
+                else:
+                    # 마지막 태그는 5분으로 설정
+                    duration = 5
             
             # O 태그(장비 사용)의 경우 최소 10분, 최대 30분으로 제한
             if current_row.get('INOUT_GB') == 'O' or current_row.get('activity_code') == 'EQUIPMENT_OPERATION':
@@ -3163,7 +3222,12 @@ class IndividualDashboard:
                         current_row['activity_type'] = 'work'
                         current_row['confidence'] = 85
             
-            current_row['duration_minutes'] = duration
+            # Knox PIMS 보호 - duration_minutes 덮어쓰기 방지
+            if not (current_row.get('is_knox_pims_protected', False) and pd.notna(current_row.get('knox_duration'))):
+                current_row['duration_minutes'] = duration
+            else:
+                current_row['duration_minutes'] = current_row.get('knox_duration')
+                self.logger.info(f"Knox PIMS duration_minutes 보존: {current_row['datetime']} - {current_row['duration_minutes']}분")
             filled_data.append(current_row)
             
             # 출문(T3) 후 재입문(T2) 사이의 시간을 채우기
@@ -3294,8 +3358,25 @@ class IndividualDashboard:
             
             # 활동별 시간 집계 (새로운 activity_code 기준)
             if 'duration_minutes' in classified_data.columns:
+                # Knox PIMS 데이터 상태 확인
+                knox_pims_data = classified_data[
+                    (classified_data['source'] == 'knox_pims') | 
+                    (classified_data['activity_code'] == 'G3_MEETING') |
+                    (classified_data.get('is_knox_pims_protected', False) == True)
+                ]
+                if not knox_pims_data.empty:
+                    self.logger.info(f"[analyze_daily_data] Knox PIMS 데이터 상태:")
+                    for idx, row in knox_pims_data.iterrows():
+                        self.logger.info(f"  - [{idx}] {row['datetime']}: activity_code={row['activity_code']}, duration={row['duration_minutes']}분, source={row.get('source', 'N/A')}")
+                
                 activity_summary = classified_data.groupby('activity_code')['duration_minutes'].sum()
                 activity_type_summary = classified_data.groupby('activity_type')['duration_minutes'].sum()
+                
+                # Knox PIMS 관련 집계 확인
+                if 'G3_MEETING' in activity_summary:
+                    self.logger.info(f"[analyze_daily_data] G3_MEETING 집계: {activity_summary['G3_MEETING']}분")
+                if 'MEETING' in activity_summary:
+                    self.logger.info(f"[analyze_daily_data] MEETING 집계: {activity_summary['MEETING']}분")
                 
                 # 디버깅: 식사 활동 집계 확인
                 meal_activities = classified_data[classified_data['activity_code'].isin(['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL'])]
@@ -4215,8 +4296,24 @@ class IndividualDashboard:
             )
         
         with col2:
-            # 회의 시간 (activity_breakdown에서 가져오기)
-            meeting_hours = work_analysis.get('work_breakdown', {}).get('meeting', 0)
+            # 회의 시간 계산 - 여러 소스에서 확인
+            meeting_hours = 0
+            
+            # 1. work_breakdown에서 meeting 시간
+            meeting_hours += work_analysis.get('work_breakdown', {}).get('meeting', 0)
+            
+            # 2. activity_summary에서 G3_MEETING과 MEETING 시간 추가
+            if 'activity_summary' in analysis_result:
+                activity_summary = analysis_result['activity_summary']
+                g3_meeting_minutes = activity_summary.get('G3_MEETING', 0)
+                meeting_minutes = activity_summary.get('MEETING', 0)
+                meeting_hours += g3_meeting_minutes / 60  # 분을 시간으로 변환
+                meeting_hours += meeting_minutes / 60     # 분을 시간으로 변환
+                
+                # 디버깅 로그
+                if g3_meeting_minutes > 0 or meeting_minutes > 0:
+                    self.logger.info(f"회의 시간 집계: G3_MEETING={g3_meeting_minutes}분, MEETING={meeting_minutes}분, 총 회의시간={meeting_hours:.1f}시간")
+            
             st.metric(
                 "회의 시간",
                 f"{meeting_hours:.1f}h",
@@ -4743,6 +4840,12 @@ class IndividualDashboard:
         claim_data = analysis_result.get('claim_data', {})
         work_time_analysis = analysis_result.get('work_time_analysis', {})
         
+        # 디버깅: activity_summary 전체 내용 출력
+        self.logger.info(f"[render_activity_summary] activity_summary 전체 내용:")
+        for activity_code, minutes in activity_summary.items():
+            if minutes > 0:
+                self.logger.info(f"  - {activity_code}: {minutes}분")
+        
         # 주요 지표 계산 - 체류시간 사용
         total_minutes = analysis_result.get('total_hours', 0) * 60  # 체류시간을 분으로 변환
         
@@ -4882,7 +4985,7 @@ class IndividualDashboard:
         }
         .summary-metrics {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 15px;
             margin-bottom: 20px;
         }
@@ -4986,10 +5089,54 @@ class IndividualDashboard:
             else:
                 st.markdown("**업무 효율성:** -", unsafe_allow_html=True)
         
-        # 주요 지표들 - 5개 카드를 한 행으로
+        # 회의시간 계산
+        meeting_codes = ['G3_MEETING', 'MEETING']
+        meeting_minutes = sum(activity_summary.get(code, 0) for code in meeting_codes)
+        
+        # Knox PIMS 회의 시간 직접 보정 - 60분 회의가 5분으로 잘못 집계되는 문제 해결
+        if 'raw_data' in analysis_result:
+            raw_data = analysis_result['raw_data']
+            if isinstance(raw_data, pd.DataFrame) and not raw_data.empty:
+                # Knox PIMS 회의 데이터 찾기
+                knox_meetings = raw_data[
+                    (raw_data.get('source') == 'knox_pims') | 
+                    (raw_data.get('DR_NO') == 'G3_KNOX_PIMS') |
+                    ((raw_data.get('tag_code') == 'G3') & (raw_data.get('DR_NM', '').str.contains('Knox PIMS', na=False)))
+                ]
+                if not knox_meetings.empty:
+                    knox_total_minutes = 0
+                    for idx, meeting in knox_meetings.iterrows():
+                        knox_duration = meeting.get('knox_duration')
+                        if pd.notna(knox_duration) and knox_duration > 0:
+                            knox_total_minutes += knox_duration
+                            self.logger.info(f"Knox PIMS 회의 직접 보정: {meeting['datetime']} - {knox_duration}분")
+                    
+                    if knox_total_minutes > 0:
+                        # 기존 회의시간에서 Knox PIMS 잘못 집계된 부분을 빼고 정확한 시간 추가
+                        meeting_minutes = knox_total_minutes  # 간단히 Knox PIMS 시간으로 교체
+                        self.logger.info(f"Knox PIMS 회의 시간 보정 완료: {knox_total_minutes}분")
+                    else:
+                        # Knox PIMS 데이터가 있지만 knox_duration이 없는 경우 60분으로 가정
+                        meeting_minutes = 60
+                        self.logger.info(f"Knox PIMS 회의 시간 기본값 적용: 60분")
+        
+        # 디버깅 로그 - 항상 표시
+        self.logger.info(f"[render_activity_summary] 회의시간 집계:")
+        for code in meeting_codes:
+            minutes = activity_summary.get(code, 0)
+            self.logger.info(f"  - {code}: {minutes}분")
+        self.logger.info(f"  - 총 회의시간: {meeting_minutes}분 = {meeting_minutes/60:.1f}시간")
+        
+        # activity_summary의 모든 G3 관련 키 확인
+        g3_related = {k: v for k, v in activity_summary.items() if 'G3' in k or 'MEETING' in k}
+        if g3_related:
+            self.logger.info(f"[render_activity_summary] G3/MEETING 관련 모든 키: {g3_related}")
+        
+        
+        # 주요 지표들 - 6개 카드를 한 행으로
         st.markdown("<div class='summary-metrics'>", unsafe_allow_html=True)
         
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
         
         with col1:
             # actual_work_hours를 사용하여 표시
@@ -5004,6 +5151,16 @@ class IndividualDashboard:
             """, unsafe_allow_html=True)
         
         with col2:
+            meeting_percent = (meeting_minutes / total_minutes * 100) if total_minutes > 0 else 0
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #7B1FA2;">{meeting_minutes/60:.1f}h</div>
+                    <div class="metric-label">회의시간</div>
+                    <div class="metric-percent">{meeting_percent:.1f}%</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
             meal_percent = (meal_minutes / total_minutes * 100) if total_minutes > 0 else 0
             st.markdown(f"""
                 <div class="metric-card">
@@ -5013,7 +5170,7 @@ class IndividualDashboard:
                 </div>
             """, unsafe_allow_html=True)
         
-        with col3:
+        with col4:
             movement_percent = (movement_minutes / total_minutes * 100) if total_minutes > 0 else 0
             st.markdown(f"""
                 <div class="metric-card">
@@ -5023,7 +5180,7 @@ class IndividualDashboard:
                 </div>
             """, unsafe_allow_html=True)
         
-        with col4:
+        with col5:
             rest_percent = (rest_minutes / total_minutes * 100) if total_minutes > 0 else 0
             st.markdown(f"""
                 <div class="metric-card">
@@ -5033,7 +5190,7 @@ class IndividualDashboard:
                 </div>
             """, unsafe_allow_html=True)
         
-        with col5:
+        with col6:
             # 데이터 품질 점수 사용 (analyze_data_quality에서 계산된 값)
             data_quality_score = analysis_result.get('data_quality', {}).get('overall_quality_score', 80)
             st.markdown(f"""

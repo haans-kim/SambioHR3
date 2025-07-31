@@ -101,7 +101,7 @@ pip install -r requirements.txt
 ### 2. 애플리케이션 실행
 ```bash
 # Streamlit 대시보드 실행
-streamlit run src/ui/streamlit_app.py
+ㅊ
 
 # 또는 메인 애플리케이션 실행
 python src/ui/streamlit_app.py
