@@ -28,7 +28,10 @@
       "Bash(venv/bin/pip:*)",
       "Bash(sqlite3:*)",
       "Bash(find:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(code:*)",
+      "Bash(deactivate)",
+      "Bash(chmod:*)"
     ],
     "deny": []
   }
