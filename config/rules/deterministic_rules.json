@@ -5,7 +5,7 @@
   "legal_notice": "식사 시간 규칙은 법적 검토 후 변경될 수 있습니다",
   "config": {
     "meal_max_duration_minutes": 60,
-    "takeout_fixed_duration_minutes": 30,
+    "takeout_fixed_duration_minutes": 10,
     "short_duration_threshold_minutes": 5,
     "long_duration_threshold_minutes": 120,
     "critical_confidence": 0.98,
@@ -50,8 +50,8 @@
           "condition": "tag == 'M2'",
           "state": "TRANSIT",
           "confidence": 0.98,
-          "duration": 30,
-          "description": "테이크아웃 구매 - 고정 30분"
+          "duration": 10,
+          "description": "테이크아웃 구매 - 고정 10분"
         },
         {
           "id": "m2_to_n2_meal",

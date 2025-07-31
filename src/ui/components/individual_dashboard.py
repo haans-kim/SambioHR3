@@ -3116,7 +3116,7 @@ class IndividualDashboard:
                 minute = daily_data.loc[idx, 'datetime'].minute
                 time_in_minutes = hour * 60 + minute
                 
-                # M2는 고정 30분
+                # M2는 고정 10분
                 meal_duration = rule_integration.get_meal_duration('M2', None)
                 daily_data.loc[idx, 'duration_minutes'] = meal_duration
                 
@@ -3269,8 +3269,8 @@ class IndividualDashboard:
                     # 테이크아웃 여부 확인
                     is_takeout = current_row.get('is_takeout', False)
                     if is_takeout:
-                        # 테이크아웃은 30분 고정
-                        duration = 30
+                        # 테이크아웃은 10분 고정
+                        duration = 10
                     else:
                         # 식당 식사는 다음 이동태그까지 (최대 1시간)
                         # duration은 이미 다음 태그까지의 시간으로 계산됨
@@ -3504,7 +3504,7 @@ class IndividualDashboard:
                         # 식사 세그먼트 직접 추가
                         activity_segments.append({
                             'start_time': meal_time,
-                            'end_time': meal_time + timedelta(minutes=30),  # 테이크아웃도 30분으로 통일
+                            'end_time': meal_time + timedelta(minutes=10),  # 테이크아웃 10분
                             'activity': 'meal',
                             'activity_code': activity_code,
                             'location': restaurant_info,
@@ -3722,8 +3722,8 @@ class IndividualDashboard:
                         # 식사 세그먼트의 경우 특별 처리
                         if activity_segments[i].get('activity_code') in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
                             if activity_segments[i].get('is_takeout', False):
-                                # 테이크아웃은 30분 고정
-                                duration = 30
+                                # 테이크아웃은 10분 고정
+                                duration = 10
                             else:
                                 # 식당 식사는 다음 태그까지의 시간 사용 (최대 1시간)
                                 if duration > 60:
@@ -5655,7 +5655,7 @@ class IndividualDashboard:
                             'work_status': 'M',
                             'activity_label': '',
                             'Tag_Code': 'M2' if is_takeout else 'M1',  # M1/M2 태그 추가
-                            'duration_minutes': 30 if is_takeout else None,  # 테이크아웃은 30분 고정
+                            'duration_minutes': 10 if is_takeout else None,  # 테이크아웃은 10분 고정
                             'meal_type': '',
                             'meal_time': '',  # 여기는 비워둠 - 나중에 duration으로 채움
                             'restaurant': restaurant_info,
@@ -5694,9 +5694,9 @@ class IndividualDashboard:
                         
                         # 마지막 행의 duration이 None인 경우 기본값 설정
                         if pd.isna(raw_data.iloc[-1]['duration_minutes']):
-                            # 테이크아웃이면 30분, 아니면 30분 (식당 식사는 실제 다음 태그까지의 시간으로 계산됨)
+                            # 테이크아웃이면 10분, 아니면 30분 (식당 식사는 실제 다음 태그까지의 시간으로 계산됨)
                             is_takeout = raw_data.iloc[-1].get('is_takeout', False)
-                            raw_data.at[raw_data.index[-1], 'duration_minutes'] = 30
+                            raw_data.at[raw_data.index[-1], 'duration_minutes'] = 10 if is_takeout else 30
         
         # ========== Tag_Code 할당 시작 ==========
         self.logger.info("===== Tag_Code 할당 시작 =====")
@@ -6053,7 +6053,7 @@ class IndividualDashboard:
                     # 테이크아웃 여부 확인
                     is_takeout = ('is_takeout' in raw_data.columns and raw_data.loc[idx, 'is_takeout']) or '테이크아웃' in str(row.get('DR_NM', ''))
                     if is_takeout:
-                        df_display.at[idx, 'meal_time'] = '30'  # 테이크아웃은 30분 고정
+                        df_display.at[idx, 'meal_time'] = '10'  # 테이크아웃은 10분 고정
                     else:
                         # 식당 식사는 체류시간 표시 (최대 60분)
                         duration = row['duration_minutes']
