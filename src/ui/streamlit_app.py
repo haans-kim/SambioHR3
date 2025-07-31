@@ -65,7 +65,8 @@ class SambioHumanApp:
             self.organization_dashboard = OrganizationDashboard(self.organization_analyzer)
             self.data_upload = DataUploadComponent(self.db_manager)
             self.model_config = ModelConfigComponent(None)  # HMM 없이
-            self.transition_rule_editor = TransitionRuleEditor()
+            # HMM 모델 사용 안함 - TransitionRuleEditor 비활성화
+            # self.transition_rule_editor = TransitionRuleEditor()
             self.network_analysis_dashboard = NetworkAnalysisDashboard(self.db_manager)
             
             logger.info("애플리케이션 컴포넌트 초기화 완료")

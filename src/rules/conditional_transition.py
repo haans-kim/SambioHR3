@@ -19,7 +19,8 @@ class ConditionalTransitionEngine:
     def __init__(self, rule_manager: Optional[RuleManager] = None):
         self.rule_manager = rule_manager or RuleManager()
         self.logger = logging.getLogger(__name__)
-        self.hmm_model = HMMModel()
+        # HMM 모델 비활성화 - 태그 기반 시스템만 사용
+        # self.hmm_model = HMMModel()
         
         # 캐시
         self.prediction_cache = {}

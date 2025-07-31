@@ -163,7 +163,7 @@ class HMMRuleConverter:
     def save_rules_to_file(self, filepath: Optional[str] = None):
         """규칙을 JSON 파일로 저장"""
         if filepath is None:
-            filepath = "config/rules/hmm_transition_rules.json"
+            filepath = "config/rules/unified_transition_rules.json"
         
         # 디렉토리 생성
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)

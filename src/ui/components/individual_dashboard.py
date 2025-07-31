@@ -1691,8 +1691,21 @@ class IndividualDashboard:
                     # N2: 복지공간 -> 휴게
                     daily_data.loc[daily_data['tag_code'] == 'N2', 'activity_code'] = 'REST'
                     
-                    # T1: 건물/구역 연결 -> 내부이동
-                    daily_data.loc[daily_data['tag_code'] == 'T1', 'activity_code'] = 'MOVEMENT'
+                    # T1: 건물/구역 연결 -> 짧은 시간만 이동으로 분류
+                    t1_mask = daily_data['tag_code'] == 'T1'
+                    if t1_mask.any():
+                        # T1 태그의 duration을 확인하여 짧은 것만 이동으로 분류
+                        t1_movement_count = 0
+                        t1_work_count = 0
+                        for idx in daily_data[t1_mask].index:
+                            duration = daily_data.loc[idx, 'duration_minutes']
+                            if pd.isna(duration) or duration <= 10:  # 10분 이하만 이동
+                                daily_data.loc[idx, 'activity_code'] = 'MOVEMENT'
+                                t1_movement_count += 1
+                            else:  # 10분 초과는 작업으로 분류
+                                daily_data.loc[idx, 'activity_code'] = 'WORK'
+                                t1_work_count += 1
+                        self.logger.info(f"🔍 T1 태그 처리: 총 {t1_mask.sum()}건 → MOVEMENT {t1_movement_count}건, WORK {t1_work_count}건")
                     
                     # T2: 출입포인트(IN) -> 출근으로 처리
                     t2_mask = daily_data['tag_code'] == 'T2'
@@ -1752,8 +1765,20 @@ class IndividualDashboard:
                         # NN: 비근무구역에서 비근무중 (휴식)
                         daily_data.loc[daily_data['activity_label'] == 'NN', 'activity_code'] = 'REST'
                         
-                        # YM: 근무구역에서 이동중
-                        daily_data.loc[daily_data['activity_label'] == 'YM', 'activity_code'] = 'MOVEMENT'
+                        # YM: 근무구역에서 이동중 -> 짧은 시간만 이동으로 분류
+                        ym_mask = daily_data['activity_label'] == 'YM'
+                        if ym_mask.any():
+                            ym_movement_count = 0
+                            ym_work_count = 0
+                            for idx in daily_data[ym_mask].index:
+                                duration = daily_data.loc[idx, 'duration_minutes']
+                                if pd.isna(duration) or duration <= 15:  # 15분 이하만 이동
+                                    daily_data.loc[idx, 'activity_code'] = 'MOVEMENT'
+                                    ym_movement_count += 1
+                                else:  # 15분 초과는 작업으로 분류 (근무구역에서 장시간)
+                                    daily_data.loc[idx, 'activity_code'] = 'WORK'
+                                    ym_work_count += 1
+                            self.logger.info(f"🔍 YM 태그 처리: 총 {ym_mask.sum()}건 → MOVEMENT {ym_movement_count}건, WORK {ym_work_count}건")
             
             # HMM 분류기 사용 전에 is_actual_meal 플래그 확인
             if 'is_actual_meal' not in daily_data.columns:
@@ -4909,6 +4934,21 @@ class IndividualDashboard:
         
         # 이동시간 (출퇴근 제외)
         movement_minutes = activity_summary.get('MOVEMENT', 0)
+        self.logger.info(f"🔍 MOVEMENT 시간 분석: {movement_minutes:.1f}분 = {movement_minutes/60:.2f}시간")
+        
+        # MOVEMENT로 분류된 세그먼트들의 상세 분석
+        if hasattr(analysis_result, 'get') and 'activity_segments' in analysis_result:
+            movement_segments = [seg for seg in analysis_result['activity_segments'] 
+                               if seg.get('activity_code') == 'MOVEMENT']
+            if movement_segments:
+                self.logger.info(f"🔍 MOVEMENT 세그먼트 수: {len(movement_segments)}개")
+                total_movement_from_segments = sum(seg.get('duration_minutes', 0) for seg in movement_segments)
+                self.logger.info(f"🔍 세그먼트 기반 MOVEMENT 시간: {total_movement_from_segments:.1f}분")
+                
+                # 상위 5개 MOVEMENT 세그먼트 로깅
+                sorted_segments = sorted(movement_segments, key=lambda x: x.get('duration_minutes', 0), reverse=True)
+                for i, seg in enumerate(sorted_segments[:5]):
+                    self.logger.info(f"🔍 MOVEMENT #{i+1}: {seg.get('duration_minutes', 0):.1f}분 @ {seg.get('location', 'N/A')} ({seg.get('start_time', 'N/A')})")
         
         # 휴식시간
         rest_codes = ['REST', 'FITNESS']

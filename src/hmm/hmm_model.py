@@ -312,7 +312,7 @@ class HMMModel:
         
         return emission_matrix
     
-    def load_transition_rules(self, filepath: str = "config/rules/hmm_transition_rules.json"):
+    def load_transition_rules(self, filepath: str = "config/rules/unified_transition_rules.json"):
         """JSON 파일에서 전이 규칙 로드"""
         self.rules_filepath = filepath
         
