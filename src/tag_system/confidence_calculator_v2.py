@@ -289,6 +289,7 @@ class ConfidenceCalculatorV2:
             'work', 'meeting', 'training', 'preparation',  # 소문자 (신뢰지수 계산 결과)
             'WORK', 'MEETING', 'TRAINING', 'PREPARATION',  # 대문자 (태그 기반 규칙)
             'FOCUSED_WORK', 'EQUIPMENT_OPERATION',  # 추가 작업 활동
+            'G3_MEETING',  # Knox PIMS 회의
             '업무', '회의', '교육', '준비',  # 한글 상태명
             '업무(확실)'  # O 태그로 확정된 업무
         ]
@@ -340,23 +341,40 @@ class ConfidenceCalculatorV2:
                     
                     # 가장 높은 확률의 활동 선택
                     main_activity = max(confidence.items(), key=lambda x: x[1])[0]
+                    activity = main_activity  # activity 변수에 할당
                     
                     # 작업 관련 활동인지 확인
                     is_work_activity = main_activity in work_activities
+                
+                # 활동 유형 결정
+                if is_work_activity:
+                    # G3_MEETING은 meeting으로 분류
+                    if activity == 'G3_MEETING':
+                        activity_type = 'meeting'
+                    elif activity in ['MEETING', '회의']:
+                        activity_type = 'meeting'
+                    elif activity in ['TRAINING', '교육']:
+                        activity_type = 'training'
+                    elif activity in ['PREPARATION', '준비']:
+                        activity_type = 'preparation'
+                    else:
+                        activity_type = 'work'
+                else:
+                    activity_type = None
                 
                 # 블록 처리
                 if current_block_start is None:
                     # 새 블록 시작
                     if is_work_activity:
                         current_block_start = i
-                        current_activity = 'work'
+                        current_activity = activity_type
                 else:
                     # 현재 블록 진행 중
-                    if not is_work_activity:
-                        # 작업 블록 종료
+                    if not is_work_activity or current_activity != activity_type:
+                        # 작업 블록 종료 (활동 종료 또는 활동 유형 변경)
                         work_blocks.append((current_block_start, i-1, current_activity))
-                        current_block_start = None
-                        current_activity = None
+                        current_block_start = None if not is_work_activity else i
+                        current_activity = None if not is_work_activity else activity_type
             else:
                 # 점심시간이나 TAKEOUT인 경우 현재 작업 블록 종료
                 if current_block_start is not None:
@@ -401,8 +419,13 @@ class ConfidenceCalculatorV2:
             
             # 첫 몇 개 블록만 로그
             if block_idx < 3:
-                self.logger.info(f"작업 블록 {block_idx}: {start_time} ~ {end_time} ({block_minutes:.1f}분)")
-            activity_minutes['work'] += block_minutes
+                self.logger.info(f"작업 블록 {block_idx}: {start_time} ~ {end_time} ({block_minutes:.1f}분, {activity_type})")
+            
+            # activity_type에 따라 적절한 카테고리에 시간 추가
+            if activity_type in activity_minutes:
+                activity_minutes[activity_type] += block_minutes
+            else:
+                activity_minutes['work'] += block_minutes
             
             # 블록 내 태그들의 신뢰도 수집
             for idx in range(start_idx, end_idx + 1):

@@ -14,6 +14,9 @@ from typing import Dict, List, Optional
 
 from ...database import DatabaseManager, get_pickle_manager
 from ...data_processing import DataTransformer, ExcelLoader
+from ...data.equipment_processors import process_eam_data, process_lams_data, process_mes_data
+from ...data.knox_processors import process_knox_approval_data, process_knox_pims_data, process_knox_mail_data
+from ...data.integrated_data_processor import IntegratedDataProcessor
 
 class DataUploadComponent:
     """데이터 업로드 컴포넌트"""
@@ -24,6 +27,7 @@ class DataUploadComponent:
         self.pickle_manager = get_pickle_manager()
         self.data_transformer = DataTransformer()
         self.excel_loader = ExcelLoader()
+        self.integrated_processor = IntegratedDataProcessor(db_manager)
         
         # 설정 파일 경로
         self.config_dir = Path("config")
@@ -94,6 +98,26 @@ class DataUploadComponent:
                 "table_name": "mes_data",
                 "display_name": "MES(생산시스템) 로그인 이력",
                 "process_func_name": "process_mes_data"
+            },
+            "조직현황 자료": {
+                "table_name": "organization_data",
+                "display_name": "조직현황",
+                "process_func_name": "process_organization_data"
+            },
+            "Knox Approval": {
+                "table_name": "knox_approval_data",
+                "display_name": "Knox 결재 데이터",
+                "process_func_name": "process_knox_approval_data"
+            },
+            "Knox PIMS": {
+                "table_name": "knox_pims_data",
+                "display_name": "Knox PIMS 회의 데이터",
+                "process_func_name": "process_knox_pims_data"
+            },
+            "Knox Mail": {
+                "table_name": "knox_mail_data",
+                "display_name": "Knox 메일 데이터",
+                "process_func_name": "process_knox_mail_data"
             }
         }
         
@@ -110,7 +134,15 @@ class DataUploadComponent:
         # process_func 설정
         for data_type, info in default_types.items():
             if info.get('process_func_name'):
-                info['process_func'] = getattr(self.data_transformer, info['process_func_name'], None)
+                # data_transformer에서 찾아보고, 없으면 직접 import한 함수에서 찾기
+                func = getattr(self.data_transformer, info['process_func_name'], None)
+                if func is None:
+                    # equipment_processors와 knox_processors의 함수들
+                    if info['process_func_name'] in ['process_eam_data', 'process_lams_data', 'process_mes_data']:
+                        func = globals().get(info['process_func_name'])
+                    elif info['process_func_name'] in ['process_knox_approval_data', 'process_knox_pims_data', 'process_knox_mail_data']:
+                        func = globals().get(info['process_func_name'])
+                info['process_func'] = func
             else:
                 info['process_func'] = None
         
@@ -445,6 +477,9 @@ class DataUploadComponent:
         status_text.empty()
         detail_text.empty()
         
+        # Knox 및 Equipment 데이터 통합 처리
+        self._integrate_knox_and_equipment_data()
+        
         # 설정 저장 - 세션 상태가 이미 업데이트되어 있으므로 바로 저장
         self._save_upload_config()
         self.logger.info("데이터 로드 완료 - 설정 저장됨")
@@ -454,6 +489,43 @@ class DataUploadComponent:
         
         # 버튼 클릭 후에만 rerun
         time.sleep(2)  # 성공 메시지를 보여주기 위한 대기
+    
+    def _integrate_knox_and_equipment_data(self):
+        """Knox 및 Equipment 데이터를 daily_logs와 통합"""
+        try:
+            # Knox 데이터 로드
+            knox_approval_df = self.pickle_manager.load_pickle('knox_approval_data')
+            knox_pims_df = self.pickle_manager.load_pickle('knox_pims_data')
+            knox_mail_df = self.pickle_manager.load_pickle('knox_mail_data')
+            
+            # Equipment 데이터 로드
+            eam_df = self.pickle_manager.load_pickle('eam_data')
+            lams_df = self.pickle_manager.load_pickle('lams_data')
+            mes_df = self.pickle_manager.load_pickle('mes_data')
+            
+            # Knox 데이터 통합
+            if any(df is not None for df in [knox_approval_df, knox_pims_df, knox_mail_df]):
+                self.logger.info("Knox 데이터 통합 처리 시작")
+                self.integrated_processor.process_and_integrate_knox_data(
+                    approval_df=knox_approval_df,
+                    pims_df=knox_pims_df,
+                    mail_df=knox_mail_df
+                )
+                self.logger.info("Knox 데이터 통합 완료")
+            
+            # Equipment 데이터 통합
+            if any(df is not None for df in [eam_df, lams_df, mes_df]):
+                self.logger.info("Equipment 데이터 통합 처리 시작")
+                self.integrated_processor.process_and_integrate_equipment_data(
+                    eam_df=eam_df,
+                    lams_df=lams_df,
+                    mes_df=mes_df
+                )
+                self.logger.info("Equipment 데이터 통합 완료")
+                
+        except Exception as e:
+            self.logger.error(f"데이터 통합 중 오류 발생: {e}")
+            st.warning(f"일부 데이터 통합에 실패했습니다: {str(e)}")
     
     def _load_from_excel(self, data_type: str, info: Dict, config: Dict, detail_text=None):
         """엑셀 파일에서 데이터 로드"""

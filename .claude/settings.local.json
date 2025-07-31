@@ -22,7 +22,12 @@
       "Bash(git lfs:*)",
       "Bash(brew install:*)",
       "Bash(gh release create:*)",
-      "Bash(gh release view:*)"
+      "Bash(gh release view:*)",
+      "mcp__ide__executeCode",
+      "Bash(./venv/bin/python:*)",
+      "Bash(venv/bin/pip:*)",
+      "Bash(sqlite3:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

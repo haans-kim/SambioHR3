@@ -285,6 +285,52 @@ class HmmModelConfig(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class KnoxApprovalData(Base):
+    """Knox 결재 데이터"""
+    __tablename__ = 'knox_approval_data'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    employee_id = Column(String(20), nullable=False, index=True)
+    task = Column(String(100), nullable=True)
+    apid = Column(String(100), nullable=True)
+    remark = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class KnoxPimsData(Base):
+    """Knox PIMS 회의 데이터"""
+    __tablename__ = 'knox_pims_data'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    employee_id = Column(String(20), nullable=False, index=True)
+    meeting_id = Column(String(100), nullable=False)
+    meeting_type = Column(String(50), nullable=True)
+    start_time = Column(DateTime, nullable=False, index=True)
+    end_time = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class KnoxMailData(Base):
+    """Knox 메일 데이터"""
+    __tablename__ = 'knox_mail_data'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    mail_key = Column(String(200), nullable=False)
+    send_time = Column(DateTime, nullable=False, index=True)
+    sender_id = Column(String(20), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class EquipmentData(Base):
+    """장비 사용 데이터 (EAM, LAMS, MES)"""
+    __tablename__ = 'equipment_data'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    system_type = Column(String(20), nullable=False)  # EAM, LAMS, MES
+    timestamp = Column(DateTime, nullable=False, index=True)
+    employee_id = Column(String(20), nullable=False, index=True)
+    action_type = Column(String(50), nullable=True)
+    application = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class ProcessingLog(Base):
     """처리 로그"""
     __tablename__ = 'processing_log'

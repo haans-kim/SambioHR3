@@ -54,6 +54,16 @@ ACTIVITY_TYPES = {
         keywords=['장비', '기계', 'EQUIPMENT', 'MACHINE'],
         location_patterns=['EQUIPMENT', '장비실']
     ),
+    'O_TAG_WORK': ActivityType(
+        code='O_TAG_WORK',
+        name_ko='O태그작업',
+        name_en='O Tag Work',
+        category='work',
+        color='#3F51B5',  # 남색
+        priority=55,
+        keywords=['O태그', 'O_TAG'],
+        location_patterns=['O_TAG']
+    ),
     'WORK_PREPARATION': ActivityType(
         code='WORK_PREPARATION',
         name_ko='작업준비',
@@ -84,6 +94,68 @@ ACTIVITY_TYPES = {
         priority=70,
         keywords=['회의', 'MEETING', 'CONFERENCE'],
         location_patterns=['MEETING', '회의실', 'CONFERENCE']
+    ),
+    'G3_MEETING': ActivityType(
+        code='G3_MEETING',
+        name_ko='G3회의',
+        name_en='G3 Meeting',
+        category='meeting',
+        color='#7B1FA2',  # 진한 보라색
+        priority=80,
+        keywords=['G3회의', 'Knox PIMS', 'PIMS'],
+        location_patterns=['G3_KNOX_PIMS']
+    ),
+    
+    # Knox/Equipment 시스템 작업
+    'KNOX_APPROVAL': ActivityType(
+        code='KNOX_APPROVAL',
+        name_ko='결재업무',
+        name_en='Knox Approval',
+        category='work',
+        color='#607D8B',  # 회색-파란색
+        priority=55,
+        keywords=['결재', 'APPROVAL', 'Knox결재'],
+        location_patterns=['KNOX_APPROVAL']
+    ),
+    'KNOX_MAIL': ActivityType(
+        code='KNOX_MAIL',
+        name_ko='메일업무',
+        name_en='Knox Mail',
+        category='work',
+        color='#795548',  # 갈색
+        priority=55,
+        keywords=['메일', 'MAIL', 'Knox메일'],
+        location_patterns=['KNOX_MAIL']
+    ),
+    'EAM_WORK': ActivityType(
+        code='EAM_WORK',
+        name_ko='안전설비',
+        name_en='EAM Work',
+        category='work',
+        color='#009688',  # 청록색
+        priority=55,
+        keywords=['EAM', '안전설비', '설비점검'],
+        location_patterns=['EAM']
+    ),
+    'LAMS_WORK': ActivityType(
+        code='LAMS_WORK',
+        name_ko='품질시스템',
+        name_en='LAMS Work',
+        category='work',
+        color='#00ACC1',  # 밝은 청록색
+        priority=55,
+        keywords=['LAMS', '품질', '품질시스템'],
+        location_patterns=['LAMS']
+    ),
+    'MES_WORK': ActivityType(
+        code='MES_WORK',
+        name_ko='생산시스템',
+        name_en='MES Work',
+        category='work',
+        color='#00897B',  # 진한 청록색
+        priority=55,
+        keywords=['MES', '생산', '생산시스템'],
+        location_patterns=['MES']
     ),
     
     # 이동

@@ -741,9 +741,10 @@ class IndividualDashboard:
             return None
     
     def get_daily_tag_data(self, employee_id: str, selected_date: date):
-        """특정 직원의 특정 날짜 태깅 데이터 가져오기"""
+        """특정 직원의 특정 날짜 태깅 데이터 가져오기 (Knox/Equipment 데이터 포함)"""
         try:
             from ...database import get_pickle_manager
+            from ...data.integrated_data_processor import IntegratedDataProcessor
             pickle_manager = get_pickle_manager()
             
             # 태깅 데이터 로드
@@ -859,49 +860,227 @@ class IndividualDashboard:
                 else:
                     self.logger.warning("정문 태그가 필터링 후 없음")
             
-            # 장비 사용 데이터를 O 태그로 추가
-            equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
-            if equipment_data is not None and not equipment_data.empty:
-                # 야간 근무자의 경우 장비 데이터도 동일한 시간대로 필터링
-                if work_type in ['flexible', 'night_shift']:
-                    # 야간 근무 시간대만 포함
-                    equipment_data['timestamp'] = pd.to_datetime(equipment_data['timestamp'])
-                    equipment_data = equipment_data[
-                        (equipment_data['timestamp'] >= start_time) & 
-                        (equipment_data['timestamp'] < end_time)
-                    ]
-                    self.logger.info(f"야간 근무자 장비 데이터 필터링: {start_time} ~ {end_time}, {len(equipment_data)}건")
+            # Knox 및 Equipment 데이터를 태그 형식으로 추가
+            knox_equipment_tags = self._get_knox_and_equipment_tags(employee_id, selected_date, work_type)
+            if knox_equipment_tags is not None and not knox_equipment_tags.empty:
+                self.logger.info(f"Knox/Equipment 데이터 {len(knox_equipment_tags)}건을 추가")
                 
-                if not equipment_data.empty:
-                    self.logger.info(f"장비 데이터 {len(equipment_data)}건을 O 태그로 변환하여 추가")
+                # 태그별 상세 정보 로깅
+                for _, tag in knox_equipment_tags.iterrows():
+                    self.logger.info(f"  - {tag['datetime']}: {tag['DR_NM']} ({tag['tag_code']})")
+                
+                # 야간 근무자의 경우 시간대 필터링
+                if work_type in ['flexible', 'night_shift']:
+                    start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
+                    end_time = datetime.combine(selected_date, time(12, 0))
                     
-                    # 장비 데이터를 태그 형식으로 변환
-                    for _, equip in equipment_data.iterrows():
-                        # O 태그 생성
-                        o_tag = pd.DataFrame({
-                            'ENTE_DT': [int(pd.to_datetime(equip['timestamp']).strftime('%Y%m%d'))],
-                            '출입시각': [int(pd.to_datetime(equip['timestamp']).strftime('%H%M%S'))],
-                            '사번': [int(employee_id)],
-                            'DR_NO': ['O_EQUIP'],  # 가상의 게이트 번호
-                            'DR_NM': [f"{equip.get('system_type', 'EQUIPMENT')} 사용"],
-                            'INOUT_GB': ['O'],  # O 태그
-                            'datetime': [pd.to_datetime(equip['timestamp'])],
-                            'time': [pd.to_datetime(equip['timestamp']).strftime('%H%M%S')],
-                            'equipment_type': [equip.get('system_type', '')],
-                            'action_type': [equip.get('action_type', 'USE')]
-                        })
-                        
-                        # 기존 데이터에 추가
-                        daily_data = pd.concat([daily_data, o_tag], ignore_index=True)
+                    self.logger.info(f"야간 근무자 필터링 적용: {start_time} ~ {end_time}")
+                    knox_equipment_tags_before = len(knox_equipment_tags)
                     
-                    # 시간순 재정렬
+                    knox_equipment_tags = knox_equipment_tags[
+                        (knox_equipment_tags['datetime'] >= start_time) & 
+                        (knox_equipment_tags['datetime'] < end_time)
+                    ]
+                    self.logger.info(f"야간 근무 시간대 필터링 후: {len(knox_equipment_tags)}건 (필터링 전: {knox_equipment_tags_before}건)")
+                else:
+                    self.logger.info(f"주간 근무자(work_type: {work_type}) - 시간대 필터링 미적용")
+                
+                # 기존 데이터와 병합
+                if not knox_equipment_tags.empty:
+                    daily_data = pd.concat([daily_data, knox_equipment_tags], ignore_index=True)
                     daily_data = daily_data.sort_values('datetime').reset_index(drop=True)
+                    self.logger.info(f"병합 후 총 {len(daily_data)}건의 태그")
             
             return daily_data
             
         except Exception as e:
             self.logger.error(f"일일 태그 데이터 로드 실패: {e}")
             return None
+    
+    def _get_knox_and_equipment_tags(self, employee_id: str, selected_date: date, work_type: str) -> pd.DataFrame:
+        """Knox 및 Equipment 데이터를 태그 형식으로 변환하여 반환"""
+        try:
+            from ...database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
+            
+            all_tags = []
+            emp_id_str = str(employee_id)
+            self.logger.info(f"_get_knox_and_equipment_tags 호출 - 사번: {emp_id_str}, 날짜: {selected_date}, 근무유형: {work_type}")
+            
+            # 1. Knox Approval 데이터
+            knox_approval = pickle_manager.load_dataframe(name='knox_approval_data')
+            if knox_approval is not None:
+                # 사번 컬럼 확인 및 변환
+                if 'UserNo' in knox_approval.columns:
+                    knox_approval['employee_id'] = knox_approval['UserNo'].astype(str)
+                elif '사번' in knox_approval.columns:
+                    knox_approval['employee_id'] = knox_approval['사번'].astype(str)
+                
+                # 해당 직원의 데이터 필터링
+                if 'employee_id' in knox_approval.columns:
+                    emp_data = knox_approval[knox_approval['employee_id'] == emp_id_str]
+                    if not emp_data.empty:
+                        for _, row in emp_data.iterrows():
+                            timestamp = pd.to_datetime(row.get('Timestamp', row.get('timestamp')))
+                            if timestamp.date() == selected_date:
+                                tag = {
+                                    'ENTE_DT': int(timestamp.strftime('%Y%m%d')),
+                                    '출입시각': int(timestamp.strftime('%H%M%S')),
+                                    '사번': int(employee_id),
+                                    'DR_NO': 'O_KNOX_APPROVAL',
+                                    'DR_NM': 'Knox 결재 시스템',
+                                    'INOUT_GB': 'O',
+                                    'datetime': timestamp,
+                                    'time': timestamp.strftime('%H%M%S'),
+                                    'tag_code': 'O',
+                                    'source': 'knox_approval'
+                                }
+                                all_tags.append(tag)
+            
+            # 2. Knox PIMS 데이터 (G3 태그)
+            knox_pims = pickle_manager.load_dataframe(name='knox_pims_data')
+            if knox_pims is not None:
+                self.logger.info(f"Knox PIMS 데이터 로드됨: {len(knox_pims)}건")
+                self.logger.info(f"Knox PIMS 컬럼: {list(knox_pims.columns)}")
+                
+                # 사번 컬럼 변환
+                if '사번' in knox_pims.columns:
+                    knox_pims['employee_id'] = knox_pims['사번'].astype(str)
+                    self.logger.info(f"사번 컬럼 변환 완료")
+                else:
+                    self.logger.warning(f"Knox PIMS에 '사번' 컬럼이 없습니다. 컬럼: {list(knox_pims.columns)}")
+                
+                # 해당 직원의 데이터 필터링
+                if 'employee_id' in knox_pims.columns:
+                    emp_data = knox_pims[knox_pims['employee_id'] == emp_id_str]
+                    self.logger.info(f"Knox PIMS - {emp_id_str} 사번 데이터: {len(emp_data)}건")
+                    
+                    # 20220245 사번 데이터 상세 확인
+                    if emp_id_str == '20220245' and not emp_data.empty:
+                        self.logger.info(f"20220245 사번의 전체 Knox PIMS 데이터:")
+                        for idx, row in emp_data.iterrows():
+                            start_time_str = row.get('시작일시_GMT+9', row.get('start_time', ''))
+                            self.logger.info(f"  - 일정ID: {row.get('일정ID', '')}, 시작: {start_time_str}")
+                    
+                    if not emp_data.empty:
+                        matched_count = 0
+                        for _, row in emp_data.iterrows():
+                            # 시작 시간 처리
+                            start_time_str = row.get('시작일시_GMT+9', row.get('start_time'))
+                            if pd.isna(start_time_str):
+                                self.logger.warning(f"시작 시간이 없음: 일정ID {row.get('일정ID', '')}")
+                                continue
+                                
+                            start_time = pd.to_datetime(start_time_str)
+                            end_time_str = row.get('종료일시_GMT+9', row.get('end_time'))
+                            end_time = pd.to_datetime(end_time_str) if pd.notna(end_time_str) else None
+                            
+                            self.logger.debug(f"Knox PIMS 시간 확인 - 일정ID: {row.get('일정ID', '')}, 시작시간: {start_time}, 종료시간: {end_time}, 선택날짜: {selected_date}")
+                            
+                            if start_time.date() == selected_date:
+                                matched_count += 1
+                                self.logger.info(f"Knox PIMS 매칭 - 시간: {start_time} ~ {end_time}, 일정ID: {row.get('일정ID', '')}, 일정구분: {row.get('일정_구분', '')}")
+                                
+                                # 회의 시간 계산 (분 단위)
+                                meeting_duration = None
+                                if end_time:
+                                    meeting_duration = (end_time - start_time).total_seconds() / 60
+                                
+                                tag = {
+                                    'ENTE_DT': int(start_time.strftime('%Y%m%d')),
+                                    '출입시각': int(start_time.strftime('%H%M%S')),
+                                    '사번': int(employee_id),
+                                    'DR_NO': 'G3_KNOX_PIMS',
+                                    'DR_NM': 'Knox PIMS 회의',
+                                    'INOUT_GB': 'G3',
+                                    'datetime': start_time,
+                                    'time': start_time.strftime('%H%M%S'),
+                                    'tag_code': 'G3',
+                                    'source': 'knox_pims',
+                                    'meeting_id': row.get('일정ID', row.get('meeting_id', '')),
+                                    'knox_end_time': end_time,  # Knox PIMS 종료시간 저장
+                                    'knox_duration': meeting_duration  # Knox PIMS 회의 시간(분) 저장
+                                }
+                                all_tags.append(tag)
+                        self.logger.info(f"Knox PIMS - {selected_date} 날짜로 매칭된 데이터: {matched_count}건")
+            
+            # 3. Knox Mail 데이터
+            knox_mail = pickle_manager.load_dataframe(name='knox_mail_data')
+            if knox_mail is not None:
+                # 사번 컬럼 변환
+                if '발신인사번_text' in knox_mail.columns:
+                    knox_mail['employee_id'] = knox_mail['발신인사번_text'].astype(str)
+                
+                # 해당 직원의 데이터 필터링
+                if 'employee_id' in knox_mail.columns:
+                    emp_data = knox_mail[knox_mail['employee_id'] == emp_id_str]
+                    if not emp_data.empty:
+                        for _, row in emp_data.iterrows():
+                            timestamp = pd.to_datetime(row.get('발신일시_GMT9', row.get('timestamp')))
+                            if timestamp.date() == selected_date:
+                                tag = {
+                                    'ENTE_DT': int(timestamp.strftime('%Y%m%d')),
+                                    '출입시각': int(timestamp.strftime('%H%M%S')),
+                                    '사번': int(employee_id),
+                                    'DR_NO': 'O_KNOX_MAIL',
+                                    'DR_NM': 'Knox 메일 시스템',
+                                    'INOUT_GB': 'O',
+                                    'datetime': timestamp,
+                                    'time': timestamp.strftime('%H%M%S'),
+                                    'tag_code': 'O',
+                                    'source': 'knox_mail'
+                                }
+                                all_tags.append(tag)
+            
+            # 4. Equipment 데이터 (EAM, LAMS, MES)
+            equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
+            if equipment_data is not None and not equipment_data.empty:
+                for _, equip in equipment_data.iterrows():
+                    timestamp = pd.to_datetime(equip['timestamp'])
+                    tag = {
+                        'ENTE_DT': int(timestamp.strftime('%Y%m%d')),
+                        '출입시각': int(timestamp.strftime('%H%M%S')),
+                        '사번': int(employee_id),
+                        'DR_NO': f"O_{equip.get('system_type', 'EQUIP')}",
+                        'DR_NM': f"{equip.get('system_type', 'Equipment')} 사용",
+                        'INOUT_GB': 'O',
+                        'datetime': timestamp,
+                        'time': timestamp.strftime('%H%M%S'),
+                        'tag_code': 'O',
+                        'source': f"equipment_{equip.get('system_type', '').lower()}"
+                    }
+                    all_tags.append(tag)
+            
+            # DataFrame으로 변환
+            if all_tags:
+                tags_df = pd.DataFrame(all_tags)
+                self.logger.info(f"Knox/Equipment 태그 생성: 총 {len(tags_df)}건")
+                
+                # 태그 종류별 통계
+                if 'tag_code' in tags_df.columns:
+                    tag_stats = tags_df.groupby('tag_code').size()
+                    for tag_code, count in tag_stats.items():
+                        self.logger.info(f"  - {tag_code} 태그: {count}건")
+                
+                # G3 태그 상세 확인
+                g3_tags = tags_df[tags_df['tag_code'] == 'G3']
+                if not g3_tags.empty:
+                    self.logger.info(f"G3 태그 {len(g3_tags)}건 상세:")
+                    for _, tag in g3_tags.iterrows():
+                        self.logger.info(f"  - {tag['datetime']}: {tag['DR_NM']} (meeting_id: {tag.get('meeting_id', 'N/A')})")
+                else:
+                    self.logger.info("G3 태그가 없음")
+                
+                return tags_df
+            else:
+                self.logger.info("Knox/Equipment 태그가 전혀 없음")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            self.logger.error(f"Knox/Equipment 태그 생성 실패: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            return pd.DataFrame()
     
     def get_employee_attendance_data(self, employee_id: str, selected_date) -> pd.DataFrame:
         """직원의 근태 정보 조회"""
@@ -1210,6 +1389,57 @@ class IndividualDashboard:
                 daily_data.loc[o_tag_mask, 'work_status'] = 'O'  # 장비 조작 상태
                 daily_data.loc[o_tag_mask, 'activity_label'] = 'YO'  # 근무구역에서 장비조작
                 self.logger.info(f"O 태그 {o_tag_mask.sum()}건을 EQUIPMENT_OPERATION으로 분류")
+            
+            # tag_code 기반 추가 분류 (Knox/Equipment 데이터)
+            if 'tag_code' in daily_data.columns:
+                # G3 태그 (회의) 처리
+                g3_mask = daily_data['tag_code'] == 'G3'
+                if g3_mask.any():
+                    daily_data.loc[g3_mask, 'activity_code'] = 'G3_MEETING'
+                    daily_data.loc[g3_mask, 'confidence'] = 100  # 회의 데이터는 확실함
+                    daily_data.loc[g3_mask, 'work_area_type'] = 'Y'
+                    daily_data.loc[g3_mask, 'work_status'] = 'M'  # Meeting
+                    daily_data.loc[g3_mask, 'activity_label'] = 'YM'
+                    self.logger.info(f"G3 태그 {g3_mask.sum()}건을 G3_MEETING으로 분류")
+                
+                # O 태그 추가 처리 (Knox/Equipment 데이터)
+                o_tag_code_mask = daily_data['tag_code'] == 'O'
+                if o_tag_code_mask.any():
+                    # source 정보로 세부 분류
+                    if 'source' in daily_data.columns:
+                        knox_approval_mask = o_tag_code_mask & (daily_data['source'] == 'knox_approval')
+                        knox_mail_mask = o_tag_code_mask & (daily_data['source'] == 'knox_mail')
+                        eam_mask = o_tag_code_mask & (daily_data['source'] == 'equipment_eam')
+                        lams_mask = o_tag_code_mask & (daily_data['source'] == 'equipment_lams')
+                        mes_mask = o_tag_code_mask & (daily_data['source'] == 'equipment_mes')
+                        
+                        if knox_approval_mask.any():
+                            daily_data.loc[knox_approval_mask, 'activity_code'] = 'KNOX_APPROVAL'
+                            self.logger.info(f"Knox Approval {knox_approval_mask.sum()}건 분류")
+                        
+                        if knox_mail_mask.any():
+                            daily_data.loc[knox_mail_mask, 'activity_code'] = 'KNOX_MAIL'
+                            self.logger.info(f"Knox Mail {knox_mail_mask.sum()}건 분류")
+                        
+                        if eam_mask.any():
+                            daily_data.loc[eam_mask, 'activity_code'] = 'EAM_WORK'
+                            self.logger.info(f"EAM {eam_mask.sum()}건 분류")
+                        
+                        if lams_mask.any():
+                            daily_data.loc[lams_mask, 'activity_code'] = 'LAMS_WORK'
+                            self.logger.info(f"LAMS {lams_mask.sum()}건 분류")
+                        
+                        if mes_mask.any():
+                            daily_data.loc[mes_mask, 'activity_code'] = 'MES_WORK'
+                            self.logger.info(f"MES {mes_mask.sum()}건 분류")
+                    else:
+                        # source 정보가 없으면 일반 O태그 작업으로
+                        daily_data.loc[o_tag_code_mask, 'activity_code'] = 'O_TAG_WORK'
+                    
+                    daily_data.loc[o_tag_code_mask, 'confidence'] = 95
+                    daily_data.loc[o_tag_code_mask, 'work_area_type'] = 'Y'
+                    daily_data.loc[o_tag_code_mask, 'work_status'] = 'W'
+                    daily_data.loc[o_tag_code_mask, 'activity_label'] = 'YW'
             
             # 디버깅: DR_NM 값 확인
             unique_dr_nm = daily_data['DR_NM'].unique()
@@ -2107,10 +2337,18 @@ class IndividualDashboard:
             
             # 3. 집중근무 판별 (같은 작업 위치에 30분 이상 체류)
             # 체류시간 계산 (M1/M2 태그는 위에서 이미 계산됨)
-            # M1/M2 태그의 duration을 먼저 백업
+            # M1/M2 태그와 Knox PIMS의 duration을 먼저 백업
             if 'tag_code' in daily_data.columns:
                 m1_m2_mask = daily_data['tag_code'].isin(['M1', 'M2'])
                 m1_m2_durations = daily_data.loc[m1_m2_mask, 'duration_minutes'].copy() if 'duration_minutes' in daily_data.columns and m1_m2_mask.any() else pd.Series()
+            
+            # Knox PIMS duration 백업
+            knox_pims_mask = pd.Series([False] * len(daily_data))
+            knox_durations = pd.Series()
+            if 'source' in daily_data.columns:
+                knox_pims_mask = daily_data['source'] == 'knox_pims'
+                if knox_pims_mask.any() and 'knox_duration' in daily_data.columns:
+                    knox_durations = daily_data.loc[knox_pims_mask, 'knox_duration'].copy()
             
             daily_data['next_time'] = daily_data['datetime'].shift(-1)
             daily_data['duration_minutes'] = (daily_data['next_time'] - daily_data['datetime']).dt.total_seconds() / 60
@@ -2126,6 +2364,11 @@ class IndividualDashboard:
             if 'tag_code' in daily_data.columns and m1_m2_mask.any() and not m1_m2_durations.empty:
                 daily_data.loc[m1_m2_mask, 'duration_minutes'] = m1_m2_durations
                 self.logger.info(f"[첫 번째 duration 계산] M1/M2 태그 duration 복원: {m1_m2_mask.sum()}건")
+            
+            # Knox PIMS duration 복원
+            if knox_pims_mask.any() and not knox_durations.empty:
+                daily_data.loc[knox_pims_mask, 'duration_minutes'] = knox_durations
+                self.logger.info(f"[첫 번째 duration 계산] Knox PIMS duration 복원: {knox_pims_mask.sum()}건")
             
             # O 태그 (장비 사용)의 체류시간 설정
             o_tag_indices = daily_data[daily_data['INOUT_GB'] == 'O'].index
@@ -2181,10 +2424,17 @@ class IndividualDashboard:
             # 시간순 재정렬
             daily_data = daily_data.sort_values('datetime').reset_index(drop=True)
             
-            # duration_minutes 재계산 (M1/M2 태그는 제외)
+            # duration_minutes 재계산 (M1/M2 태그와 Knox PIMS는 제외)
             # M1/M2 태그의 duration을 먼저 백업
             m1_m2_mask = daily_data['tag_code'].isin(['M1', 'M2'])
             m1_m2_durations = daily_data.loc[m1_m2_mask, 'duration_minutes'].copy()
+            
+            # Knox PIMS duration 백업
+            knox_pims_mask = pd.Series([False] * len(daily_data))
+            knox_durations = pd.Series()
+            if 'source' in daily_data.columns:
+                knox_pims_mask = daily_data['source'] == 'knox_pims'
+                knox_durations = daily_data.loc[knox_pims_mask, 'duration_minutes'].copy() if knox_pims_mask.any() else pd.Series()
             
             daily_data['next_time'] = daily_data['datetime'].shift(-1)
             daily_data['duration_minutes'] = (daily_data['next_time'] - daily_data['datetime']).dt.total_seconds() / 60
@@ -2194,6 +2444,11 @@ class IndividualDashboard:
             if m1_m2_mask.any():
                 daily_data.loc[m1_m2_mask, 'duration_minutes'] = m1_m2_durations
                 self.logger.info(f"M1/M2 태그 duration 복원: {m1_m2_mask.sum()}건")
+            
+            # Knox PIMS duration 복원
+            if knox_pims_mask.any() and not knox_durations.empty:
+                daily_data.loc[knox_pims_mask, 'duration_minutes'] = knox_durations
+                self.logger.info(f"Knox PIMS duration 복원: {knox_pims_mask.sum()}건")
             
             # 같은 위치에서 30분 이상 작업한 경우 집중근무로 분류
             focused_work_mask = (
@@ -2635,12 +2890,37 @@ class IndividualDashboard:
         # 6. G3 태그 (회의공간) 처리
         g3_mask = daily_data['tag_code'] == 'G3'
         if g3_mask.any():
-            activity_type = get_activity_type('MEETING')
-            daily_data.loc[g3_mask, 'activity_code'] = 'MEETING'
-            daily_data.loc[g3_mask, 'activity_type'] = activity_type.category if activity_type else 'meeting'
-            daily_data.loc[g3_mask, '활동분류'] = activity_type.name_ko if activity_type else '회의'
-            daily_data.loc[g3_mask, 'confidence'] = 95
-            self.logger.info(f"G3 태그 {g3_mask.sum()}개를 MEETING으로 설정")
+            # Knox PIMS G3 태그는 G3_MEETING 유지
+            if 'source' in daily_data.columns:
+                knox_pims_mask = g3_mask & (daily_data['source'] == 'knox_pims')
+                regular_g3_mask = g3_mask & (daily_data['source'] != 'knox_pims')
+            else:
+                knox_pims_mask = pd.Series([False] * len(daily_data))
+                regular_g3_mask = g3_mask
+            
+            # Knox PIMS G3 태그 처리
+            if knox_pims_mask.any():
+                activity_type = get_activity_type('G3_MEETING')
+                if activity_type:
+                    daily_data.loc[knox_pims_mask, 'activity_code'] = 'G3_MEETING'
+                    daily_data.loc[knox_pims_mask, 'activity_type'] = 'meeting'
+                    daily_data.loc[knox_pims_mask, '활동분류'] = activity_type.name_ko
+                else:
+                    # get_activity_type이 None을 반환한 경우 기본값 사용
+                    daily_data.loc[knox_pims_mask, 'activity_code'] = 'G3_MEETING'
+                    daily_data.loc[knox_pims_mask, 'activity_type'] = 'meeting'
+                    daily_data.loc[knox_pims_mask, '활동분류'] = 'G3회의'
+                daily_data.loc[knox_pims_mask, 'confidence'] = 100
+                self.logger.info(f"Knox PIMS G3 태그 {knox_pims_mask.sum()}개를 G3_MEETING으로 설정")
+            
+            # 일반 G3 태그 처리
+            if regular_g3_mask.any():
+                activity_type = get_activity_type('MEETING')
+                daily_data.loc[regular_g3_mask, 'activity_code'] = 'MEETING'
+                daily_data.loc[regular_g3_mask, 'activity_type'] = activity_type.category if activity_type else 'meeting'
+                daily_data.loc[regular_g3_mask, '활동분류'] = activity_type.name_ko if activity_type else '회의'
+                daily_data.loc[regular_g3_mask, 'confidence'] = 95
+                self.logger.info(f"일반 G3 태그 {regular_g3_mask.sum()}개를 MEETING으로 설정")
         
         # 7. M1 태그 (바이오플라자 식사) 처리 - 확정적 규칙 엔진 사용
         m1_mask = daily_data['tag_code'] == 'M1'
@@ -3095,10 +3375,16 @@ class IndividualDashboard:
             
             # 나머지 활동 정리
             for idx, row in classified_data.iterrows():
-                # next_time이 NaT인 경우 처리
-                end_time = row.get('next_time')
-                if pd.isna(end_time):
-                    end_time = row['datetime'] + timedelta(minutes=5)
+                # Knox PIMS 회의의 경우 종료시간 사용
+                if row.get('source') == 'knox_pims' and pd.notna(row.get('knox_end_time')):
+                    end_time = row['knox_end_time']
+                    duration_minutes = row.get('knox_duration', 60)  # Knox에서 계산된 duration 사용
+                else:
+                    # next_time이 NaT인 경우 처리
+                    end_time = row.get('next_time')
+                    if pd.isna(end_time):
+                        end_time = row['datetime'] + timedelta(minutes=5)
+                    duration_minutes = None  # 나중에 계산
                 
                 # 태그 기반 규칙이 적용된 후에는 activity_code를 건드리지 않음
                 # T2/T3 태그는 이미 COMMUTE_IN/COMMUTE_OUT으로 설정됨
@@ -3189,16 +3475,21 @@ class IndividualDashboard:
                     'activity': activity_code,  # activity_type 대신 activity_code 사용
                     'activity_code': activity_code,
                     'location': row['DR_NM'],
-                    'duration_minutes': row.get('duration_minutes', 5),
+                    'duration_minutes': duration_minutes if duration_minutes is not None else row.get('duration_minutes', 5),
                     'confidence': row.get('confidence', 80),  # 신뢰도 추가
                     'is_actual_meal': row.get('is_actual_meal', False),  # 실제 식사 여부
                     'is_takeout': is_takeout_value,  # 테이크아웃 여부
-                    'tag_code': row.get('tag_code', '')  # tag_code도 전달
+                    'tag_code': row.get('tag_code', ''),  # tag_code도 전달
+                    'source': row.get('source', '')  # source 정보도 전달
                 }
                 
                 # 디버깅: T2 태그(출근) 세그먼트 생성 확인
                 if row.get('tag_code') == 'T2' or activity_code == 'COMMUTE_IN':
                     self.logger.info(f"[SEGMENT추가] 출근 세그먼트: {segment_data['start_time']} - activity_code={activity_code}, tag_code={row.get('tag_code')}")
+                
+                # 디버깅: G3 태그(회의) 세그먼트 생성 확인
+                if row.get('tag_code') == 'G3' or activity_code in ['MEETING', 'G3_MEETING']:
+                    self.logger.info(f"[SEGMENT추가] 회의 세그먼트: {segment_data['start_time']} - activity_code={activity_code}, tag_code={row.get('tag_code')}, source={row.get('source', 'N/A')}")
                 
                 activity_segments.append(segment_data)
             
@@ -3207,12 +3498,79 @@ class IndividualDashboard:
             
             # 디버깅: 전체 세그먼트 확인
             self.logger.info(f"총 {len(activity_segments)}개의 세그먼트 생성됨")
+            
+            # 활동 코드별 집계
+            activity_code_counts = {}
             for seg in activity_segments:
+                code = seg.get('activity_code', 'UNKNOWN')
+                activity_code_counts[code] = activity_code_counts.get(code, 0) + 1
+                
                 if seg['activity_code'] in ['COMMUTE_IN', 'COMMUTE_OUT']:
                     self.logger.info(f"출퇴근 세그먼트: {seg['start_time']} - {seg['activity_code']} @ {seg['location']}")
+                elif seg['activity_code'] in ['MEETING', 'G3_MEETING']:
+                    self.logger.info(f"회의 세그먼트: {seg['start_time']} - {seg['activity_code']} @ {seg['location']}")
+            
+            self.logger.info(f"활동 코드별 세그먼트 수: {activity_code_counts}")
+            
+            # Knox PIMS 회의 후 WORK 세그먼트 추가
+            new_segments = []
+            knox_meeting_count = 0
+            work_segment_added = 0
+            
+            for i in range(len(activity_segments)):
+                segment = activity_segments[i]
+                new_segments.append(segment)
+                
+                # Knox PIMS 회의 세그먼트 확인
+                if segment.get('source') == 'knox_pims':
+                    knox_meeting_count += 1
+                    self.logger.info(f"Knox PIMS 회의 발견 [{i}]: {segment['start_time']} ~ {segment['end_time']}, " +
+                                   f"activity_code={segment.get('activity_code')}, duration={segment.get('duration_minutes')}분")
+                
+                # Knox PIMS 회의 세그먼트인 경우
+                if (segment.get('source') == 'knox_pims' and 
+                    segment.get('activity_code') == 'G3_MEETING' and
+                    i < len(activity_segments) - 1):
+                    
+                    # 회의 종료 시간과 다음 세그먼트 시작 시간 사이에 간격이 있는 경우
+                    meeting_end = segment['end_time']
+                    next_start = activity_segments[i+1]['start_time']
+                    gap_minutes = (next_start - meeting_end).total_seconds() / 60
+                    
+                    self.logger.info(f"Knox PIMS 회의 종료: {meeting_end}, 다음 태그: {next_start}, 간격: {gap_minutes:.1f}분")
+                    
+                    if gap_minutes > 5:  # 5분 이상의 간격이 있으면 WORK 세그먼트 추가
+                        work_segment = {
+                            'start_time': meeting_end,
+                            'end_time': next_start,
+                            'activity': 'WORK',
+                            'activity_code': 'WORK',
+                            'location': '작업장',
+                            'duration_minutes': gap_minutes,
+                            'confidence': 70,
+                            'is_actual_meal': False,
+                            'is_takeout': False,
+                            'tag_code': '',
+                            'source': 'inferred'
+                        }
+                        new_segments.append(work_segment)
+                        work_segment_added += 1
+                        self.logger.info(f"회의 종료 후 WORK 세그먼트 추가: {meeting_end} ~ {next_start} ({gap_minutes:.1f}분)")
+            
+            self.logger.info(f"Knox PIMS 회의 {knox_meeting_count}건 발견, WORK 세그먼트 {work_segment_added}건 추가")
+            
+            activity_segments = new_segments
+            # 다시 시간순으로 정렬
+            activity_segments = sorted(activity_segments, key=lambda x: x['start_time'])
             
             # 정렬 후 duration_minutes 재계산
             for i in range(len(activity_segments)):
+                # Knox PIMS 회의는 이미 duration이 설정되어 있으므로 건너뛰기
+                if (activity_segments[i].get('source') == 'knox_pims' and 
+                    activity_segments[i]['duration_minutes'] is not None):
+                    self.logger.info(f"Knox PIMS 회의 duration 유지: {activity_segments[i]['start_time']} - {activity_segments[i]['duration_minutes']}분")
+                    continue
+                    
                 if activity_segments[i]['duration_minutes'] is None:
                     if i < len(activity_segments) - 1:
                         # 다음 세그먼트까지의 시간 계산
@@ -3644,6 +4002,14 @@ class IndividualDashboard:
                 if attendance_data is not None and not attendance_data.empty:
                     st.info(f"📋 근태 정보: {len(attendance_data)}건 발견")
                 
+                # Knox/Equipment 데이터 확인
+                knox_tags = daily_data[daily_data['tag_code'] == 'G3']
+                if not knox_tags.empty:
+                    self.logger.info(f"[분류 전] G3 태그 {len(knox_tags)}건 발견:")
+                    for idx, row in knox_tags.iterrows():
+                        self.logger.info(f"  - {row['datetime']}: tag_code={row.get('tag_code')}, source={row.get('source', 'N/A')}, " +
+                                       f"activity_code={row.get('activity_code', 'N/A')}, 활동분류={row.get('활동분류', 'N/A')}")
+                
                 # 활동 분류 수행 (employee_id와 selected_date 전달)
                 classified_data = self.classify_activities(daily_data, employee_id, selected_date)
                 
@@ -3654,8 +4020,21 @@ class IndividualDashboard:
                     for idx, row in t2_classified.head(3).iterrows():
                         self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code')}, activity_type={row.get('activity_type')}, DR_NM={row['DR_NM']}")
                 
+                # 분류 후 G3 태그 상태 확인
+                g3_classified = classified_data[classified_data['tag_code'] == 'G3']
+                if not g3_classified.empty:
+                    self.logger.info(f"[classify_activities 후] G3 태그 {len(g3_classified)}건:")
+                    for idx, row in g3_classified.iterrows():
+                        self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code', 'N/A')}, " +
+                                       f"활동분류={row.get('활동분류', 'N/A')}, source={row.get('source', 'N/A')}")
+                
                 # 분석 결과 생성
                 analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
+                
+                # analyze_daily_data가 실패한 경우 기본 결과 생성
+                if analysis_result is None:
+                    st.error("데이터 분석 중 오류가 발생했습니다. 기본 정보만 표시합니다.")
+                    analysis_result = self.create_sample_analysis_result(employee_id, (selected_date, selected_date))
                 
                 # 장비 데이터를 분석 결과에 추가
                 if equipment_data is not None and not equipment_data.empty:
@@ -3686,11 +4065,30 @@ class IndividualDashboard:
         except Exception as e:
             st.error(f"분석 중 오류 발생: {e}")
             self.logger.error(f"개인 분석 오류: {e}")
+            import traceback
+            self.logger.error(f"전체 스택 트레이스:\n{traceback.format_exc()}")
     
     def create_sample_analysis_result(self, employee_id: str, date_range: tuple):
         """샘플 분석 결과 생성"""
         return {
             'employee_id': employee_id,
+            'analysis_date': date_range[0],
+            'total_hours': 8.5,
+            'work_start': '08:00',
+            'work_end': '17:30',
+            'activity_summary': {
+                'WORK': 390,  # 6.5시간 * 60분
+                'MEETING': 72,  # 1.2시간 * 60분
+                'MOVEMENT': 48,  # 0.8시간 * 60분
+                'LUNCH': 60,
+                'BREAKFAST': 30,
+                'REST': 30
+            },
+            'area_summary': {},
+            'activity_segments': [],
+            'raw_data': [],
+            'total_records': 0,
+            'claim_data': {},
             'analysis_period': {
                 'start_date': date_range[0].isoformat(),
                 'end_date': date_range[1].isoformat()
@@ -3730,7 +4128,8 @@ class IndividualDashboard:
                     'medium': 25,
                     'low': 5
                 }
-            }
+            },
+            'work_type': 'day_shift'
         }
     
     def create_sample_timeline_data(self, date_range: tuple):
@@ -3805,7 +4204,7 @@ class IndividualDashboard:
         work_analysis = analysis_result['work_time_analysis']
         claim_data = analysis_result.get('claim_data', {})
         
-        # 주요 지표 대시보드
+        # 주요 지표 대시보드 - 첫 번째 줄
         col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
@@ -3816,26 +4215,32 @@ class IndividualDashboard:
             )
         
         with col2:
+            # 회의 시간 (activity_breakdown에서 가져오기)
+            meeting_hours = work_analysis.get('work_breakdown', {}).get('meeting', 0)
             st.metric(
-                "업무 효율성",
-                f"{work_analysis['efficiency_ratio']:.1f}%",
-                "2.3%"
+                "회의 시간",
+                f"{meeting_hours:.1f}h",
+                ""
             )
         
         with col3:
-            # 근무 형태 표시 (WORKSCHDTYPNM 필드 사용)
-            work_type = claim_data.get('claim_type', '선택근무제')
+            # 식사 시간 계산
+            meal_minutes = 0
+            if 'activity_summary' in analysis_result:
+                for meal_type in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
+                    meal_minutes += analysis_result['activity_summary'].get(meal_type, 0)
+            meal_hours = meal_minutes / 60
             st.metric(
-                "근무 형태",
-                work_type,
+                "식사 시간",
+                f"{meal_hours:.1f}h",
                 ""
             )
         
         with col4:
             st.metric(
-                "데이터 신뢰도",
-                f"{analysis_result['data_quality']['overall_quality_score']}%",
-                "1.5%"
+                "업무 효율성",
+                f"{work_analysis['efficiency_ratio']:.1f}%",
+                "2.3%"
             )
         
         with col5:
@@ -3846,6 +4251,56 @@ class IndividualDashboard:
                 f"{overtime:.1f}h" if overtime > 0 else "없음",
                 ""
             )
+        
+        # 두 번째 줄 - 부가 정보
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            # 근무 형태 표시 (WORKSCHDTYPNM 필드 사용)
+            work_type = claim_data.get('claim_type', '선택근무제')
+            st.metric(
+                "근무 형태",
+                work_type,
+                ""
+            )
+        
+        with col2:
+            st.metric(
+                "데이터 신뢰도",
+                f"{analysis_result['data_quality']['overall_quality_score']}%",
+                "1.5%"
+            )
+        
+        with col3:
+            # 이동 시간 추가
+            movement_hours = work_analysis.get('work_breakdown', {}).get('movement', 0)
+            st.metric(
+                "이동 시간",
+                f"{movement_hours:.1f}h",
+                ""
+            )
+        
+        with col4:
+            # 휴식 시간 추가
+            rest_hours = work_analysis.get('work_breakdown', {}).get('rest', 0)
+            st.metric(
+                "휴식 시간",
+                f"{rest_hours:.1f}h",
+                ""
+            )
+        
+        with col5:
+            # 집중근무 시간
+            if 'activity_summary' in analysis_result:
+                focused_minutes = analysis_result['activity_summary'].get('FOCUSED_WORK', 0)
+                focused_hours = focused_minutes / 60
+                st.metric(
+                    "집중근무",
+                    f"{focused_hours:.1f}h",
+                    ""
+                )
+            else:
+                st.metric("집중근무", "0.0h", "")
         
         # 활동 분류별 시간 분포 (프로그레스 바 스타일)
         st.markdown("#### 📊 활동 분류별 시간 분포")

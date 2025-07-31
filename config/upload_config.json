@@ -54,6 +54,21 @@
       "table_name": "organization_data",
       "display_name": "조직현황",
       "process_func_name": "process_organization_data"
+    },
+    "Knox Approval": {
+      "table_name": "knox_approval_data",
+      "display_name": "Knox 결재 데이터",
+      "process_func_name": "process_knox_approval_data"
+    },
+    "Knox PIMS": {
+      "table_name": "knox_pims_data",
+      "display_name": "Knox PIMS 회의 데이터",
+      "process_func_name": "process_knox_pims_data"
+    },
+    "Knox Mail": {
+      "table_name": "knox_mail_data",
+      "display_name": "Knox 메일 데이터",
+      "process_func_name": "process_knox_mail_data"
     }
   },
   "upload_config": {
@@ -166,6 +181,36 @@
       "dataframe_name": "organization_data",
       "last_modified": "2025-07-22T11:02:53.643340",
       "row_count": 5142
+    },
+    "Knox Approval": {
+      "files": [],
+      "file_names": [
+        "Knox_approval_250512-250723.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "knox_approval_data",
+      "last_modified": "2025-07-31T14:43:17.086033",
+      "row_count": 339818
+    },
+    "Knox PIMS": {
+      "files": [],
+      "file_names": [
+        "Knox_PIMS_2025.06.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "knox_pims_data",
+      "last_modified": "2025-07-31T14:43:49.076387",
+      "row_count": 48864
+    },
+    "Knox Mail": {
+      "files": [],
+      "file_names": [
+        "Knox mail_250709~250719.xlsx"
+      ],
+      "pickle_exists": true,
+      "dataframe_name": "knox_mail_data",
+      "last_modified": "2025-07-31T14:44:12.442204",
+      "row_count": 95630
     }
   }
 }

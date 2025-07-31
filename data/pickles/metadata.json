@@ -592,5 +592,57 @@
       "login_time": "datetime64[ns]",
       "USERNo": "int64"
     }
+  },
+  "data/pickles/knox_approval_data_v20250731_144314.pkl.gz": {
+    "name": "knox_approval_data",
+    "version": "20250731_144314",
+    "file_path": "data/pickles/knox_approval_data_v20250731_144314.pkl.gz",
+    "rows": 339818,
+    "columns": 5,
+    "size_mb": 5.88671875,
+    "created_at": "2025-07-31T14:43:17.086033",
+    "data_hash": null,
+    "description": "Combined from 1 files",
+    "dtypes": {
+      "Timestamp": "datetime64[ns]",
+      "UserNo": "int64",
+      "Task": "object",
+      "APID": "object",
+      "비고": "object"
+    }
+  },
+  "data/pickles/knox_pims_data_v20250731_144348.pkl.gz": {
+    "name": "knox_pims_data",
+    "version": "20250731_144348",
+    "file_path": "data/pickles/knox_pims_data_v20250731_144348.pkl.gz",
+    "rows": 48864,
+    "columns": 5,
+    "size_mb": 0.20110797882080078,
+    "created_at": "2025-07-31T14:43:49.076387",
+    "data_hash": null,
+    "description": "Combined from 1 files",
+    "dtypes": {
+      "사번": "int64",
+      "일정ID": "object",
+      "일정_구분": "object",
+      "시작일시_GMT+9": "datetime64[ns]",
+      "종료일시_GMT+9": "datetime64[ns]"
+    }
+  },
+  "data/pickles/knox_mail_data_v20250731_144411.pkl.gz": {
+    "name": "knox_mail_data",
+    "version": "20250731_144411",
+    "file_path": "data/pickles/knox_mail_data_v20250731_144411.pkl.gz",
+    "rows": 95630,
+    "columns": 3,
+    "size_mb": 2.736539840698242,
+    "created_at": "2025-07-31T14:44:12.442204",
+    "data_hash": null,
+    "description": "Combined from 1 files",
+    "dtypes": {
+      "메일key": "object",
+      "발신일시_GMT9": "datetime64[ns]",
+      "발신인사번_text": "int64"
+    }
   }
 }
