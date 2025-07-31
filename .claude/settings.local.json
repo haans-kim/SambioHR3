@@ -27,7 +27,8 @@
       "Bash(./venv/bin/python:*)",
       "Bash(venv/bin/pip:*)",
       "Bash(sqlite3:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }
