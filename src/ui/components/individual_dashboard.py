@@ -528,60 +528,65 @@ class IndividualDashboard:
                 if ' - ' in str(employee_id):
                     employee_id = employee_id.split(' - ')[0].strip()
                 
-                # 날짜 형식 맞추기
+                # 날짜 형식 맞추기 - 근무일이 datetime 타입인 경우와 int 타입인 경우 모두 처리
                 date_int = int(selected_date.strftime('%Y%m%d'))
+                date_datetime = pd.to_datetime(selected_date)
+                
+                # 디버깅: Claim 데이터 정보
+                self.logger.info(f"Claim 데이터 조회 - 사번: {employee_id}, 날짜: {selected_date}")
+                self.logger.info(f"Claim 데이터 행 수: {len(claim_data)}")
+                self.logger.info(f"근무일 컬럼 타입: {claim_data['근무일'].dtype}")
                 
                 # 사번을 숫자로 변환
                 try:
                     emp_id_int = int(employee_id)
-                    emp_claim = claim_data[
-                        (claim_data['사번'] == emp_id_int) & 
-                        (claim_data['근무일'] == date_int)
-                    ]
+                    
+                    # 근무일 컬럼 타입에 따라 다르게 처리
+                    if pd.api.types.is_datetime64_any_dtype(claim_data['근무일']):
+                        emp_claim = claim_data[
+                            (claim_data['사번'] == emp_id_int) & 
+                            (claim_data['근무일'] == date_datetime)
+                        ]
+                        self.logger.info(f"datetime 타입으로 조회 결과: {len(emp_claim)}건")
+                    else:
+                        emp_claim = claim_data[
+                            (claim_data['사번'] == emp_id_int) & 
+                            (claim_data['근무일'] == date_int)
+                        ]
+                        self.logger.info(f"int 타입으로 조회 결과: {len(emp_claim)}건")
                 except:
                     emp_claim = claim_data[
                         (claim_data['사번'] == employee_id) & 
                         (claim_data['근무일'] == date_int)
                     ]
+                    self.logger.info(f"문자 사번으로 조회 결과: {len(emp_claim)}건")
                 
                 if not emp_claim.empty and 'WORKSCHDTYPNM' in emp_claim.columns:
                     work_type = emp_claim.iloc[0]['WORKSCHDTYPNM']
                     self.logger.info(f"Claim 데이터에서 근무제 확인: {work_type}")
-                    if '탄력' in str(work_type):
-                        return 'flexible'
-                    elif '선택' in str(work_type):
+                    
+                    # 디버깅: 정확한 값 확인
+                    self.logger.info(f"근무제 원본 값: '{work_type}', 타입: {type(work_type)}")
+                    self.logger.info(f"근무제 값 길이: {len(str(work_type))}")
+                    self.logger.info(f"근무제 값 repr: {repr(work_type)}")
+                    
+                    # 선택적근로시간제, 선택근무제 등 다양한 표현 처리
+                    if '선택' in str(work_type) or '선택적' in str(work_type):
+                        self.logger.info(f"선택근무제로 분류: {work_type}")
                         return 'selective'
+                    elif '탄력' in str(work_type):
+                        self.logger.info(f"탄력근무제로 분류: {work_type}")
+                        return 'flexible'
                     elif '야간' in str(work_type) or '2교대' in str(work_type) or '교대' in str(work_type):
+                        self.logger.info(f"야간/교대근무제로 분류: {work_type}")
                         return 'night_shift'
                     else:
-                        # Claim 데이터가 있지만 키워드가 없는 경우도 태그 데이터로 추가 확인
-                        pass
+                        # Claim 데이터가 있지만 키워드가 없는 경우 기본값으로 처리
+                        self.logger.info(f"근무제 키워드 매칭 실패, 일반 근무로 분류: {work_type}")
+                        return 'standard'
             
-            # 태그 데이터로 야간 근무 여부 판단
-            tag_data = pickle_manager.load_dataframe(name='tag_data')
-            if tag_data is not None and '사번' in tag_data.columns:
-                try:
-                    emp_id_int = int(employee_id)
-                    date_int = int(selected_date.strftime('%Y%m%d'))
-                    
-                    # 해당 날짜의 첫 출근 시간 확인
-                    daily_tags = tag_data[
-                        (tag_data['사번'] == emp_id_int) & 
-                        (tag_data['ENTE_DT'] == date_int)
-                    ].copy()
-                    
-                    if not daily_tags.empty:
-                        # 시간 정보 파싱
-                        daily_tags['hour'] = daily_tags['출입시각'].astype(str).str.zfill(6).str[:2].astype(int)
-                        
-                        # 첫 태그의 시간 확인 (18시 이후 또는 6시 이전이면 야간조)
-                        first_hour = daily_tags.iloc[0]['hour']
-                        if first_hour >= 18 or first_hour <= 6:
-                            self.logger.info(f"야간 근무자 감지: {employee_id}, 첫 태그 시간: {first_hour}시")
-                            return 'night_shift'
-                except:
-                    pass
-            
+            # Claim 데이터가 없는 경우 기본값 사용
+            self.logger.info("Claim 데이터에서 근무제를 찾을 수 없음 - 기본값(standard) 사용")
             return 'standard'  # 기본값
             
         except Exception as e:
@@ -647,9 +652,9 @@ class IndividualDashboard:
                 # meal_data의 사번도 숫자로 변환
                 meal_data[emp_id_column] = pd.to_numeric(meal_data[emp_id_column], errors='coerce')
                 
-                # 야간 근무자는 전날 데이터도 포함해야 함
-                if work_type in ['flexible', 'night_shift']:
-                    # 야간 근무자는 전날과 당일 데이터 모두 가져오기
+                # 야간/교대 근무자는 전날 데이터도 포함해야 함 (선택근무제는 제외)
+                if work_type == 'night_shift':
+                    # 야간/교대 근무자는 전날과 당일 데이터 모두 가져오기
                     prev_date = selected_date - timedelta(days=1)
                     self.logger.info(f"야간 근무자 식사 데이터 조회: {prev_date} ~ {selected_date}")
                     
@@ -673,15 +678,15 @@ class IndividualDashboard:
                 self.logger.info(f"숫자 비교 결과: {len(daily_meals)}건의 식사 데이터 찾음 (근무유형: {work_type})")
                 
                 # 디버깅: 날짜 필터링 전 데이터 확인
-                if work_type in ['flexible', 'night_shift']:
+                if work_type == 'night_shift':
                     self.logger.info(f"필터링 전 전날({prev_date}) 식사: {len(prev_meals)}건, 당일({selected_date}) 식사: {len(curr_meals)}건")
                 
             except ValueError:
                 # 문자열로 비교
                 meal_data[emp_id_column] = meal_data[emp_id_column].astype(str)
                 
-                if work_type in ['flexible', 'night_shift']:
-                    # 야간 근무자는 전날과 당일 데이터 모두 가져오기
+                if work_type == 'night_shift':
+                    # 야간/교대 근무자는 전날과 당일 데이터 모두 가져오기
                     prev_date = selected_date - timedelta(days=1)
                     daily_meals = meal_data[
                         (meal_data[emp_id_column] == str(employee_id)) & 
@@ -697,8 +702,8 @@ class IndividualDashboard:
                 
                 self.logger.info(f"문자열 비교 결과: {len(daily_meals)}건의 식사 데이터 찾음 (근무유형: {work_type})")
             
-            # 야간 근무자의 경우 시간대 필터링
-            if work_type in ['flexible', 'night_shift'] and not daily_meals.empty:
+            # 야간/교대 근무자의 경우 시간대 필터링  
+            if work_type == 'night_shift' and not daily_meals.empty:
                 # 전날 저녁 17시 ~ 당일 오전 12시까지로 필터링
                 start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
                 end_time = datetime.combine(selected_date, time(12, 0))
@@ -763,8 +768,8 @@ class IndividualDashboard:
             try:
                 emp_id_int = int(employee_id)
                 
-                # 탄력적 근무제 또는 야간 근무의 경우 야간 근무 고려
-                if work_type in ['flexible', 'night_shift']:
+                # 야간/교대 근무의 경우 야간 근무 고려 (선택근무제는 제외)
+                if work_type == 'night_shift':
                     # 야간 근무자는 전날 저녁 ~ 당일 아침이 한 근무일
                     # 따라서 '선택 날짜'는 퇴근하는 날짜를 의미
                     prev_date = selected_date - timedelta(days=1)
@@ -828,8 +833,8 @@ class IndividualDashboard:
             )
             daily_data = daily_data.sort_values('datetime')
             
-            # 탄력적 근무제 또는 야간 근무의 경우 야간 근무 시간대 필터링
-            if work_type in ['flexible', 'night_shift']:
+            # 야간/교대 근무의 경우 야간 근무 시간대 필터링 (선택근무제는 제외)
+            if work_type == 'night_shift':
                 # 야간 근무는 전날 저녁 ~ 당일 아침 (하나의 근무 사이클)
                 # 선택한 날짜 = 퇴근하는 날짜 기준
                 
@@ -870,7 +875,7 @@ class IndividualDashboard:
                     self.logger.info(f"  - {tag['datetime']}: {tag['DR_NM']} ({tag['Tag_Code']})")
                 
                 # 야간 근무자의 경우 시간대 필터링
-                if work_type in ['flexible', 'night_shift']:
+                if work_type == 'night_shift':
                     start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
                     end_time = datetime.combine(selected_date, time(12, 0))
                     
@@ -1125,7 +1130,7 @@ class IndividualDashboard:
             # 근무 유형 확인
             work_type = self.get_employee_work_type(employee_id, selected_date)
             
-            if work_type in ['flexible', 'night_shift']:
+            if work_type == 'night_shift':
                 # 야간/교대 근무자는 전날 17:00부터 당일 12:00까지
                 start_date = selected_date - timedelta(days=1)
                 end_date = selected_date
@@ -1272,8 +1277,8 @@ class IndividualDashboard:
                 combined_data = pd.concat(equipment_data_list, ignore_index=True)
                 combined_data = combined_data.sort_values('timestamp')
                 
-                # 야간 근무자의 경우 시간대 필터링
-                if work_type in ['flexible', 'night_shift']:
+                # 야간/교대 근무자의 경우 시간대 필터링 (선택근무제는 제외)
+                if work_type == 'night_shift':
                     # 전날 저녁 17시 ~ 당일 오전 12시까지로 필터링
                     start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
                     end_time = datetime.combine(selected_date, time(12, 0))
@@ -1901,8 +1906,8 @@ class IndividualDashboard:
                         for idx in daily_data[t3_mask].index:
                             hour = daily_data.loc[idx, 'datetime'].hour
                             # 야간 근무자는 5-10시 퇴근, 일반 근무자는 17-22시 퇴근
-                            if (work_type in ['night_shift', 'flexible'] and 5 <= hour <= 10) or \
-                               (work_type not in ['night_shift', 'flexible'] and 17 <= hour <= 22):
+                            if (work_type == 'night_shift' and 5 <= hour <= 10) or \
+                               (work_type != 'night_shift' and 17 <= hour <= 22):
                                 daily_data.loc[idx, 'activity_code'] = 'COMMUTE_OUT'
                                 daily_data.loc[idx, 'activity_type'] = 'commute'
                                 daily_data.loc[idx, 'confidence'] = 100
@@ -2081,10 +2086,10 @@ class IndividualDashboard:
                     # 시간대에 따른 분류
                     for idx in daily_data[speed_gate_mask].index:
                         hour = daily_data.loc[idx, 'datetime'].hour
-                        if work_type in ['night_shift', 'flexible'] and 17 <= hour <= 22:  # 야간 근무자는 저녁 출근
+                        if work_type == 'night_shift' and 17 <= hour <= 22:  # 야간 근무자는 저녁 출근
                             daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
                             daily_data.loc[idx, 'confidence'] = 100
-                        elif work_type not in ['night_shift', 'flexible'] and 5 <= hour < 10:  # 일반 근무자는 아침 출근
+                        elif work_type != 'night_shift' and 5 <= hour < 10:  # 일반 근무자는 아침 출근
                             daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
                             daily_data.loc[idx, 'confidence'] = 100
                         else:  # 그 외 시간대는 이동
@@ -2098,10 +2103,10 @@ class IndividualDashboard:
                     # 시간대에 따른 분류
                     for idx in daily_data[gate_exit_mask].index:
                         hour = daily_data.loc[idx, 'datetime'].hour
-                        if work_type in ['night_shift', 'flexible'] and 5 <= hour <= 10:  # 야간 근무자는 아침 퇴근
+                        if work_type == 'night_shift' and 5 <= hour <= 10:  # 야간 근무자는 아침 퇴근
                             daily_data.loc[idx, 'activity_code'] = 'COMMUTE_OUT'
                             daily_data.loc[idx, 'confidence'] = 100
-                        elif work_type not in ['night_shift', 'flexible'] and 17 <= hour <= 22:  # 일반 근무자는 저녁 퇴근
+                        elif work_type != 'night_shift' and 17 <= hour <= 22:  # 일반 근무자는 저녁 퇴근
                             daily_data.loc[idx, 'activity_code'] = 'COMMUTE_OUT'
                             daily_data.loc[idx, 'confidence'] = 100
                 
@@ -2454,7 +2459,7 @@ class IndividualDashboard:
             
             # Knox PIMS duration 백업
             knox_pims_mask = pd.Series([False] * len(daily_data))
-            knox_durations = pd.Series()
+            knox_durations = pd.Series(dtype='float64')
             if 'source' in daily_data.columns:
                 knox_pims_mask = daily_data['source'] == 'knox_pims'
                 if knox_pims_mask.any() and 'knox_duration' in daily_data.columns:
@@ -2547,10 +2552,10 @@ class IndividualDashboard:
             
             # Knox PIMS duration 백업
             knox_pims_mask = pd.Series([False] * len(daily_data))
-            knox_durations = pd.Series()
+            knox_durations = pd.Series(dtype='float64')
             if 'source' in daily_data.columns:
                 knox_pims_mask = daily_data['source'] == 'knox_pims'
-                knox_durations = daily_data.loc[knox_pims_mask, 'duration_minutes'].copy() if knox_pims_mask.any() else pd.Series()
+                knox_durations = daily_data.loc[knox_pims_mask, 'duration_minutes'].copy() if knox_pims_mask.any() else pd.Series(dtype='float64')
             
             daily_data['next_time'] = daily_data['datetime'].shift(-1)
             daily_data['duration_minutes'] = (daily_data['next_time'] - daily_data['datetime']).dt.total_seconds() / 60
@@ -2717,12 +2722,12 @@ class IndividualDashboard:
                     is_gate = 'SPEED GATE' in str(dr_nm).upper() or '정문' in str(dr_nm)
                     
                     if is_gate:
-                        if work_type in ['night_shift', 'flexible'] and 17 <= hour <= 22:
+                        if work_type == 'night_shift' and 17 <= hour <= 22:
                             # 야간 근무자의 저녁 출근
                             daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
                             daily_data.loc[idx, 'activity_type'] = 'commute'
                             self.logger.info(f"야간 출근 시간대 게이트 입문: {daily_data.loc[idx, 'datetime']} - {dr_nm}")
-                        elif work_type not in ['night_shift', 'flexible'] and 5 <= hour < 10:
+                        elif work_type != 'night_shift' and 5 <= hour < 10:
                             # 일반 근무자의 아침 출근
                             daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
                             daily_data.loc[idx, 'activity_type'] = 'commute'
@@ -2741,7 +2746,7 @@ class IndividualDashboard:
             gate_name_mask = daily_data['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)
             
             # 근무 유형에 따라 출근 시간대 다르게 설정
-            if work_type in ['night_shift', 'flexible']:
+            if work_type == 'night_shift':
                 # 야간 근무자는 저녁 시간대를 출근으로
                 commute_time_mask = daily_data['datetime'].dt.hour.between(17, 22)
             else:
@@ -2771,7 +2776,7 @@ class IndividualDashboard:
                         self.logger.info(f"  - {row['datetime']}: {row['DR_NM']}, activity={row['activity_code']}, is_takeout={row['is_takeout']}")
             
             # 최종 리턴 전에 한 번 더 정문 입문 체크
-            if work_type in ['night_shift', 'flexible']:
+            if work_type == 'night_shift':
                 # 야간 근무자는 저녁 시간대 체크
                 final_check = daily_data[
                     (daily_data['INOUT_GB'] == '입문') & 
