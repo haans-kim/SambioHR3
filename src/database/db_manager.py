@@ -88,7 +88,7 @@ class DatabaseManager:
             List[Dict]: 쿼리 결과
         """
         try:
-            with self.engine.connect() as connection:
+            with self.engine.begin() as connection:  # begin()을 사용하면 자동 커밋됨
                 if isinstance(query, str):
                     query = text(query)
                 
@@ -99,6 +99,8 @@ class DatabaseManager:
                     columns = result.keys()
                     return [dict(zip(columns, row)) for row in result.fetchall()]
                 else:
+                    # INSERT/UPDATE/DELETE의 경우 영향받은 행 수 반환
+                    self.logger.debug(f"Query executed, rows affected: {result.rowcount}")
                     return []
                     
         except SQLAlchemyError as e:

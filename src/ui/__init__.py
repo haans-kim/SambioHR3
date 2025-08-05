@@ -12,6 +12,7 @@ from .components import (
     DataUploadComponent,
     ModelConfigComponent
 )
+from .organization_dashboard import OrganizationDashboard as NewOrganizationDashboard
 
 __all__ = [
     'SambioHumanApp',

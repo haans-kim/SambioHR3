@@ -32,6 +32,7 @@ from src.ui.components.data_upload import DataUploadComponent
 from src.ui.components.model_config import ModelConfigComponent
 from src.ui.components.transition_rule_editor import TransitionRuleEditor
 from src.ui.components.rule_editor import RuleEditorComponent
+from src.ui.organization_dashboard import OrganizationDashboard as NewOrganizationDashboard
 try:
     from src.ui.components.network_analysis_dashboard_optimized import NetworkAnalysisDashboard
 except ImportError:
@@ -66,6 +67,7 @@ class SambioHumanApp:
             # UI 컴포넌트 초기화
             self.individual_dashboard = IndividualDashboard(self.individual_analyzer)
             self.organization_dashboard = OrganizationDashboard(self.organization_analyzer)
+            self.new_organization_dashboard = NewOrganizationDashboard()  # 새로운 조직 대시보드
             self.data_upload = DataUploadComponent(self.db_manager)
             self.model_config = ModelConfigComponent(None)  # HMM 없이
             # HMM 모델 사용 안함 - TransitionRuleEditor 비활성화
@@ -111,6 +113,9 @@ class SambioHumanApp:
                 
             if st.button("조직 분석", use_container_width=True):
                 st.session_state.current_page = "조직 분석"
+                
+            if st.button("조직별 대시보드", use_container_width=True):
+                st.session_state.current_page = "조직별 대시보드"
                 
             if st.button("모델 설정", use_container_width=True):
                 st.session_state.current_page = "모델 설정"
@@ -158,6 +163,8 @@ class SambioHumanApp:
             self.render_individual_analysis()
         elif current_page == '조직 분석':
             self.render_organization_analysis()
+        elif current_page == '조직별 대시보드':
+            self.render_new_organization_dashboard()
         elif current_page == '데이터 업로드':
             self.render_data_upload()
         elif current_page == '모델 설정':
@@ -537,6 +544,13 @@ class SambioHumanApp:
                 st.info(f"[{alert['time']}] {alert['message']}")
             elif alert["type"] == "success":
                 st.success(f"[{alert['time']}] {alert['message']}")
+    
+    def render_new_organization_dashboard(self):
+        """새로운 조직별 대시보드 렌더링"""
+        if self.new_organization_dashboard:
+            self.new_organization_dashboard.render()
+        else:
+            st.error("조직별 대시보드를 로드할 수 없습니다.")
 
 
 def main():
