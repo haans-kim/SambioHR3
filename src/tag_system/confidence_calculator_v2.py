@@ -28,8 +28,12 @@ class ConfidenceCalculatorV2:
             with open(data_path, 'r', encoding='utf-8') as f:
                 self.transition_data = json.load(f)
                 self.logger.info(f"전이 확률 데이터 로드 완료: {data_path}")
+        except FileNotFoundError:
+            self.logger.debug(f"전이 확률 데이터 파일이 없습니다. 기본값을 사용합니다: {data_path}")
+            # 기본값 설정
+            self.transition_data = self._get_default_data()
         except Exception as e:
-            self.logger.error(f"전이 확률 데이터 로드 실패: {e}")
+            self.logger.warning(f"전이 확률 데이터 로드 실패: {e}")
             # 기본값 설정
             self.transition_data = self._get_default_data()
         

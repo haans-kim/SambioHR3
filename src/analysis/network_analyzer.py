@@ -64,7 +64,7 @@ if platform.system() == 'Darwin':  # macOS
         font_name = font_prop.get_name()
         plt.rcParams['font.family'] = font_name
         plt.rcParams['axes.unicode_minus'] = False
-        print(f"Using Korean font: {font_name} from {font_path}")
+        # 한글 폰트 설정 완료
     else:
         # 폴백: 다른 방법 시도
         font_path = find_korean_font()
@@ -74,7 +74,7 @@ if platform.system() == 'Darwin':  # macOS
             font_prop = font_manager.FontProperties(fname=font_path)
             plt.rcParams['font.family'] = font_prop.get_name()
             plt.rcParams['axes.unicode_minus'] = False
-            print(f"Using Korean font: {font_path}")
+            # 한글 폰트 설정 완료
 elif platform.system() == 'Windows':
     plt.rcParams['font.family'] = 'Malgun Gothic'
     plt.rcParams['axes.unicode_minus'] = False
@@ -372,7 +372,6 @@ class NetworkAnalyzer:
                                 meal_movements = pd.concat([virtual_df, meal_movements], ignore_index=True)
                 
         except Exception as e:
-            print(f"Error loading data: {e}")
             df = pd.DataFrame()
             meal_movements = pd.DataFrame()
             
@@ -392,45 +391,7 @@ class NetworkAnalyzer:
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df['building'] = df['tag_location'].apply(self.mapper.get_building_from_location)
             
-            # 디버깅: 식사 관련 데이터 확인
-            if 'is_meal' in df.columns:
-                meal_data_in_df = df[df['is_meal'] == True]
-            else:
-                meal_data_in_df = pd.DataFrame()
-            if not meal_data_in_df.empty:
-                print(f"식사 데이터 확인:")
-                print(f"  - 식사 기록 수: {len(meal_data_in_df)}")
-                print(f"  - 태그 위치: {meal_data_in_df['tag_location'].unique()}")
-                print(f"  - 매핑된 건물: {meal_data_in_df['building'].unique()}")
-                
-            # 전체 데이터 요약
-            print(f"전체 이동 데이터: {len(df)}건")
-            print(f"건물 매핑 현황: {df.groupby('building').size().to_dict()}")
-            
-            # 디버깅: 게이트 관련 데이터 확인
-            gate_related = df[df['tag_location'].str.contains('정문|GATE|SPEED|스피드|게이트|브릿지', case=False, na=False)]
-            if not gate_related.empty:
-                print(f"게이트 관련 태그 발견: {len(gate_related)}건")
-                print(f"게이트 태그 위치: {gate_related['tag_location'].unique()}")
-                print(f"게이트 매핑 결과: {gate_related['building'].unique()}")
-                
-                # P4 게이트 구분
-                p4_gate = gate_related[gate_related['building'] == 'P4_GATE']
-                if not p4_gate.empty:
-                    print(f"  - P4_GATE: {len(p4_gate)}건")
-                    
-                # P4 관련 태그 중 매핑 안된 것 확인
-                p4_related = df[df['tag_location'].str.contains('P4', case=False, na=False)]
-                p4_unmapped = p4_related[p4_related['building'].isna()]
-                if not p4_unmapped.empty:
-                    print(f"  - P4 태그 중 매핑 안됨: {p4_unmapped['tag_location'].unique()}")
-            
-            # 출퇴근 시간대 데이터 확인
-            if not df.empty and 'timestamp' in df.columns:
-                first_record = df.iloc[0]
-                last_record = df.iloc[-1]
-                print(f"첫 태그: {first_record['timestamp'].strftime('%H:%M')} - {first_record['tag_location']} -> {first_record['building']}")
-                print(f"마지막 태그: {last_record['timestamp'].strftime('%H:%M')} - {last_record['tag_location']} -> {last_record['building']}")
+            # 데이터 검증 (디버깅 로그 제거)
             
         return df
     
@@ -481,7 +442,6 @@ class NetworkAnalyzer:
                         duration_minutes = pd.Timedelta(time_diff).total_seconds() / 60
                         
                 except Exception as e:
-                    print(f"Duration calculation error: {e}")
                     # 오류 발생시 기본값 사용
                     duration_minutes = 5.0
                 
@@ -536,7 +496,6 @@ class NetworkAnalyzer:
                             if duration < 480:  # Cap at 8 hours to avoid overnight gaps
                                 total_minutes += duration
                 except Exception as e:
-                    print(f"Time spent calculation error: {e}")
                     # 오류 발생시 건너뛰기
                     continue
             

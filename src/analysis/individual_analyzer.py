@@ -28,6 +28,10 @@ class IndividualAnalyzer:
         self.pickle_manager = PickleManager()
         self.logger = logging.getLogger(__name__)
         
+        # 데이터 로딩 로깅 최적화
+        self._cache_hit_count = 0
+        self._cache_miss_count = 0
+        
         # 정교한 규칙 기반 분류기 초기화
         self.state_classifier = TagStateClassifier()
         
@@ -58,7 +62,7 @@ class IndividualAnalyzer:
         Returns:
             Dict: 분석 결과
         """
-        self.logger.info(f"개인별 분석 시작: {employee_id}, {start_date} ~ {end_date}")
+        self.logger.debug(f"개인별 분석 시작: {employee_id}, {start_date} ~ {end_date}")
         
         try:
             # 기본 데이터 수집
@@ -90,7 +94,13 @@ class IndividualAnalyzer:
             # 분석 결과 저장
             self._save_analysis_result(employee_id, analysis_result)
             
-            self.logger.info(f"개인별 분석 완료: {employee_id}")
+            # 분석 완료 시 캐시 통계 로깅 (100회마다)
+            total_requests = self._cache_hit_count + self._cache_miss_count
+            if total_requests % 100 == 0 and total_requests > 0:
+                hit_rate = (self._cache_hit_count / total_requests) * 100
+                self.logger.info(f"캐시 통계 - 히트율: {hit_rate:.1f}% (총 {total_requests}회 요청)")
+            
+            self.logger.debug(f"개인별 분석 완료: {employee_id}")
             return analysis_result
             
         except Exception as e:
@@ -104,10 +114,14 @@ class IndividualAnalyzer:
         try:
             # 1. Pickle 캐시에서 로드 시도
             df = self.pickle_manager.load_dataframe(name=pickle_name)
-            self.logger.info(f"캐시에서 데이터 로드 성공: {pickle_name}")
+            self._cache_hit_count += 1
+            self.logger.debug(f"캐시 히트: {pickle_name}")
             return df
         except FileNotFoundError:
-            self.logger.info(f"캐시 파일을 찾을 수 없음: {pickle_name}. 데이터베이스에서 조회합니다.")
+            self._cache_miss_count += 1
+            # 10번에 1번만 로깅
+            if self._cache_miss_count % 10 == 1:
+                self.logger.info(f"캐시 미스 발생 (최근 10회 중 첫 번째): {pickle_name}")
             # 2. 캐시 없으면 데이터베이스에서 조회
             with self.db_manager.get_session() as session:
                 table_class = self.db_manager.get_table_class(table_name)
@@ -126,7 +140,7 @@ class IndividualAnalyzer:
                 # 3. 조회된 데이터를 다음을 위해 캐시에 저장
                 if not df.empty:
                     self.pickle_manager.save_dataframe(df, name=pickle_name, description=f"{table_name} data for {employee_id}")
-                    self.logger.info(f"데이터베이스 조회 결과를 캐시에 저장: {pickle_name}")
+                    self.logger.debug(f"캐시 저장: {pickle_name} ({len(df)}행)")
                 
                 return df
 
@@ -167,7 +181,7 @@ class IndividualAnalyzer:
         for i, entry in enumerate(sequence):
             # 'anomaly' 필드에 'tailgating'이 설정된 경우
             if entry.get('anomaly') == 'tailgating':
-                self.logger.info(f"꼬리물기 패턴 감지: {entry['timestamp']} 에서 {entry.get('duration_minutes', 0):.1f}분 지속")
+                self.logger.debug(f"꼬리물기 패턴 감지: {entry['timestamp']} 에서 {entry.get('duration_minutes', 0):.1f}분 지속")
                 
                 # 상태를 '업무'로 변경하고 신뢰도 조정
                 entry['state'] = ActivityState.WORK.value

@@ -87,32 +87,16 @@ def render_improved_gantt_chart(analysis_result: dict):
     # 각 세그먼트를 원과 연결선으로 표시
     prev_segment = None
     
-    # 디버깅: 출퇴근 활동 확인
-    commute_segments = [seg for seg in segments if seg.get('activity_code') in ['COMMUTE_IN', 'COMMUTE_OUT']]
-    if commute_segments:
-        print(f"출퇴근 세그먼트 발견: {len(commute_segments)}개")
-        for seg in commute_segments:
-            print(f"  - {seg['start_time']} : {seg['activity_code']} @ {seg.get('location', 'N/A')}")
+    # 출퇴근 활동 확인 (디버깅 로그 제거)
     
     for i, segment in enumerate(segments):
         if pd.notna(segment['start_time']) and pd.notna(segment['end_time']):
             activity_code = segment.get('activity_code', 'UNKNOWN')
             
-            # 디버깅: 상세 로깅 (Knox 관련 우선)
+            # Knox 관련 체크 (디버깅 로그 제거)
             is_knox_related = 'knox' in str(segment.get('location', '')).lower() or 'knox' in str(segment.get('activity', '')).lower()
-            if i < 10 or activity_code in ['COMMUTE_IN', 'COMMUTE_OUT'] or is_knox_related:
-                print(f"[GANTT] Segment {i}:")
-                print(f"  - activity: '{segment.get('activity', 'N/A')}'")
-                print(f"  - activity_code: '{activity_code}'")
-                print(f"  - location: '{segment.get('location', 'N/A')}'")
-                print(f"  - start_time: {segment.get('start_time')}")
-                print(f"  - tag_code: '{segment.get('tag_code', 'N/A')}'")
-                if is_knox_related:
-                    print(f"  - [KNOX DETECTED] Color will be: {activity_info.get(activity_code, activity_info['UNKNOWN'])['color']}")
             
-            # activity_code가 대문자가 아닌 경우만 확인 (하위호환성)
-            if activity_code and not activity_code.isupper():
-                print(f"[GANTT] WARNING: 비정상적인 activity_code 발견: '{activity_code}'")
+            # activity_code 검증 (디버깅 로그 제거)
             
             activity = activity_info.get(activity_code, activity_info['UNKNOWN'])
             

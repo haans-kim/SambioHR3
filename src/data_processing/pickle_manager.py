@@ -27,7 +27,7 @@ class PickleManager:
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
         self.logger = logging.getLogger(__name__)
-        self.logger.info(f"PickleManager 초기화 - base_path: {self.base_path}")
+        self.logger.debug(f"PickleManager 초기화 - base_path: {self.base_path}")
         
         # 메타데이터 파일 경로
         self.metadata_file = self.base_path / "metadata.json"
@@ -73,7 +73,11 @@ class PickleManager:
             
             # 파일 크기 정보
             file_size = file_path.stat().st_size / (1024 * 1024)  # MB
-            self.logger.info(f"DataFrame 저장 완료: {file_path} ({file_size:.2f} MB)")
+            # 대용량 파일만 로깅
+            if file_size > 10:  # 10MB 이상
+                self.logger.info(f"DataFrame 저장 완료: {file_path} ({file_size:.2f} MB)")
+            else:
+                self.logger.debug(f"DataFrame 저장: {file_path}")
             
             return str(file_path)
             
@@ -89,7 +93,7 @@ class PickleManager:
         for old_file in old_files:
             try:
                 old_file.unlink()
-                self.logger.info(f"이전 버전 삭제: {old_file}")
+                self.logger.debug(f"이전 버전 삭제: {old_file}")
             except Exception as e:
                 self.logger.warning(f"파일 삭제 실패: {old_file} - {e}")
     
@@ -119,12 +123,20 @@ class PickleManager:
                 with open(file_path, 'rb') as f:
                     df = pickle.load(f)
             
-            self.logger.info(f"DataFrame 로드 완료: {file_path} ({len(df):,}행 x {len(df.columns)}열)")
+            # 대용량 데이터만 로깅
+            if len(df) > 10000:  # 10,000행 이상
+                self.logger.info(f"DataFrame 로드 완료: {file_path} ({len(df):,}행)")
+            else:
+                self.logger.debug(f"DataFrame 로드: {file_path}")
             
             return df
             
         except Exception as e:
-            self.logger.error(f"DataFrame 로드 실패: {e}")
+            # FileNotFoundError는 예상된 상황이므로 debug 레벨로
+            if isinstance(e, FileNotFoundError):
+                self.logger.debug(f"Pickle 파일 없음: {name}")
+            else:
+                self.logger.error(f"DataFrame 로드 실패: {e}")
             raise
     
     def list_files(self, name: str = None) -> pd.DataFrame:
@@ -300,18 +312,17 @@ class PickleManager:
         
         # 메타데이터에 없으면 직접 파일 시스템에서 찾기
         if not matching_files:
-            self.logger.info(f"메타데이터에서 {name} 파일을 찾을 수 없어 파일 시스템에서 검색")
-            self.logger.info(f"검색 경로: {self.base_path}")
+            self.logger.debug(f"메타데이터에서 {name} 파일을 찾을 수 없어 파일 시스템에서 검색")
             
             pattern = f"{name}_v*.pkl.gz" if version is None else f"{name}_v{version}.pkl.gz"
             files = list(self.base_path.glob(pattern))
-            self.logger.info(f"패턴 '{pattern}'으로 찾은 파일: {len(files)}개")
+            self.logger.debug(f"패턴 '{pattern}'으로 찾은 파일: {len(files)}개")
             
             if not files:
                 # .pkl 파일도 확인
                 pattern = f"{name}_v*.pkl" if version is None else f"{name}_v{version}.pkl"
                 files = list(self.base_path.glob(pattern))
-                self.logger.info(f"패턴 '{pattern}'으로 찾은 파일: {len(files)}개")
+                self.logger.debug(f"패턴 '{pattern}'으로 찾은 파일: {len(files)}개")
             
             for file_path in files:
                 # 파일명에서 버전 추출
@@ -321,7 +332,7 @@ class PickleManager:
                     if version is None or file_version == version:
                         # 파일 수정 시간을 기준으로 정렬하기 위해 사용
                         matching_files.append((file_path.stat().st_mtime, file_path))
-                        self.logger.info(f"매칭된 파일: {file_path}")
+                        self.logger.debug(f"매칭된 파일: {file_path}")
         
         if not matching_files:
             return None
@@ -341,7 +352,7 @@ class PickleManager:
             with open(self.metadata_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            self.logger.warning(f"메타데이터 로드 실패: {e}")
+            self.logger.debug(f"메타데이터 로드 실패: {e}")
             return {}
     
     def _save_metadata(self):
@@ -350,7 +361,7 @@ class PickleManager:
             with open(self.metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(self.metadata, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            self.logger.error(f"메타데이터 저장 실패: {e}")
+            self.logger.debug(f"메타데이터 저장 실패: {e}")
     
     def _update_metadata(self, name: str, version: str, file_path: Path, 
                         df: pd.DataFrame, data_hash: str, description: str = None):

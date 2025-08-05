@@ -14,8 +14,8 @@ textColor = "#1F2937"  # 다크 그레이 - 가독성 좋음
 # Font family for all text in the app, except code blocks
 font = "Inter"  # 모던하고 가독성 좋은 폰트
 
-# Base font size
-base = "rem"
+# Base theme (light or dark)
+base = "light"
 
 # 추가 설정들
 [theme.palette]

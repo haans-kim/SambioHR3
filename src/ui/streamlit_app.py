@@ -18,6 +18,10 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
+# 로깅 설정을 먼저 초기화
+from src.config.logging_config import setup_logging
+setup_logging(log_file="streamlit_app", debug=False)
+
 from src.utils.recent_views_manager import RecentViewsManager
 
 from src.database import get_database_manager
@@ -33,8 +37,7 @@ try:
 except ImportError:
     from src.ui.components.network_analysis_dashboard import NetworkAnalysisDashboard
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# 로거 가져오기
 logger = logging.getLogger(__name__)
 
 class SambioHumanApp:

@@ -363,7 +363,7 @@ class DatabaseManager:
             DailyWorkData, ShiftWorkData, OrganizationSummary, TagLogs,
             AbcActivityData, ClaimData, AttendanceData, NonWorkTimeData,
             EmployeeInfo, TagLocationMaster, OrganizationMapping,
-            HmmModelConfig, ProcessingLog
+            HmmModelConfig, ProcessingLog, EquipmentLogs
         )
         
         table_mapping = {
@@ -379,7 +379,8 @@ class DatabaseManager:
             'tag_location_master': TagLocationMaster,
             'organization_mapping': OrganizationMapping,
             'hmm_model_config': HmmModelConfig,
-            'processing_log': ProcessingLog
+            'processing_log': ProcessingLog,
+            'equipment_logs': EquipmentLogs
         }
         
         return table_mapping.get(table_name)
@@ -497,9 +498,10 @@ class DatabaseManager:
         df_copy = df.copy()
         
         # 첫 번째 행이 헤더인 경우 제거
-        if df_copy.iloc[0]['Unnamed: 0'] == '사번':
-            df_copy = df_copy.iloc[1:].copy()
-            df_copy.reset_index(drop=True, inplace=True)
+        if len(df_copy) > 0 and 'Unnamed: 0' in df_copy.columns:
+            if df_copy.iloc[0]['Unnamed: 0'] == '사번':
+                df_copy = df_copy.iloc[1:].copy()
+                df_copy.reset_index(drop=True, inplace=True)
         
         # 컬럼명 매핑
         column_mapping = {
@@ -530,21 +532,35 @@ class DatabaseManager:
         
         df_copy.rename(columns=column_mapping, inplace=True)
         
+        # 디버깅: 변환 전 데이터 타입 확인
+        self.logger.debug("attendance_data 컬럼 타입:")
+        for col in df_copy.columns:
+            if col in ['start_time', 'end_time']:
+                sample_val = df_copy[col].dropna().iloc[0] if not df_copy[col].dropna().empty else None
+                self.logger.debug(f"  {col}: {type(sample_val)}")
+        
         # datetime.time 타입 컬럼을 문자열로 변환
         time_columns = ['start_time', 'end_time']
         for col in time_columns:
             if col in df_copy.columns:
                 # 각 값을 개별적으로 처리
                 converted_values = []
-                for val in df_copy[col]:
-                    if pd.isna(val):
+                for idx, val in enumerate(df_copy[col]):
+                    try:
+                        if pd.isna(val) or val is None or str(val).strip() == '':
+                            converted_values.append(None)
+                        elif hasattr(val, 'strftime'):
+                            # datetime.time 객체인 경우
+                            converted_values.append(val.strftime('%H:%M:%S'))
+                        elif isinstance(val, str):
+                            # 이미 문자열인 경우
+                            converted_values.append(val)
+                        else:
+                            # 기타 타입은 문자열로 변환
+                            converted_values.append(str(val))
+                    except Exception as e:
+                        self.logger.warning(f"{col} 컬럼의 {idx}번째 값 변환 실패: {type(val)} - {e}")
                         converted_values.append(None)
-                    elif hasattr(val, 'strftime'):
-                        # datetime.time 객체인 경우
-                        converted_values.append(val.strftime('%H:%M:%S'))
-                    else:
-                        # 이미 문자열이거나 다른 타입인 경우
-                        converted_values.append(val)
                 df_copy[col] = converted_values
         
         # 날짜 컬럼 처리 (YYYYMMDD 형식을 YYYY-MM-DD로 변환)
@@ -567,16 +583,45 @@ class DatabaseManager:
         try:
             # datetime.time 타입 컬럼을 문자열로 변환
             df_copy = df.copy()
+            
+            # 모든 object 타입 컬럼 검사
             for col in df_copy.columns:
                 if df_copy[col].dtype == 'object':
-                    # datetime.time 객체가 있는지 확인
-                    sample = df_copy[col].dropna().iloc[0] if not df_copy[col].dropna().empty else None
-                    if sample is not None and hasattr(sample, 'strftime'):
-                        self.logger.info(f"{col} 컬럼의 datetime.time 타입을 문자열로 변환")
-                        df_copy[col] = df_copy[col].apply(lambda x: x.strftime('%H:%M:%S') if pd.notna(x) and hasattr(x, 'strftime') else x)
+                    # 각 값을 안전하게 변환
+                    converted_values = []
+                    has_time_objects = False
+                    
+                    for val in df_copy[col]:
+                        if pd.isna(val) or val is None:
+                            converted_values.append(None)
+                        elif hasattr(val, 'strftime') and hasattr(val, 'hour'):
+                            # datetime.time 또는 datetime 객체
+                            has_time_objects = True
+                            if hasattr(val, 'date'):
+                                # datetime 객체
+                                converted_values.append(val.strftime('%Y-%m-%d %H:%M:%S'))
+                            else:
+                                # time 객체
+                                converted_values.append(val.strftime('%H:%M:%S'))
+                        else:
+                            converted_values.append(val)
+                    
+                    if has_time_objects:
+                        self.logger.debug(f"{col} 컬럼의 시간 객체를 문자열로 변환")
+                        df_copy[col] = converted_values
             
+            # 데이터베이스에 저장
             df_copy.to_sql(table_name, self.engine, if_exists=if_exists, index=False)
             self.logger.info(f"{table_name} 테이블에 {len(df):,}행 저장 완료")
         except Exception as e:
             self.logger.error(f"{table_name} 테이블 저장 실패: {e}")
+            # 더 자세한 디버깅 정보
+            if 'parameter' in str(e):
+                self.logger.error(f"데이터 타입 정보:")
+                for col in df_copy.columns:
+                    self.logger.error(f"  {col}: {df_copy[col].dtype}")
+                    # object 타입인 경우 샘플 확인
+                    if df_copy[col].dtype == 'object' and not df_copy[col].dropna().empty:
+                        sample = df_copy[col].dropna().iloc[0]
+                        self.logger.error(f"    샘플 값 타입: {type(sample)}")
             raise

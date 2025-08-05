@@ -6,6 +6,7 @@
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Boolean, Text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.sql import func
 from datetime import datetime
 import logging
 
@@ -31,8 +32,8 @@ class DailyWorkData(Base):
     cross_day_flag = Column(Boolean, default=False)  # 출근일과 퇴근일이 다른 경우
     efficiency_ratio = Column(Float, nullable=True)
     data_quality_score = Column(Float, nullable=True)  # 데이터 품질 점수
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 class ShiftWorkData(Base):
     """교대근무 시간 데이터"""
@@ -46,7 +47,7 @@ class ShiftWorkData(Base):
     shift_duration = Column(Float, nullable=True)
     cross_midnight = Column(Boolean, default=False)  # 자정을 넘나는 근무
     shift_pattern = Column(String(20), nullable=True)  # 교대 패턴
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class OrganizationSummary(Base):
     """조직별 집계 데이터"""
@@ -63,7 +64,7 @@ class OrganizationSummary(Base):
     total_employees = Column(Integer, nullable=True)
     day_shift_count = Column(Integer, nullable=True)
     night_shift_count = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class TagLogs(Base):
     """태그 로그 데이터"""
@@ -80,7 +81,7 @@ class TagLogs(Base):
     meal_type = Column(String(20), nullable=True)  # breakfast, lunch, dinner, midnight_meal
     is_tailgating = Column(Boolean, default=False)
     confidence_score = Column(Float, nullable=True)  # 신뢰도 점수
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class AbcActivityData(Base):
     """ABC 작업 활동 데이터"""
@@ -104,7 +105,7 @@ class AbcActivityData(Base):
     activity_minor = Column(String(100), nullable=True)
     activity_hierarchy = Column(String(300), nullable=True)
     remarks = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class ClaimData(Base):
     """근무시간 Claim 데이터"""
@@ -125,7 +126,7 @@ class ClaimData(Base):
     attendance_code = Column(String(20), nullable=True)
     cross_day_work = Column(Boolean, default=False)
     actual_work_duration = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class AttendanceData(Base):
     """근태 사용 데이터"""
@@ -146,7 +147,7 @@ class AttendanceData(Base):
     attendance_hours = Column(Float, nullable=True)
     reason = Column(String(200), nullable=True)
     reason_detail = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class NonWorkTimeData(Base):
     """비근무시간 데이터"""
@@ -163,7 +164,7 @@ class NonWorkTimeData(Base):
     input_type = Column(String(20), nullable=True)
     is_reflected = Column(Boolean, default=True)
     table_type = Column(String(20), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class EmployeeInfo(Base):
     """직원 정보"""
@@ -193,8 +194,8 @@ class EmployeeInfo(Base):
     job_title = Column(String(50), nullable=True)
     job_function = Column(String(100), nullable=True)
     email = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 class TagLocationMaster(Base):
     """태깅 지점 마스터"""
@@ -211,7 +212,7 @@ class TagLocationMaster(Base):
     근무구역여부 = Column(String(10), nullable=True)  # G(일반), Y(근무구역), N(비근무구역)
     근무 = Column(String(10), nullable=True)  # M(근무)
     라벨링 = Column(String(20), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class OrganizationData(Base):
     """조직현황 데이터"""
@@ -241,8 +242,8 @@ class OrganizationData(Base):
     job_role = Column(String(100), nullable=True)  # 직무
     email = Column(String(200), nullable=True)  # 녹스메일
     org_path = Column(String(500), nullable=True)  # 조직경로
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 class OrganizationMapping(Base):
     """조직 매핑"""
@@ -265,7 +266,7 @@ class OrganizationMapping(Base):
     employee_id = Column(String(20), nullable=True)
     employee_name = Column(String(50), nullable=True)
     rr_description = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class HmmModelConfig(Base):
     """HMM 모델 설정"""
@@ -282,8 +283,8 @@ class HmmModelConfig(Base):
     training_accuracy = Column(Float, nullable=True)
     validation_accuracy = Column(Float, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 class KnoxApprovalData(Base):
     """Knox 결재 데이터"""
@@ -295,7 +296,7 @@ class KnoxApprovalData(Base):
     task = Column(String(100), nullable=True)
     apid = Column(String(100), nullable=True)
     remark = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class KnoxPimsData(Base):
     """Knox PIMS 회의 데이터"""
@@ -307,7 +308,7 @@ class KnoxPimsData(Base):
     meeting_type = Column(String(50), nullable=True)
     start_time = Column(DateTime, nullable=False, index=True)
     end_time = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class KnoxMailData(Base):
     """Knox 메일 데이터"""
@@ -317,7 +318,7 @@ class KnoxMailData(Base):
     mail_key = Column(String(200), nullable=False)
     send_time = Column(DateTime, nullable=False, index=True)
     sender_id = Column(String(20), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class EquipmentData(Base):
     """장비 사용 데이터 (EAM, LAMS, MES)"""
@@ -329,7 +330,7 @@ class EquipmentData(Base):
     employee_id = Column(String(20), nullable=False, index=True)
     action_type = Column(String(50), nullable=True)
     application = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
 
 class ProcessingLog(Base):
     """처리 로그"""
@@ -346,7 +347,23 @@ class ProcessingLog(Base):
     error_count = Column(Integer, nullable=True)
     error_message = Column(Text, nullable=True)
     processing_details = Column(Text, nullable=True)  # JSON 형태로 저장
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
+
+class EquipmentLogs(Base):
+    """장비 로그 데이터"""
+    __tablename__ = 'equipment_logs'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    employee_id = Column(String(20), nullable=False, index=True)
+    datetime = Column(DateTime, nullable=False, index=True)
+    equipment_type = Column(String(50), nullable=False)  # LAMS, MES, EAM 등
+    equipment_id = Column(String(50), nullable=True)
+    location = Column(String(100), nullable=True)
+    action = Column(String(50), nullable=True)  # login, logout, work_start, work_end 등
+    work_type = Column(String(50), nullable=True)
+    duration = Column(Float, nullable=True)  # 작업 시간 (분)
+    details = Column(Text, nullable=True)  # JSON 형태의 추가 정보
+    created_at = Column(DateTime, default=func.now())
 
 class DatabaseSchema:
     """데이터베이스 스키마 관리 클래스"""

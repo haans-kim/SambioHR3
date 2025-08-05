@@ -1092,8 +1092,9 @@ class IndividualDashboard:
     def get_employee_attendance_data(self, employee_id: str, selected_date) -> pd.DataFrame:
         """직원의 근태 정보 조회"""
         try:
-            # 날짜를 datetime으로 변환
+            # 날짜를 datetime으로 변환하고 문자열로 포맷
             date_obj = pd.to_datetime(selected_date)
+            date_str = date_obj.strftime('%Y-%m-%d')
             
             # 근태 데이터 조회 쿼리
             query = """
@@ -1104,7 +1105,7 @@ class IndividualDashboard:
             
             result = self.db_manager.execute_query(
                 query, 
-                {'emp_id': employee_id, 'target_date': date_obj}
+                {'emp_id': employee_id, 'target_date': date_str}
             )
             
             if result:
@@ -1205,7 +1206,7 @@ class IndividualDashboard:
                         self.logger.info(f"LAMS 데이터 {len(daily_lams)}건 로드")
                         
                 except Exception as e:
-                    self.logger.warning(f"LAMS 데이터 로드 실패: {e}")
+                    self.logger.debug(f"LAMS 데이터 로드 실패: {e}")
             
             # MES 데이터 로드
             mes_data = pickle_manager.load_dataframe(name='mes_data')
@@ -1227,7 +1228,7 @@ class IndividualDashboard:
                         self.logger.info(f"MES 데이터 {len(daily_mes)}건 로드")
                         
                 except Exception as e:
-                    self.logger.warning(f"MES 데이터 로드 실패: {e}")
+                    self.logger.debug(f"MES 데이터 로드 실패: {e}")
             
             # EAM 데이터 로드
             eam_data = pickle_manager.load_dataframe(name='eam_data')
@@ -1249,7 +1250,7 @@ class IndividualDashboard:
                         self.logger.info(f"EAM 데이터 {len(daily_eam)}건 로드")
                         
                 except Exception as e:
-                    self.logger.warning(f"EAM 데이터 로드 실패: {e}")
+                    self.logger.debug(f"EAM 데이터 로드 실패: {e}")
             
             # 통합된 장비 데이터 로드 (equipment_data_merged)
             merged_data = pickle_manager.load_dataframe(name='equipment_data_merged')
