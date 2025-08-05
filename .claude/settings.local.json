@@ -39,7 +39,9 @@
       "Bash(git remote add:*)",
       "Bash(git push:*)",
       "Bash(git checkout:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(git pull:*)",
+      "Bash(gh pr create:*)"
     ],
     "deny": []
   }

@@ -129,6 +129,9 @@ class SambioHumanApp:
             if st.button("실시간 모니터링", use_container_width=True):
                 st.session_state.current_page = "실시간 모니터링"
             
+            if st.button("작업지시 관리", use_container_width=True):
+                st.session_state.current_page = "작업지시 관리"
+            
             # 현재 페이지가 없으면 홈으로 설정
             if 'current_page' not in st.session_state:
                 st.session_state.current_page = "홈"
@@ -175,6 +178,8 @@ class SambioHumanApp:
             self.render_network_analysis()
         elif current_page == '실시간 모니터링':
             self.render_real_time_monitoring()
+        elif current_page == '작업지시 관리':
+            self.render_work_order_management()
     
     def render_home_page(self):
         """홈 페이지 렌더링"""
@@ -551,6 +556,25 @@ class SambioHumanApp:
             self.new_organization_dashboard.render()
         else:
             st.error("조직별 대시보드를 로드할 수 없습니다.")
+    
+    def render_work_order_management(self):
+        """작업지시 관리 페이지 렌더링"""
+        from .work_order_management import WorkOrderManagementUI
+        
+        # 세련된 비즈니스 스타일 헤더
+        st.markdown("""
+        <div style="background: linear-gradient(90deg, #2E86AB 0%, #4A9BC6 100%); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+            <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">
+                Work Order Management
+            </h2>
+            <p style="color: rgba(255,255,255,0.9); margin: 0.3rem 0 0 0; font-size: 0.95rem;">
+                작업지시 생성, 할당 및 추적 관리
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        work_order_ui = WorkOrderManagementUI()
+        work_order_ui.render()
 
 
 def main():
