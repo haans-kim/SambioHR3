@@ -31,7 +31,8 @@
       "Bash(grep:*)",
       "Bash(code:*)",
       "Bash(deactivate)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(git init:*)"
     ],
     "deny": []
   }
