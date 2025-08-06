@@ -31,21 +31,29 @@ class OrganizationDashboard:
             if org_level in self._organizations_cache:
                 return self._organizations_cache[org_level]
             
-            # 데이터베이스에서 조직 목록 조회
-            from sqlalchemy import text
+            # pickle 데이터에서 조직 정보 가져오기
+            org_data = self.pickle_manager.load_dataframe('organization_data')
+            if org_data is None or org_data.empty:
+                org_data = self.pickle_manager.load_dataframe('organization')
+                if org_data is None or org_data.empty:
+                    self.logger.warning("조직 데이터를 찾을 수 없습니다")
+                    return []
             
-            query = text("""
-            SELECT DISTINCT org_code, org_name 
-            FROM organization_master 
-            WHERE org_level = :org_level 
-                AND is_active = 1
-            ORDER BY org_name
-            """)
+            # 조직 레벨에 따른 컬럼 매핑
+            column_map = {
+                'center': '센터',
+                'team': '팀',
+                'group': '그룹'
+            }
             
-            with self.db_manager.get_session() as session:
-                result = session.execute(query, {"org_level": org_level})
-                # 조직명만 표시 (코드는 내부적으로만 사용)
-                organizations = [(row[0], row[1]) for row in result.fetchall()]
+            col_name = column_map.get(org_level)
+            if col_name and col_name in org_data.columns:
+                # 유니크한 값들 추출
+                unique_orgs = org_data[col_name].dropna().unique()
+                # (코드, 이름) 튜플로 반환 (여기서는 같은 값 사용)
+                organizations = [(org, org) for org in sorted(unique_orgs)]
+            else:
+                organizations = []
                 
             # 캐시 저장
             self._organizations_cache[org_level] = organizations
@@ -339,16 +347,6 @@ class OrganizationDashboard:
                 
                 st.info(f"{org_name} 소속 {len(employees)}명의 직원 분석을 시작합니다.")
                 
-                # 선택한 직원 목록 표시
-                st.markdown("### 📋 분석 대상 직원 목록")
-                employees_df = pd.DataFrame({
-                    '순번': range(1, len(employees) + 1),
-                    '사번': employees,
-                    '상태': ['대기중'] * len(employees)
-                })
-                employees_table = st.empty()
-                employees_table.dataframe(employees_df, use_container_width=True)
-                
                 # Progress bar
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -392,9 +390,6 @@ class OrganizationDashboard:
                         progress_bar.progress(progress)
                         status_text.text(f"분석 중... ({idx + 1}/{len(employees)}) - {employee_id}")
                         
-                        # 직원 상태 업데이트 (분석 중)
-                        employees_df.loc[idx, '상태'] = '분석중'
-                        employees_table.dataframe(employees_df, use_container_width=True)
                         
                         # 개인별 분석 수행 - 임시로 간단한 더미 데이터 사용
                         # start_date와 end_date가 tuple인 경우 처리
@@ -421,9 +416,6 @@ class OrganizationDashboard:
                             # 분석 결과 저장
                             self._save_employee_analysis(analysis_results)
                             
-                            # 직원 상태 업데이트 (완료)
-                            employees_df.loc[idx, '상태'] = f'완료 ({len(analysis_results)}건)'
-                            employees_table.dataframe(employees_df, use_container_width=True)
                             
                             # 전체 통계 계산용 데이터 수집
                             for result in analysis_results:
@@ -460,14 +452,10 @@ class OrganizationDashboard:
                                     results_table.dataframe(results_df, use_container_width=True)
                         else:
                             # 분석 실패
-                            employees_df.loc[idx, '상태'] = '실패 (데이터 없음)'
-                            employees_table.dataframe(employees_df, use_container_width=True)
+                            self.logger.warning(f"직원 {employee_id}: 데이터 없음으로 분석 실패")
                     
                     except Exception as e:
                         failed_count += 1
-                        # 분석 실패 상태 업데이트
-                        employees_df.loc[idx, '상태'] = f'오류: {str(e)[:30]}...'
-                        employees_table.dataframe(employees_df, use_container_width=True)
                         
                         self.logger.warning(f"직원 {employee_id} 분석 실패: {e}")
                         st.error(f"직원 {employee_id} 분석 실패: {e}")
@@ -686,6 +674,18 @@ class OrganizationDashboard:
                                           efficiency_score: float):
         """조직 분석 결과를 DB에 저장"""
         try:
+            # start_date와 end_date가 tuple인 경우 처리
+            if isinstance(start_date, tuple):
+                start_date = start_date[0] if len(start_date) > 0 else date.today()
+            if isinstance(end_date, tuple):
+                end_date = end_date[0] if len(end_date) > 0 else date.today()
+            
+            # date 객체인지 확인하고 변환
+            if hasattr(start_date, 'date'):
+                start_date = start_date.date()
+            if hasattr(end_date, 'date'):
+                end_date = end_date.date()
+                
             # organization_daily_stats 테이블에 저장
             insert_query = text("""
                 INSERT OR REPLACE INTO organization_daily_stats 

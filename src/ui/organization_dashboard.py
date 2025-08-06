@@ -100,7 +100,11 @@ class OrganizationDashboard:
         with col2:
             # 센터 선택
             centers = self.get_center_list()
-            selected_center = st.selectbox("센터 선택", centers)
+            if centers:
+                selected_center = st.selectbox("센터 선택", centers)
+            else:
+                st.error("조직 데이터를 찾을 수 없습니다. 데이터 로드를 먼저 실행해주세요.")
+                selected_center = None
         
         # 팀별 통계
         if selected_center:
@@ -145,7 +149,11 @@ class OrganizationDashboard:
         with col2:
             # 센터 선택
             centers = self.get_center_list()
-            selected_center = st.selectbox("센터 선택", centers, key="group_center")
+            if centers:
+                selected_center = st.selectbox("센터 선택", centers, key="group_center")
+            else:
+                st.error("조직 데이터를 찾을 수 없습니다. 데이터 로드를 먼저 실행해주세요.")
+                selected_center = None
         
         # 그룹별 통계
         if selected_center:
@@ -541,12 +549,35 @@ class OrganizationDashboard:
     
     def get_center_list(self) -> List[str]:
         """센터 목록 조회"""
-        query = """
-        SELECT DISTINCT center_name
-        FROM daily_analysis_results
-        WHERE center_name IS NOT NULL
-        ORDER BY center_name
-        """
-        
-        result = self.db_manager.execute_query(query)
-        return [row['center_name'] for row in result] if result else []
+        try:
+            # pickle 데이터에서 조직 정보 가져오기
+            org_data = self.pickle_manager.load_dataframe('organization_data')
+            if org_data is None or org_data.empty:
+                logger.warning("organization_data를 찾을 수 없습니다. organization 시도")
+                org_data = self.pickle_manager.load_dataframe('organization')
+                if org_data is None or org_data.empty:
+                    logger.warning("organization도 찾을 수 없습니다")
+                    return []
+            
+            # 센터 목록 추출
+            if '센터' in org_data.columns:
+                centers = org_data['센터'].dropna().unique().tolist()
+                return sorted(centers)
+            elif 'center' in org_data.columns:
+                centers = org_data['center'].dropna().unique().tolist()
+                return sorted(centers)
+            else:
+                logger.warning("센터 컬럼을 찾을 수 없습니다")
+                return []
+        except Exception as e:
+            logger.error(f"센터 목록 조회 오류: {e}")
+            # DB에서 시도
+            query = """
+            SELECT DISTINCT center_name
+            FROM daily_analysis_results
+            WHERE center_name IS NOT NULL
+            ORDER BY center_name
+            """
+            
+            result = self.db_manager.execute_query(query)
+            return [row['center_name'] for row in result] if result else []
