@@ -382,8 +382,12 @@ class OrganizationDashboard:
                 total_actual_work_time = 0
                 total_days = 0  # 총 분석 일수
                 employee_results = []  # 개인별 분석 결과 저장
+                timing_results = []  # 소요시간 측정 결과
+                
+                import time
                 
                 for idx, employee_id in enumerate(employees):
+                    start_time = time.time()  # 분석 시작 시간 측정
                     try:
                         # Progress 업데이트
                         progress = (idx + 1) / len(employees)
@@ -409,6 +413,12 @@ class OrganizationDashboard:
                             start_dt,
                             end_dt
                         )
+                        
+                        elapsed_time = time.time() - start_time  # 소요시간 계산
+                        
+                        # 디버그: 처음 몇 명의 분석 결과 로그
+                        if idx < 3:
+                            self.logger.info(f"직원 {employee_id} 분석 결과: {type(analysis_results)}, 길이: {len(analysis_results) if analysis_results else 0}")
                         
                         if analysis_results and len(analysis_results) > 0:
                             analyzed_count += 1
@@ -441,10 +451,12 @@ class OrganizationDashboard:
                                     '식사시간': f"{result.get('meal_time', 0):.1f}h",
                                     '이동시간': f"{result.get('movement_time', 0):.1f}h",
                                     '휴식시간': f"{result.get('rest_time', 0):.1f}h",
-                                    '데이터신뢰도': f"{result.get('data_reliability', 0):.1f}점"
+                                    '데이터신뢰도': f"{result.get('data_reliability', 0):.1f}점",
+                                    '분석시간': f"{elapsed_time:.3f}초"  # 소요시간 추가
                                 }
                                 employee_results.append(new_result)
                                 current_results.append(new_result)
+                                timing_results.append({'employee_id': employee_id, 'time': elapsed_time, 'status': 'success'})
                                 
                                 # 실시간 결과 테이블 업데이트
                                 if current_results:
@@ -1098,6 +1110,27 @@ class OrganizationDashboard:
             # IndividualDashboard 생성 
             individual_dash = IndividualDashboard(individual_analyzer)
             
+            # 태그 데이터에서 사용 가능한 직원 목록 확인 (디버그용)
+            tag_data = self.pickle_manager.load_dataframe('tag_data')
+            if tag_data is not None and '사번' in tag_data.columns:
+                unique_employees = tag_data['사번'].unique()
+                self.logger.info(f"태그 데이터에 있는 전체 직원 수: {len(unique_employees)}")
+                self.logger.info(f"태그 데이터의 처음 10명 사번: {unique_employees[:10].tolist()}")
+                
+                # 현재 분석하려는 직원이 태그 데이터에 있는지 확인
+                try:
+                    emp_id_int = int(employee_id)
+                    if emp_id_int in unique_employees:
+                        self.logger.info(f"직원 {employee_id}는 태그 데이터에 존재합니다.")
+                    else:
+                        self.logger.warning(f"직원 {employee_id}는 태그 데이터에 없습니다!")
+                        # 사번 형식 차이 확인
+                        emp_id_str = str(employee_id)
+                        if emp_id_str in tag_data['사번'].astype(str).unique():
+                            self.logger.info(f"문자열 형식으로는 존재: {emp_id_str}")
+                except:
+                    self.logger.warning(f"직원 ID 형식 변환 실패: {employee_id}")
+            
             # 날짜별 분석 결과 수집
             daily_results = []
             current_date = start_date
@@ -1127,13 +1160,36 @@ class OrganizationDashboard:
                     self.logger.info(f"  {current_date}: analysis_result 타입: {type(analysis_result)}")
                     if analysis_result:
                         self.logger.info(f"  {current_date}: analysis_result 키들: {list(analysis_result.keys()) if isinstance(analysis_result, dict) else 'dict가 아님'}")
-                        # 분석 결과를 DB 저장용 형식으로 변환
-                        db_result = self._convert_to_db_format(analysis_result, employee_id, current_date)
-                        if db_result:
-                            daily_results.append(db_result)
-                            self.logger.info(f"  {current_date}: 분석 완료 (DB 결과: {db_result.keys()})")
-                        else:
-                            self.logger.warning(f"  {current_date}: _convert_to_db_format 결과 없음")
+                        
+                        # 개인별 분석 결과를 그대로 사용
+                        work_analysis = analysis_result.get('work_time_analysis', {})
+                        meal_analysis = analysis_result.get('meal_time_analysis', {})
+                        activity_summary = analysis_result.get('activity_summary', {})
+                        
+                        # 식사시간은 개인별 분석에서 이미 계산된 total_meal_time 사용 (분 단위)
+                        total_meal_minutes = meal_analysis.get('total_meal_time', 0)
+                        meal_hours = total_meal_minutes / 60
+                        
+                        # 활동별 시간 계산 (activity_summary는 분 단위)
+                        meeting_minutes = activity_summary.get('MEETING', 0)
+                        movement_minutes = activity_summary.get('MOVEMENT', 0)
+                        rest_minutes = activity_summary.get('REST', 0) + activity_summary.get('IDLE', 0)
+                        
+                        db_result = {
+                            'employee_id': employee_id,
+                            'analysis_date': current_date,
+                            'attendance_hours': work_analysis.get('claimed_work_hours', 0),
+                            'actual_work_hours': work_analysis.get('actual_work_hours', 0),
+                            'work_estimation_rate': work_analysis.get('work_efficiency', 0),
+                            'meeting_time': meeting_minutes / 60,  # 분을 시간으로 변환
+                            'meal_time': meal_hours,  # 개인별 분석에서 계산한 값 그대로 사용
+                            'movement_time': movement_minutes / 60,  # 분을 시간으로 변환
+                            'rest_time': rest_minutes / 60,  # 분을 시간으로 변환
+                            'data_reliability': work_analysis.get('confidence_score', 80)
+                        }
+                        
+                        daily_results.append(db_result)
+                        self.logger.info(f"  {current_date}: 분석 완료 - 식사시간: {total_meal_minutes}분 ({meal_hours:.1f}시간)")
                     else:
                         self.logger.warning(f"  {current_date}: analysis_result가 None 또는 빈 값")
                         # None이 반환된 이유를 더 자세히 조사
@@ -1224,17 +1280,16 @@ class OrganizationDashboard:
             attendance_hours = work_analysis.get('claimed_work_hours', 0)
             actual_work_hours = work_analysis.get('actual_work_hours', 0)
             
-            # 활동별 시간 계산 (분 -> 시간)
+            # 활동별 시간 계산 (activity_summary는 이미 분 단위이므로 60으로 나누면 시간)
             meeting_hours = activity_summary.get('MEETING', 0) / 60
             movement_hours = activity_summary.get('MOVEMENT', 0) / 60
             rest_hours = (activity_summary.get('REST', 0) + activity_summary.get('IDLE', 0)) / 60
             
-            # 식사 시간 - 개인별 분석과 동일한 방식으로 meal_data에서 직접 계산
-            # 1. activity_summary에서 직접
-            breakfast_hours = activity_summary.get('BREAKFAST', 0) / 60
-            lunch_hours = activity_summary.get('LUNCH', 0) / 60  
-            dinner_hours = activity_summary.get('DINNER', 0) / 60
-            midnight_meal_hours = activity_summary.get('MIDNIGHT_MEAL', 0) / 60
+            # 식사 시간 - activity_summary는 분 단위
+            breakfast_minutes = activity_summary.get('BREAKFAST', 0)
+            lunch_minutes = activity_summary.get('LUNCH', 0)  
+            dinner_minutes = activity_summary.get('DINNER', 0)
+            midnight_meal_minutes = activity_summary.get('MIDNIGHT_MEAL', 0)
             
             # 2. meal_data 테이블에서 직접 계산 (개인별 분석 방식과 동일)
             try:
@@ -1247,18 +1302,33 @@ class OrganizationDashboard:
                 individual_dash = IndividualDashboard(individual_analyzer)
                 
                 # meal_data에서 직접 식사 데이터 가져오기
+                self.logger.info(f"  meal_data 조회: employee_id={employee_id}, work_date={work_date}")
                 meal_data = individual_dash.get_meal_data(employee_id, work_date)
                 if meal_data is not None and not meal_data.empty:
-                    self.logger.info(f"  meal_data에서 {len(meal_data)}건의 식사 데이터 발견")
+                    self.logger.info(f"  meal_data에서 {len(meal_data)}건의 식사 데이터 발견 (날짜: {work_date})")
                     
                     # 실제 식사별로 시간 계산 (개인별 분석과 동일한 로직)
                     calculated_meal_minutes = 0
                     date_column = '취식일시' if '취식일시' in meal_data.columns else 'meal_datetime'
                     
+                    # 최대 4끼까지만 계산 (조식, 중식, 석식, 야식)
+                    meal_count_by_type = {}
+                    
                     for _, meal in meal_data.iterrows():
                         meal_type = meal.get('식사대분류', meal.get('meal_category', ''))
                         배식구 = meal.get('배식구', '')
                         테이크아웃 = meal.get('테이크아웃', '')
+                        
+                        # 각 식사 유형별로 1번만 계산
+                        if meal_type not in meal_count_by_type:
+                            meal_count_by_type[meal_type] = 0
+                        
+                        # 이미 해당 타입의 식사를 계산했으면 스킵
+                        if meal_count_by_type[meal_type] >= 1:
+                            self.logger.info(f"    {meal_type} 중복 건너뛰기")
+                            continue
+                        
+                        meal_count_by_type[meal_type] += 1
                         
                         # 배식구 기준 테이크아웃 판단
                         is_takeout = (테이크아웃 == 'Y') or ('테이크아웃' in str(배식구))
@@ -1277,18 +1347,21 @@ class OrganizationDashboard:
                         meal_hours = calculated_meal_minutes / 60
                         self.logger.info(f"  meal_data에서 직접 계산한 식사시간: {calculated_meal_minutes}분 ({meal_hours:.1f}시간)")
                     else:
-                        # activity_summary에서 계산
-                        meal_hours = breakfast_hours + lunch_hours + dinner_hours + midnight_meal_hours
-                        self.logger.info(f"  activity_summary에서 계산한 식사시간: {meal_hours:.1f}시간")
+                        # activity_summary에서 계산 (분 단위)
+                        total_meal_minutes = breakfast_minutes + lunch_minutes + dinner_minutes + midnight_meal_minutes
+                        meal_hours = total_meal_minutes / 60
+                        self.logger.info(f"  activity_summary에서 계산한 식사시간: {total_meal_minutes}분 ({meal_hours:.1f}시간)")
                 else:
-                    # meal_data가 없으면 activity_summary에서 계산
-                    meal_hours = breakfast_hours + lunch_hours + dinner_hours + midnight_meal_hours
-                    self.logger.info(f"  meal_data 없음 - activity_summary에서 계산한 식사시간: {meal_hours:.1f}시간")
+                    # meal_data가 없으면 activity_summary에서 계산 (분 단위)
+                    total_meal_minutes = breakfast_minutes + lunch_minutes + dinner_minutes + midnight_meal_minutes
+                    meal_hours = total_meal_minutes / 60
+                    self.logger.info(f"  meal_data 없음 - activity_summary에서 계산한 식사시간: {total_meal_minutes}분 ({meal_hours:.1f}시간)")
             except Exception as meal_e:
                 self.logger.warning(f"  meal_data 계산 실패: {meal_e}")
-                # activity_summary에서 계산
-                meal_hours = breakfast_hours + lunch_hours + dinner_hours + midnight_meal_hours
-                self.logger.info(f"  meal_data 오류로 activity_summary에서 계산한 식사시간: {meal_hours:.1f}시간")
+                # activity_summary에서 계산 (분 단위)
+                total_meal_minutes = breakfast_minutes + lunch_minutes + dinner_minutes + midnight_meal_minutes
+                meal_hours = total_meal_minutes / 60
+                self.logger.info(f"  meal_data 오류로 activity_summary에서 계산한 식사시간: {total_meal_minutes}분 ({meal_hours:.1f}시간)")
             
             # 3. meal_time_analysis에서 시도 (보조)
             if meal_analysis and 'total_meal_time' in meal_analysis:
@@ -1336,10 +1409,10 @@ class OrganizationDashboard:
                 'meal_time': meal_hours,
                 'movement_time': movement_hours,
                 'rest_time': rest_hours,
-                'breakfast_time': breakfast_hours,
-                'lunch_time': lunch_hours,
-                'dinner_time': dinner_hours,
-                'midnight_meal_time': midnight_meal_hours,
+                'breakfast_time': breakfast_minutes / 60,  # 분을 시간으로 변환
+                'lunch_time': lunch_minutes / 60,
+                'dinner_time': dinner_minutes / 60,
+                'midnight_meal_time': midnight_meal_minutes / 60,
                 'shift_type': work_analysis.get('shift_type', '주간'),
                 'cross_day_flag': work_analysis.get('cross_day', False),
                 'data_reliability': data_reliability,
