@@ -497,13 +497,13 @@ class IndividualDashboard:
             return None
     
     def get_employee_work_type(self, employee_id: str, selected_date: date):
-        """직원의 근무제 유형 확인"""
+        """직원의 근무제 유형 확인 (캐시 활용)"""
         try:
-            from ...database import get_pickle_manager
-            pickle_manager = get_pickle_manager()
+            from ...utils.performance_cache import get_performance_cache
+            cache = get_performance_cache()
             
-            # Claim 데이터에서 근무제 유형 확인
-            claim_data = pickle_manager.load_dataframe(name='claim_data')
+            # Claim 데이터에서 근무제 유형 확인 (캐시 활용)
+            claim_data = cache.get_claim_data()
             if claim_data is not None and '사번' in claim_data.columns:
                 # 사번 형식 맞추기
                 if ' - ' in str(employee_id):

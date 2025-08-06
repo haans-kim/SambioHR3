@@ -38,6 +38,9 @@ class PerformanceCache:
         self.tag_location_master_cache: Optional[pd.DataFrame] = None
         self.tag_location_master_loaded_at: Optional[datetime] = None
         
+        self.claim_data_cache: Optional[pd.DataFrame] = None
+        self.claim_data_loaded_at: Optional[datetime] = None
+        
         self.analysis_results_cache: Dict[str, Any] = {}
         self.cache_ttl_minutes = 30  # 캐시 유지 시간
         
@@ -235,6 +238,38 @@ class PerformanceCache:
             logger.error(f"태깅지점 마스터 데이터 캐시 로드 실패: {e}")
             return None
     
+    def get_claim_data(self, pickle_manager=None) -> Optional[pd.DataFrame]:
+        """Claim 데이터 캐시된 로드"""
+        try:
+            # 캐시 유효성 확인
+            if self._is_cache_valid('claim_data'):
+                logger.debug("Claim 데이터 캐시 히트")
+                return self.claim_data_cache
+            
+            # 캐시 미스 - 새로 로드
+            logger.info("Claim 데이터 새로 로드 중...")
+            
+            if pickle_manager is None:
+                from ..database import get_pickle_manager
+                pickle_manager = get_pickle_manager()
+            
+            start_time = datetime.now()
+            self.claim_data_cache = pickle_manager.load_dataframe('claim_data')
+            self.claim_data_loaded_at = start_time
+            
+            load_time = (datetime.now() - start_time).total_seconds()
+            
+            if self.claim_data_cache is not None:
+                logger.info(f"Claim 데이터 로드 완료: {len(self.claim_data_cache):,}건, {load_time:.3f}초")
+            else:
+                logger.warning("Claim 데이터 로드 실패")
+            
+            return self.claim_data_cache
+            
+        except Exception as e:
+            logger.error(f"Claim 데이터 캐시 로드 실패: {e}")
+            return None
+    
     def _is_cache_valid(self, cache_type: str) -> bool:
         """캐시 유효성 검사"""
         if cache_type == 'tag_data':
@@ -249,6 +284,10 @@ class PerformanceCache:
             return (self.tag_location_master_cache is not None and 
                    self.tag_location_master_loaded_at is not None and
                    (datetime.now() - self.tag_location_master_loaded_at).seconds < self.cache_ttl_minutes * 60)
+        elif cache_type == 'claim_data':
+            return (self.claim_data_cache is not None and 
+                   self.claim_data_loaded_at is not None and
+                   (datetime.now() - self.claim_data_loaded_at).seconds < self.cache_ttl_minutes * 60)
         return False
     
     def clear_cache(self, cache_type: str = 'all'):
@@ -271,6 +310,11 @@ class PerformanceCache:
             self.tag_location_master_cache = None
             self.tag_location_master_loaded_at = None
             logger.info("태깅지점 마스터 캐시 클리어")
+        
+        if cache_type in ['all', 'claim_data']:
+            self.claim_data_cache = None
+            self.claim_data_loaded_at = None
+            logger.info("Claim 데이터 캐시 클리어")
     
     def get_cache_stats(self) -> Dict[str, Any]:
         """캐시 통계 정보"""
@@ -281,6 +325,8 @@ class PerformanceCache:
             'organization_size': len(self.organization_data_cache) if self.organization_data_cache is not None else 0,
             'tag_location_master_cached': self.tag_location_master_cache is not None,
             'tag_location_master_size': len(self.tag_location_master_cache) if self.tag_location_master_cache is not None else 0,
+            'claim_data_cached': self.claim_data_cache is not None,
+            'claim_data_size': len(self.claim_data_cache) if self.claim_data_cache is not None else 0,
             'analysis_cache_count': len(self.analysis_results_cache),
             'memory_usage_mb': self._calculate_memory_usage()
         }
@@ -298,6 +344,9 @@ class PerformanceCache:
         
         if self.tag_location_master_cache is not None:
             total_bytes += self.tag_location_master_cache.memory_usage(deep=True).sum()
+        
+        if self.claim_data_cache is not None:
+            total_bytes += self.claim_data_cache.memory_usage(deep=True).sum()
         
         # 분석 결과 캐시는 대략 추정
         total_bytes += len(self.analysis_results_cache) * 10 * 1024  # 대략 10KB per entry
