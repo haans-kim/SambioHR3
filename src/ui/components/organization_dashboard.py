@@ -1139,29 +1139,34 @@ class OrganizationDashboard:
             
             while current_date <= end_date:
                 try:
-                    self.logger.info(f"  {current_date}: individual_dashboard.execute_analysis 호출")
+                    import time
+                    step_times = {}  # 각 단계별 시간 측정
                     
-                    # 먼저 해당 날짜에 데이터가 있는지 확인
+                    # 1. 태그 데이터 조회
+                    step_start = time.time()
                     daily_tag_data = individual_dash.get_daily_tag_data(employee_id, current_date)
+                    step_times['tag_data_load'] = time.time() - step_start
+                    
                     if daily_tag_data is None or daily_tag_data.empty:
-                        self.logger.info(f"  {current_date}: 해당 날짜에 태그 데이터가 없습니다 (건너뛰기)")
+                        self.logger.info(f"  {current_date}: 태그 데이터 없음 (조회 시간: {step_times['tag_data_load']:.3f}초)")
                         current_date += timedelta(days=1)
                         continue
                     
-                    self.logger.info(f"  {current_date}: 태그 데이터 {len(daily_tag_data)}건 발견")
+                    self.logger.info(f"  {current_date}: 태그 데이터 {len(daily_tag_data)}건 발견 (조회 시간: {step_times['tag_data_load']:.3f}초)")
                     
-                    # individual_dashboard의 execute_analysis 메서드 호출 
-                    # 반드시 employee_id와 selected_date를 설정해야 meal_data를 제대로 가져올 수 있음
-                    self.logger.info(f"  {current_date}: execute_analysis 호출 전 파라미터: employee_id={employee_id}, selected_date={current_date}")
+                    # 2. execute_analysis 호출
+                    step_start = time.time()
                     analysis_result = individual_dash.execute_analysis(
                         employee_id=employee_id,
                         selected_date=current_date,
                         return_data=True  # 데이터만 반환, UI 렌더링 안함
                     )
+                    step_times['execute_analysis'] = time.time() - step_start
                     
-                    self.logger.info(f"  {current_date}: analysis_result 타입: {type(analysis_result)}")
+                    self.logger.info(f"  {current_date}: execute_analysis 완료 (소요시간: {step_times['execute_analysis']:.3f}초)")
                     if analysis_result:
-                        self.logger.info(f"  {current_date}: analysis_result 키들: {list(analysis_result.keys()) if isinstance(analysis_result, dict) else 'dict가 아님'}")
+                        # 3. 결과 데이터 추출 및 변환
+                        step_start = time.time()
                         
                         # 개인별 분석 결과를 그대로 사용
                         work_analysis = analysis_result.get('work_time_analysis', {})
@@ -1227,7 +1232,14 @@ class OrganizationDashboard:
                         }
                         
                         daily_results.append(db_result)
-                        self.logger.info(f"  {current_date}: 분석 완료 - 식사시간: {total_meal_minutes}분 ({meal_hours:.1f}시간)")
+                        step_times['result_processing'] = time.time() - step_start
+                        
+                        # 전체 단계별 시간 로그
+                        total_step_time = sum(step_times.values())
+                        self.logger.info(f"  {current_date}: 분석 완료 - 총 {total_step_time:.3f}초")
+                        self.logger.info(f"    - 태그 데이터 조회: {step_times.get('tag_data_load', 0):.3f}초")
+                        self.logger.info(f"    - execute_analysis: {step_times.get('execute_analysis', 0):.3f}초")
+                        self.logger.info(f"    - 결과 처리: {step_times.get('result_processing', 0):.3f}초")
                     else:
                         self.logger.warning(f"  {current_date}: analysis_result가 None 또는 빈 값")
                         # None이 반환된 이유를 더 자세히 조사

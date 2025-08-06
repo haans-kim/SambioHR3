@@ -4147,7 +4147,11 @@ class IndividualDashboard:
             return None
         
         try:
+            import time
+            analysis_times = {}  # 각 단계별 시간 측정
+            
             # 분석 실행
+            step_start = time.time()
             if return_data:
                 # 데이터만 반환하는 경우 스피너 없이 실행
                 daily_data = self.get_daily_tag_data(employee_id, selected_date)
@@ -4155,6 +4159,7 @@ class IndividualDashboard:
                 # UI 렌더링하는 경우 스피너 표시
                 with st.spinner("분석 중..."):
                     daily_data = self.get_daily_tag_data(employee_id, selected_date)
+            analysis_times['tag_data'] = time.time() - step_start
             
             if daily_data is None or daily_data.empty:
                 if not return_data:
@@ -4162,12 +4167,16 @@ class IndividualDashboard:
                 return None
             
             # 장비 데이터 로드
+            step_start = time.time()
             equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
+            analysis_times['equipment_data'] = time.time() - step_start
             if equipment_data is not None and not equipment_data.empty and not return_data:
                 st.info(f"🔧 장비 사용 데이터: {len(equipment_data)}건 발견")
                 
             # 근태 데이터 로드
+            step_start = time.time()
             attendance_data = self.get_employee_attendance_data(employee_id, selected_date)
+            analysis_times['attendance_data'] = time.time() - step_start
             if attendance_data is not None and not attendance_data.empty and not return_data:
                 st.info(f"📋 근태 정보: {len(attendance_data)}건 발견")
                 
@@ -4184,7 +4193,9 @@ class IndividualDashboard:
                                    f"activity_code={row.get('activity_code', 'N/A')}, 활동분류={row.get('활동분류', 'N/A')}")
             
             # 활동 분류 수행 (employee_id와 selected_date 전달)
+            step_start = time.time()
             classified_data = self.classify_activities(daily_data, employee_id, selected_date)
+            analysis_times['classify_activities'] = time.time() - step_start
             
             # 분류 후 T2 태그 상태 확인 (Tag_Code 컬럼이 있는 경우만)
             if 'Tag_Code' in classified_data.columns:
@@ -4205,7 +4216,19 @@ class IndividualDashboard:
                 self.logger.info("[classify_activities 후] Tag_Code 컬럼이 없어 태그별 확인 생략")
             
             # 분석 결과 생성
+            step_start = time.time()
             analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
+            analysis_times['analyze_daily_data'] = time.time() - step_start
+            
+            # 성능 로깅 (return_data일 때만)
+            if return_data:
+                total_time = sum(analysis_times.values())
+                self.logger.info(f"[execute_analysis 성능 분석] 총 {total_time:.3f}초")
+                self.logger.info(f"  - tag_data 로드: {analysis_times.get('tag_data', 0):.3f}초")
+                self.logger.info(f"  - equipment_data 로드: {analysis_times.get('equipment_data', 0):.3f}초")
+                self.logger.info(f"  - attendance_data 로드: {analysis_times.get('attendance_data', 0):.3f}초")
+                self.logger.info(f"  - classify_activities: {analysis_times.get('classify_activities', 0):.3f}초")
+                self.logger.info(f"  - analyze_daily_data: {analysis_times.get('analyze_daily_data', 0):.3f}초")
             
             # analyze_daily_data가 실패한 경우 기본 결과 생성
             if analysis_result is None:
