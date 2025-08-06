@@ -42,7 +42,8 @@
       "Bash(mkdir:*)",
       "Bash(git pull:*)",
       "Bash(gh pr create:*)",
-      "Bash(timeout 5 streamlit run src/ui/streamlit_app.py)"
+      "Bash(timeout 5 streamlit run src/ui/streamlit_app.py)",
+      "Bash(git log:*)"
     ],
     "deny": []
   }

@@ -4122,100 +4122,122 @@ class IndividualDashboard:
                     st.session_state.recent_views_manager.clear_all()
                     st.rerun()
     
-    def execute_analysis(self):
-        """분석 실행"""
-        employee_id = st.session_state.get('selected_employee')
-        selected_date = st.session_state.get('analysis_date')
+    def execute_analysis(self, employee_id=None, selected_date=None, return_data=False):
+        """분석 실행
+        
+        Args:
+            employee_id: 직원 ID (None이면 session_state에서 가져옴)
+            selected_date: 분석 날짜 (None이면 session_state에서 가져옴)
+            return_data: True면 데이터만 반환, False면 UI 렌더링
+        """
+        # 파라미터가 없으면 session_state에서 가져오기
+        if employee_id is None:
+            employee_id = st.session_state.get('selected_employee')
+        if selected_date is None:
+            selected_date = st.session_state.get('analysis_date')
         
         if not employee_id or not selected_date:
-            st.error("직원과 분석 날짜를 선택해주세요.")
-            return
+            if not return_data:
+                st.error("직원과 분석 날짜를 선택해주세요.")
+            return None
         
         try:
             # 분석 실행
-            with st.spinner("분석 중..."):
-                # 실제 데이터 가져오기
+            if return_data:
+                # 데이터만 반환하는 경우 스피너 없이 실행
                 daily_data = self.get_daily_tag_data(employee_id, selected_date)
-                
-                if daily_data is None or daily_data.empty:
+            else:
+                # UI 렌더링하는 경우 스피너 표시
+                with st.spinner("분석 중..."):
+                    daily_data = self.get_daily_tag_data(employee_id, selected_date)
+            
+            if daily_data is None or daily_data.empty:
+                if not return_data:
                     st.warning(f"선택한 날짜({selected_date})에 해당 직원({employee_id})의 데이터가 없습니다.")
-                    return
+                return None
+            
+            # 장비 데이터 로드
+            equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
+            if equipment_data is not None and not equipment_data.empty and not return_data:
+                st.info(f"🔧 장비 사용 데이터: {len(equipment_data)}건 발견")
                 
-                # 장비 데이터 로드
-                equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
-                if equipment_data is not None and not equipment_data.empty:
-                    st.info(f"🔧 장비 사용 데이터: {len(equipment_data)}건 발견")
+            # 근태 데이터 로드
+            attendance_data = self.get_employee_attendance_data(employee_id, selected_date)
+            if attendance_data is not None and not attendance_data.empty and not return_data:
+                st.info(f"📋 근태 정보: {len(attendance_data)}건 발견")
                 
-                # 근태 데이터 로드
-                attendance_data = self.get_employee_attendance_data(employee_id, selected_date)
-                if attendance_data is not None and not attendance_data.empty:
-                    st.info(f"📋 근태 정보: {len(attendance_data)}건 발견")
-                
-                # Knox/Equipment 데이터 확인
-                knox_tags = daily_data[daily_data['Tag_Code'] == 'G3']
-                if not knox_tags.empty:
-                    self.logger.info(f"[분류 전] G3 태그 {len(knox_tags)}건 발견:")
-                    for idx, row in knox_tags.iterrows():
-                        self.logger.info(f"  - {row['datetime']}: Tag_Code={row.get('Tag_Code')}, source={row.get('source', 'N/A')}, " +
-                                       f"activity_code={row.get('activity_code', 'N/A')}, 활동분류={row.get('활동분류', 'N/A')}")
-                
-                # 활동 분류 수행 (employee_id와 selected_date 전달)
-                classified_data = self.classify_activities(daily_data, employee_id, selected_date)
-                
-                # 분류 후 T2 태그 상태 확인
-                t2_classified = classified_data[classified_data['Tag_Code'] == 'T2']
-                if not t2_classified.empty:
-                    self.logger.info(f"[classify_activities 후] T2 태그 {len(t2_classified)}건:")
-                    for idx, row in t2_classified.head(3).iterrows():
-                        self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code')}, activity_type={row.get('activity_type')}, DR_NM={row['DR_NM']}")
-                
-                # 분류 후 G3 태그 상태 확인
-                g3_classified = classified_data[classified_data['Tag_Code'] == 'G3']
-                if not g3_classified.empty:
-                    self.logger.info(f"[classify_activities 후] G3 태그 {len(g3_classified)}건:")
-                    for idx, row in g3_classified.iterrows():
-                        self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code', 'N/A')}, " +
-                                       f"활동분류={row.get('활동분류', 'N/A')}, source={row.get('source', 'N/A')}")
-                
-                # 분석 결과 생성
-                analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
-                
-                # analyze_daily_data가 실패한 경우 기본 결과 생성
-                if analysis_result is None:
+            # Knox/Equipment 데이터 확인
+            knox_tags = daily_data[daily_data['Tag_Code'] == 'G3']
+            if not knox_tags.empty:
+                self.logger.info(f"[분류 전] G3 태그 {len(knox_tags)}건 발견:")
+                for idx, row in knox_tags.iterrows():
+                    self.logger.info(f"  - {row['datetime']}: Tag_Code={row.get('Tag_Code')}, source={row.get('source', 'N/A')}, " +
+                                   f"activity_code={row.get('activity_code', 'N/A')}, 활동분류={row.get('활동분류', 'N/A')}")
+            
+            # 활동 분류 수행 (employee_id와 selected_date 전달)
+            classified_data = self.classify_activities(daily_data, employee_id, selected_date)
+            
+            # 분류 후 T2 태그 상태 확인
+            t2_classified = classified_data[classified_data['Tag_Code'] == 'T2']
+            if not t2_classified.empty:
+                self.logger.info(f"[classify_activities 후] T2 태그 {len(t2_classified)}건:")
+                for idx, row in t2_classified.head(3).iterrows():
+                    self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code')}, activity_type={row.get('activity_type')}, DR_NM={row['DR_NM']}")
+            
+            # 분류 후 G3 태그 상태 확인
+            g3_classified = classified_data[classified_data['Tag_Code'] == 'G3']
+            if not g3_classified.empty:
+                self.logger.info(f"[classify_activities 후] G3 태그 {len(g3_classified)}건:")
+                for idx, row in g3_classified.iterrows():
+                    self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code', 'N/A')}, " +
+                                   f"활동분류={row.get('활동분류', 'N/A')}, source={row.get('source', 'N/A')}")
+            
+            # 분석 결과 생성
+            analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
+            
+            # analyze_daily_data가 실패한 경우 기본 결과 생성
+            if analysis_result is None:
+                if not return_data:
                     st.error("데이터 분석 중 오류가 발생했습니다. 기본 정보만 표시합니다.")
-                    analysis_result = self.create_sample_analysis_result(employee_id, (selected_date, selected_date))
-                
-                # 장비 데이터를 분석 결과에 추가
-                if equipment_data is not None and not equipment_data.empty:
-                    analysis_result['equipment_data'] = equipment_data
-                
-                # 근태 데이터를 분석 결과에 추가
-                if attendance_data is not None and not attendance_data.empty:
-                    analysis_result['attendance_data'] = attendance_data
-                
-                # 직원 정보 추가 (최근 조회 기록 저장용)
-                employee_info = self.get_employee_info(employee_id)
-                analysis_result['employee_info'] = employee_info
-                
-                # 최근 조회 기록에 추가
-                if 'recent_views_manager' in st.session_state:
-                    employee_name = employee_info.get('name', employee_id)
-                    department = employee_info.get('department', 'N/A')
-                    st.session_state.recent_views_manager.add_view(
-                        employee_id=employee_id,
-                        employee_name=employee_name,
-                        analysis_date=selected_date.isoformat(),
-                        department=department
-                    )
-                
-                # 결과 렌더링
-                self.render_analysis_results(analysis_result)
+                analysis_result = self.create_sample_analysis_result(employee_id, (selected_date, selected_date))
+            
+            # 장비 데이터를 분석 결과에 추가
+            if equipment_data is not None and not equipment_data.empty:
+                analysis_result['equipment_data'] = equipment_data
+            
+            # 근태 데이터를 분석 결과에 추가
+            if attendance_data is not None and not attendance_data.empty:
+                analysis_result['attendance_data'] = attendance_data
+            
+            # 직원 정보 추가 (최근 조회 기록 저장용)
+            employee_info = self.get_employee_info(employee_id)
+            analysis_result['employee_info'] = employee_info
+            
+            # 최근 조회 기록에 추가 (UI 모드일 때만)
+            if not return_data and 'recent_views_manager' in st.session_state:
+                employee_name = employee_info.get('name', employee_id)
+                department = employee_info.get('department', 'N/A')
+                st.session_state.recent_views_manager.add_view(
+                    employee_id=employee_id,
+                    employee_name=employee_name,
+                    analysis_date=selected_date.isoformat(),
+                    department=department
+                )
+            
+            # return_data가 True인 경우 데이터만 반환
+            if return_data:
+                return analysis_result
+            
+            # 결과 렌더링
+            self.render_analysis_results(analysis_result)
                 
         except Exception as e:
-            st.error(f"분석 중 오류 발생: {e}")
+            if not return_data:
+                st.error(f"분석 중 오류 발생: {e}")
             self.logger.error(f"개인 분석 오류: {e}")
             import traceback
             self.logger.error(f"전체 스택 트레이스:\n{traceback.format_exc()}")
+            return None
     
     def create_sample_analysis_result(self, employee_id: str, date_range: tuple):
         """샘플 분석 결과 생성"""

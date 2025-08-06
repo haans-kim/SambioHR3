@@ -329,15 +329,34 @@ class OrganizationDashboard:
                 # 조직에 속한 직원들 가져오기
                 employees = self._get_organization_employees(org_name, org_level)
                 
+                self.logger.info(f"조직 {org_name}({org_level})에서 직원 {len(employees) if employees else 0}명 발견")
+                if employees:
+                    self.logger.info(f"직원 목록 (처음 5명): {employees[:5]}")
+                
                 if not employees:
                     st.warning(f"{org_name}에 속한 직원이 없습니다.")
                     return
                 
                 st.info(f"{org_name} 소속 {len(employees)}명의 직원 분석을 시작합니다.")
                 
+                # 선택한 직원 목록 표시
+                st.markdown("### 📋 분석 대상 직원 목록")
+                employees_df = pd.DataFrame({
+                    '순번': range(1, len(employees) + 1),
+                    '사번': employees,
+                    '상태': ['대기중'] * len(employees)
+                })
+                employees_table = st.empty()
+                employees_table.dataframe(employees_df, use_container_width=True)
+                
                 # Progress bar
                 progress_bar = st.progress(0)
                 status_text = st.empty()
+                
+                # 실시간 분석 결과 테이블
+                st.markdown("### 📊 실시간 분석 결과")
+                results_table = st.empty()
+                current_results = []
                 
                 # 개인별 분석기 초기화
                 import sys
@@ -354,7 +373,7 @@ class OrganizationDashboard:
                 
                 # 새로운 인스턴스 생성 (싱글톤 사용하지 않음)
                 db_mgr = DatabaseManager()
-                pickle_mgr = PickleManager()
+                pickle_mgr = PickleManager(base_path="data/pickles")  # 명시적 경로 지정
                 individual_analyzer = IndividualAnalyzer(db_mgr, None)
                 individual_analyzer.pickle_manager = pickle_mgr
                 
@@ -363,6 +382,8 @@ class OrganizationDashboard:
                 failed_count = 0
                 total_work_hours = 0
                 total_actual_work_time = 0
+                total_days = 0  # 총 분석 일수
+                employee_results = []  # 개인별 분석 결과 저장
                 
                 for idx, employee_id in enumerate(employees):
                     try:
@@ -371,7 +392,11 @@ class OrganizationDashboard:
                         progress_bar.progress(progress)
                         status_text.text(f"분석 중... ({idx + 1}/{len(employees)}) - {employee_id}")
                         
-                        # 개인별 분석 수행
+                        # 직원 상태 업데이트 (분석 중)
+                        employees_df.loc[idx, '상태'] = '분석중'
+                        employees_table.dataframe(employees_df, use_container_width=True)
+                        
+                        # 개인별 분석 수행 - 임시로 간단한 더미 데이터 사용
                         # start_date와 end_date가 tuple인 경우 처리
                         if isinstance(start_date, tuple):
                             start_dt = start_date[0] if len(start_date) > 0 else date.today()
@@ -383,22 +408,67 @@ class OrganizationDashboard:
                         else:
                             end_dt = end_date
                         
-                        analysis_result = individual_analyzer.analyze_individual(
-                            employee_id, 
-                            datetime.combine(start_dt, datetime.min.time()),
-                            datetime.combine(end_dt, datetime.max.time())
+                        # 개인별 분석 수행 - individual_dashboard와 동일한 방식 사용
+                        analysis_results = self._analyze_employee(
+                            employee_id,
+                            start_dt,
+                            end_dt
                         )
                         
-                        if analysis_result:
+                        if analysis_results and len(analysis_results) > 0:
                             analyzed_count += 1
-                            # 근무시간 집계
-                            if 'work_time_analysis' in analysis_result:
-                                work_analysis = analysis_result['work_time_analysis']
-                                total_work_hours += work_analysis.get('total_work_hours', 0)
-                                total_actual_work_time += work_analysis.get('actual_work_time', 0)
+                            
+                            # 분석 결과 저장
+                            self._save_employee_analysis(analysis_results)
+                            
+                            # 직원 상태 업데이트 (완료)
+                            employees_df.loc[idx, '상태'] = f'완료 ({len(analysis_results)}건)'
+                            employees_table.dataframe(employees_df, use_container_width=True)
+                            
+                            # 전체 통계 계산용 데이터 수집
+                            for result in analysis_results:
+                                work_hours = result.get('attendance_hours', 0)
+                                actual_hours = result.get('actual_work_hours', 0)
+                                
+                                # 디버깅 로그
+                                if idx < 5:  # 처음 5명만 로그
+                                    self.logger.info(f"직원 {employee_id}: 근태={work_hours:.1f}h, 실제={actual_hours:.1f}h")
+                                
+                                total_work_hours += work_hours
+                                total_actual_work_time += actual_hours
+                                total_days += 1
+                                
+                                # 개인별 결과를 리스트에 저장하고 실시간 업데이트
+                                new_result = {
+                                    '사번': employee_id,
+                                    '날짜': result.get('analysis_date', ''),
+                                    '근태기록시간': f"{work_hours:.1f}h",
+                                    '실제작업시간': f"{actual_hours:.1f}h",
+                                    '작업시간추정률': f"{result.get('work_estimation_rate', 0):.1f}%",
+                                    '회의시간': f"{result.get('meeting_time', 0):.1f}h",
+                                    '식사시간': f"{result.get('meal_time', 0):.1f}h",
+                                    '이동시간': f"{result.get('movement_time', 0):.1f}h",
+                                    '휴식시간': f"{result.get('rest_time', 0):.1f}h",
+                                    '데이터신뢰도': f"{result.get('data_reliability', 0):.1f}점"
+                                }
+                                employee_results.append(new_result)
+                                current_results.append(new_result)
+                                
+                                # 실시간 결과 테이블 업데이트
+                                if current_results:
+                                    results_df = pd.DataFrame(current_results)
+                                    results_table.dataframe(results_df, use_container_width=True)
+                        else:
+                            # 분석 실패
+                            employees_df.loc[idx, '상태'] = '실패 (데이터 없음)'
+                            employees_table.dataframe(employees_df, use_container_width=True)
                     
                     except Exception as e:
                         failed_count += 1
+                        # 분석 실패 상태 업데이트
+                        employees_df.loc[idx, '상태'] = f'오류: {str(e)[:30]}...'
+                        employees_table.dataframe(employees_df, use_container_width=True)
+                        
                         self.logger.warning(f"직원 {employee_id} 분석 실패: {e}")
                         st.error(f"직원 {employee_id} 분석 실패: {e}")
                         import traceback
@@ -410,11 +480,23 @@ class OrganizationDashboard:
                 status_text.text("")
                 
                 # 분석 결과 요약
-                if analyzed_count > 0:
-                    avg_work_hours = total_work_hours / analyzed_count
-                    avg_actual_work = total_actual_work_time / analyzed_count
-                    utilization_rate = (avg_actual_work / avg_work_hours * 100) if avg_work_hours > 0 else 0
+                if analyzed_count > 0 and total_days > 0:
+                    # 일 평균으로 계산
+                    avg_work_hours = total_work_hours / total_days
+                    avg_actual_work = total_actual_work_time / total_days
+                    
+                    # 효율성 계산
+                    if avg_work_hours > 0:
+                        utilization_rate = (avg_actual_work / avg_work_hours * 100)
+                    else:
+                        # 근태 기록이 없으면 실제 작업시간 기준으로 계산
+                        utilization_rate = (avg_actual_work / 8) * 100  # 8시간 기준
+                    
                     efficiency_score = min(100, utilization_rate * 0.95)
+                    
+                    self.logger.info(f"분석 완료: 직원 {analyzed_count}명, 총 {total_days}일")
+                    self.logger.info(f"평균 근태: {avg_work_hours:.1f}h, 평균 실제: {avg_actual_work:.1f}h")
+                    self.logger.info(f"가동률: {utilization_rate:.1f}%, 효율성: {efficiency_score:.1f}점")
                     
                     # 조직 분석 결과 DB 저장
                     self._save_organization_analysis_result(
@@ -431,13 +513,46 @@ class OrganizationDashboard:
                         st.metric("분석 인원", f"{analyzed_count}명")
                     
                     with col2:
-                        st.metric("평균 근무시간", f"{avg_work_hours:.1f}시간")
+                        if pd.isna(avg_work_hours) or avg_work_hours == 0:
+                            st.metric("평균 근무시간", "데이터 없음")
+                        else:
+                            st.metric("평균 근무시간", f"{avg_work_hours:.1f}시간")
                     
                     with col3:
-                        st.metric("가동률", f"{utilization_rate:.1f}%")
+                        if pd.isna(utilization_rate):
+                            st.metric("가동률", "계산 불가")
+                        else:
+                            st.metric("가동률", f"{utilization_rate:.1f}%")
                     
                     with col4:
-                        st.metric("효율성 점수", f"{efficiency_score:.1f}점")
+                        if pd.isna(efficiency_score):
+                            st.metric("효율성 점수", "계산 불가")
+                        else:
+                            st.metric("효율성 점수", f"{efficiency_score:.1f}점")
+                    
+                    # 최종 분석 결과 요약
+                    if employee_results:
+                        st.markdown("### 📊 최종 분석 결과 요약")
+                        st.markdown("*DB에 저장된 데이터*")
+                        
+                        # DataFrame으로 변환
+                        final_results_df = pd.DataFrame(employee_results)
+                        
+                        # 최종 테이블 표시 (스크롤 가능)
+                        st.dataframe(
+                            final_results_df,
+                            use_container_width=True,
+                            height=400  # 높이 제한으로 스크롤 가능
+                        )
+                        
+                        # CSV 다운로드 버튼
+                        csv = final_results_df.to_csv(index=False, encoding='utf-8-sig')
+                        st.download_button(
+                            label="📥 CSV로 다운로드",
+                            data=csv,
+                            file_name=f"{org_name}_분석결과_{start_date}_{end_date}.csv",
+                            mime="text/csv"
+                        )
                     
                 else:
                     st.error("분석에 성공한 직원이 없습니다.")
@@ -502,33 +617,67 @@ class OrganizationDashboard:
         try:
             self.logger.info(f"조직 직원 조회: {org_name} ({org_level})")
             
-            if org_level == 'center':
-                query = text("""
-                    SELECT DISTINCT employee_id 
-                    FROM employees
-                    WHERE center_name = :org_name
-                """)
-            elif org_level == 'group':
-                query = text("""
-                    SELECT DISTINCT employee_id 
-                    FROM employees
-                    WHERE group_name = :org_name
-                """)
-            else:  # team
-                query = text("""
-                    SELECT DISTINCT employee_id 
-                    FROM employees
-                    WHERE team_name = :org_name
-                """)
+            # pickle 데이터에서 조직 정보 가져오기
+            org_df = self.pickle_manager.load_dataframe('organization_data')
+            if org_df is None or org_df.empty:
+                self.logger.warning("organization_data를 찾을 수 없습니다. organization 시도")
+                org_df = self.pickle_manager.load_dataframe('organization')
+                if org_df is None or org_df.empty:
+                    self.logger.warning("organization도 찾을 수 없습니다")
+                    return []
             
-            with self.db_manager.get_session() as session:
-                result = session.execute(query, {'org_name': org_name}).fetchall()
-                employee_list = [row[0] for row in result]
-                self.logger.info(f"조회된 직원 수: {len(employee_list)}")
-                return employee_list
+            self.logger.info(f"조직 데이터 로드 성공: {len(org_df)}행, 컬럼: {list(org_df.columns)}")
+            
+            # 조직 레벨에 따른 필터링
+            if org_level == 'center':
+                if '센터' in org_df.columns:
+                    filtered = org_df[org_df['센터'] == org_name]
+                    self.logger.info(f"'센터' 컬럼으로 필터링: {len(filtered)}명")
+                elif 'center' in org_df.columns:
+                    filtered = org_df[org_df['center'] == org_name]
+                    self.logger.info(f"'center' 컬럼으로 필터링: {len(filtered)}명")
+                else:
+                    self.logger.warning("센터 컬럼을 찾을 수 없습니다")
+                    return []
+            elif org_level == 'group':
+                if '그룹' in org_df.columns:
+                    filtered = org_df[org_df['그룹'] == org_name]
+                elif 'group_name' in org_df.columns:
+                    filtered = org_df[org_df['group_name'] == org_name]
+                else:
+                    self.logger.warning("그룹 컬럼을 찾을 수 없습니다")
+                    return []
+            else:  # team
+                if '팀' in org_df.columns:
+                    filtered = org_df[org_df['팀'] == org_name]
+                elif 'team' in org_df.columns:
+                    filtered = org_df[org_df['team'] == org_name]
+                else:
+                    self.logger.warning("팀 컬럼을 찾을 수 없습니다")
+                    return []
+            
+            # 직원 ID 추출
+            employee_list = []
+            if '사번' in filtered.columns:
+                employee_list = filtered['사번'].dropna().unique().tolist()
+            elif 'employee_no' in filtered.columns:
+                employee_list = filtered['employee_no'].dropna().unique().tolist()
+            elif 'employee_id' in filtered.columns:
+                employee_list = filtered['employee_id'].dropna().unique().tolist()
+            
+            # 문자열로 변환
+            employee_list = [str(emp_id) for emp_id in employee_list]
+            
+            self.logger.info(f"조회된 직원 수: {len(employee_list)}")
+            if len(employee_list) > 0:
+                self.logger.info(f"첫 5명: {employee_list[:5]}")
+            
+            return employee_list
                 
         except Exception as e:
             self.logger.error(f"직원 목록 조회 오류: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return []
     
     def _save_organization_analysis_result(self, org_id: str, org_name: str, org_level: str,
@@ -932,3 +1081,439 @@ class OrganizationDashboard:
                 st.error(f"데이터 분석 중 오류가 발생했습니다: {str(e)}")
                 import traceback
                 st.text(traceback.format_exc())
+    
+    def _analyze_employee(self, employee_id: str, start_date, end_date):
+        """개인별 분석 수행 - individual_dashboard의 실제 로직 사용"""
+        try:
+            self.logger.info(f"직원 {employee_id} 분석 시작: {start_date} ~ {end_date}")
+            
+            # IndividualDashboard 인스턴스 생성
+            from .individual_dashboard import IndividualDashboard
+            from src.analysis.individual_analyzer import IndividualAnalyzer
+            
+            # IndividualAnalyzer 생성
+            individual_analyzer = IndividualAnalyzer(self.db_manager, None)
+            individual_analyzer.pickle_manager = self.pickle_manager
+            
+            # IndividualDashboard 생성 
+            individual_dash = IndividualDashboard(individual_analyzer)
+            
+            # 날짜별 분석 결과 수집
+            daily_results = []
+            current_date = start_date
+            
+            while current_date <= end_date:
+                try:
+                    self.logger.info(f"  {current_date}: individual_dashboard.execute_analysis 호출")
+                    # individual_dashboard의 execute_analysis 메서드 호출
+                    analysis_result = individual_dash.execute_analysis(
+                        employee_id=employee_id,
+                        selected_date=current_date,
+                        return_data=True  # 데이터만 반환, UI 렌더링 안함
+                    )
+                    
+                    self.logger.info(f"  {current_date}: analysis_result 타입: {type(analysis_result)}")
+                    if analysis_result:
+                        self.logger.info(f"  {current_date}: analysis_result 키들: {list(analysis_result.keys()) if isinstance(analysis_result, dict) else 'dict가 아님'}")
+                        # 분석 결과를 DB 저장용 형식으로 변환
+                        db_result = self._convert_to_db_format(analysis_result, employee_id, current_date)
+                        if db_result:
+                            daily_results.append(db_result)
+                            self.logger.info(f"  {current_date}: 분석 완료 (DB 결과: {db_result.keys()})")
+                        else:
+                            self.logger.warning(f"  {current_date}: _convert_to_db_format 결과 없음")
+                    else:
+                        self.logger.warning(f"  {current_date}: analysis_result가 None 또는 빈 값")
+                    
+                except Exception as e:
+                    self.logger.error(f"  {current_date} 분석 실패: {e}")
+                    import traceback
+                    self.logger.error(f"  {current_date} 전체 스택 트레이스:\n{traceback.format_exc()}")
+                
+                current_date += timedelta(days=1)
+            
+            self.logger.info(f"직원 {employee_id}: {len(daily_results)}일치 데이터 분석 완료")
+            return daily_results if daily_results else None
+            
+        except Exception as e:
+            self.logger.error(f"직원 {employee_id} 분석 실패: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            return None
+    
+    def _convert_to_db_format(self, analysis_result, employee_id, work_date):
+        """individual_dashboard의 분석 결과를 DB 저장 형식으로 변환"""
+        try:
+            # work_time_analysis에서 데이터 추출
+            work_analysis = analysis_result.get('work_time_analysis', {})
+            activity_summary = analysis_result.get('activity_summary', {})
+            meal_analysis = analysis_result.get('meal_time_analysis', {})
+            
+            # 근태 시간과 실제 작업 시간
+            attendance_hours = work_analysis.get('claimed_work_hours', 0)
+            actual_work_hours = work_analysis.get('actual_work_hours', 0)
+            
+            # 활동별 시간 계산 (분 -> 시간)
+            meeting_hours = activity_summary.get('MEETING', 0) / 60
+            movement_hours = activity_summary.get('MOVEMENT', 0) / 60
+            rest_hours = (activity_summary.get('REST', 0) + activity_summary.get('IDLE', 0)) / 60
+            
+            # 식사 시간
+            meal_hours = (
+                activity_summary.get('BREAKFAST', 0) +
+                activity_summary.get('LUNCH', 0) +
+                activity_summary.get('DINNER', 0) +
+                activity_summary.get('MIDNIGHT_MEAL', 0)
+            ) / 60
+            
+            breakfast_hours = activity_summary.get('BREAKFAST', 0) / 60
+            lunch_hours = activity_summary.get('LUNCH', 0) / 60
+            dinner_hours = activity_summary.get('DINNER', 0) / 60
+            midnight_meal_hours = activity_summary.get('MIDNIGHT_MEAL', 0) / 60
+            
+            # 데이터 신뢰도
+            data_reliability = work_analysis.get('confidence_score', 0)
+            if data_reliability == 0:
+                # 태그 수 기반으로 계산
+                total_tags = analysis_result.get('total_tags', 0)
+                data_reliability = min(100, (total_tags / 80) * 100)
+            
+            # 효율성 계산
+            work_efficiency = 0
+            if attendance_hours > 0:
+                work_efficiency = (actual_work_hours / attendance_hours) * 100
+            
+            return {
+                'employee_id': employee_id,
+                'analysis_date': work_date,
+                'attendance_hours': attendance_hours,
+                'actual_work_hours': actual_work_hours,
+                'work_estimation_rate': work_efficiency,
+                'meeting_time': meeting_hours,  # 시간 단위로 통일
+                'meal_time': meal_hours,
+                'movement_time': movement_hours,
+                'rest_time': rest_hours,
+                'breakfast_time': breakfast_hours,
+                'lunch_time': lunch_hours,
+                'dinner_time': dinner_hours,
+                'midnight_meal_time': midnight_meal_hours,
+                'shift_type': work_analysis.get('shift_type', '주간'),
+                'cross_day_flag': work_analysis.get('cross_day', False),
+                'data_reliability': data_reliability,
+                'tag_count': analysis_result.get('total_tags', 0),
+                'data_completeness': data_reliability,
+                'work_efficiency': work_efficiency,
+                'productivity_score': min(100, (actual_work_hours / 8) * 100) if actual_work_hours > 0 else 0
+            }
+            
+        except Exception as e:
+            self.logger.error(f"결과 변환 실패: {e}")
+            return None
+    
+    # 기존 코드는 더 이상 사용하지 않음 - 삭제 예정
+    def _analyze_employee_old(self, employee_id: str, start_date, end_date):
+        """이전 버전 - 삭제 예정"""
+        # 이 함수는 더 이상 사용되지 않습니다
+        # _analyze_employee 함수를 사용하세요
+        pass
+    
+    def _calculate_daily_metrics(self, employee_id, work_date, tag_data, claim_data, meal_data, emp_info):
+        """일일 메트릭 계산 - individual_dashboard의 로직 사용"""
+        try:
+            # 디버깅 로그
+            self.logger.debug(f"메트릭 계산 시작: {employee_id} - {work_date}")
+            self.logger.debug(f"  tag_data: {len(tag_data) if tag_data is not None else 0}개")
+            self.logger.debug(f"  claim_data type: {type(claim_data)}")
+            # 출퇴근 시간 찾기
+            first_in = None
+            last_out = None
+            
+            if not tag_data.empty:
+                sorted_tags = tag_data.sort_values('datetime')
+                
+                # 출근 시간 (첫 입문 또는 첫 태그)
+                in_tags = sorted_tags[sorted_tags['INOUT_GB'] == '입문'] if 'INOUT_GB' in sorted_tags.columns else pd.DataFrame()
+                if not in_tags.empty:
+                    first_in = pd.to_datetime(in_tags.iloc[0]['datetime'])
+                elif len(sorted_tags) > 0:
+                    first_in = pd.to_datetime(sorted_tags.iloc[0]['datetime'])
+                
+                # 퇴근 시간 (마지막 출문 또는 마지막 태그)
+                out_tags = sorted_tags[sorted_tags['INOUT_GB'] == '출문'] if 'INOUT_GB' in sorted_tags.columns else pd.DataFrame()
+                if not out_tags.empty:
+                    last_out = pd.to_datetime(out_tags.iloc[-1]['datetime'])
+                elif len(sorted_tags) > 0:
+                    last_out = pd.to_datetime(sorted_tags.iloc[-1]['datetime'])
+            
+            # 체류시간 계산
+            total_hours = 0
+            if first_in and last_out:
+                total_hours = (last_out - first_in).total_seconds() / 3600
+            
+            # 근태기록시간 (claim 데이터에서)
+            attendance_hours = 0
+            if claim_data is not None:
+                # claim_data가 Series인 경우
+                if isinstance(claim_data, pd.Series):
+                    # 가능한 모든 컬럼명 체크
+                    possible_columns = ['claimed_work_hours', '실제근무시간', '근무시간', '근태시간', 
+                                      'actual_work_hours', 'work_hours', '총근무시간']
+                    for col in possible_columns:
+                        if col in claim_data and pd.notna(claim_data[col]):
+                            try:
+                                value = claim_data[col]
+                                if isinstance(value, str):
+                                    # '11.5h' 또는 '11.5시간' 형태 처리
+                                    attendance_hours = float(value.replace('h', '').replace('시간', '').strip())
+                                else:
+                                    attendance_hours = float(value)
+                                if attendance_hours > 0:
+                                    self.logger.debug(f"    근태시간 발견 ({col}): {attendance_hours}h")
+                                    break
+                            except Exception as e:
+                                self.logger.debug(f"    {col} 파싱 실패: {e}")
+                                continue
+                # DataFrame인 경우
+                elif isinstance(claim_data, pd.DataFrame) and not claim_data.empty:
+                    row = claim_data.iloc[0]
+                    possible_columns = ['claimed_work_hours', '실제근무시간', '근무시간', '근태시간', 
+                                      'actual_work_hours', 'work_hours', '총근무시간']
+                    for col in possible_columns:
+                        if col in row and pd.notna(row[col]):
+                            try:
+                                value = row[col]
+                                if isinstance(value, str):
+                                    attendance_hours = float(value.replace('h', '').replace('시간', '').strip())
+                                else:
+                                    attendance_hours = float(value)
+                                if attendance_hours > 0:
+                                    break
+                            except:
+                                continue
+            
+            # 활동별 시간 집계 (태그 기반)
+            work_minutes = 0
+            meal_minutes = 0
+            rest_minutes = 0
+            movement_minutes = 0
+            meeting_minutes = 0
+            
+            if not tag_data.empty:
+                # 시간 간격 계산
+                sorted_tags = tag_data.sort_values('datetime').copy()
+                sorted_tags['datetime'] = pd.to_datetime(sorted_tags['datetime'])
+                sorted_tags['next_datetime'] = sorted_tags['datetime'].shift(-1)
+                sorted_tags['duration_minutes'] = (
+                    (sorted_tags['next_datetime'] - sorted_tags['datetime']).dt.total_seconds() / 60
+                ).fillna(0)
+                
+                # 위치별 시간 집계
+                for idx, row in sorted_tags.iterrows():
+                    duration = row['duration_minutes']
+                    location = str(row.get('DR_NM', ''))
+                    inout = str(row.get('INOUT_GB', ''))
+                    
+                    # 식사 판별 (CAFETERIA 또는 식당)
+                    if 'CAFETERIA' in location.upper() or '식당' in location:
+                        meal_minutes += duration
+                    # 회의실 판별
+                    elif '회의' in location or 'MEETING' in location.upper():
+                        meeting_minutes += duration
+                    # 휴게 판별
+                    elif '휴게' in location or '화장실' in location or 'REST' in location.upper():
+                        rest_minutes += duration
+                    # 이동 판별 (짧은 출문)
+                    elif inout == '출문' and duration < 15:
+                        movement_minutes += duration
+                    # 나머지는 작업
+                    else:
+                        work_minutes += duration
+                
+                # 최대값 제한 (체류시간 기준)
+                total_minutes = total_hours * 60
+                if total_minutes > 0:
+                    # 각 활동 시간이 체류시간을 초과하지 않도록 조정
+                    work_minutes = min(work_minutes, total_minutes * 0.8)  # 최대 80%
+                    meal_minutes = min(meal_minutes, 120)  # 최대 2시간
+                    rest_minutes = min(rest_minutes, 60)  # 최대 1시간
+                    movement_minutes = min(movement_minutes, 60)  # 최대 1시간
+                    meeting_minutes = min(meeting_minutes, 240)  # 최대 4시간
+            
+            # 시간을 시간 단위로 변환
+            actual_work_hours = work_minutes / 60
+            meal_hours = meal_minutes / 60
+            rest_hours = rest_minutes / 60
+            movement_hours = movement_minutes / 60
+            meeting_hours = meeting_minutes / 60
+            
+            # 식사 세부 시간 (meal_data에서)
+            breakfast_time = 0
+            lunch_time = 0
+            dinner_time = 0
+            midnight_meal_time = 0
+            
+            if meal_data is not None and isinstance(meal_data, pd.DataFrame) and not meal_data.empty:
+                for _, meal in meal_data.iterrows():
+                    meal_type = meal.get('meal_category', meal.get('식사대분류', ''))
+                    배식구 = meal.get('배식구', '')
+                    is_takeout = 'takeout' in str(배식구).lower() or '테이크아웃' in str(배식구)
+                    
+                    # 테이크아웃은 10분, 일반은 30분
+                    meal_duration = 10 if is_takeout else 30
+                    
+                    if '조식' in meal_type or 'breakfast' in meal_type.lower():
+                        breakfast_time += meal_duration
+                    elif '중식' in meal_type or 'lunch' in meal_type.lower():
+                        lunch_time += meal_duration
+                    elif '석식' in meal_type or 'dinner' in meal_type.lower():
+                        dinner_time += meal_duration
+                    elif '야식' in meal_type or 'midnight' in meal_type.lower():
+                        midnight_meal_time += meal_duration
+                
+                # 실제 식사 데이터가 있으면 그것을 사용
+                if breakfast_time + lunch_time + dinner_time + midnight_meal_time > 0:
+                    meal_hours = (breakfast_time + lunch_time + dinner_time + midnight_meal_time) / 60
+            
+            # 분을 시간으로 변환
+            breakfast_hours = breakfast_time / 60
+            lunch_hours = lunch_time / 60
+            dinner_hours = dinner_time / 60
+            midnight_meal_hours = midnight_meal_time / 60
+            
+            # 작업시간 추정율
+            work_estimation_rate = 0
+            if attendance_hours > 0:
+                work_estimation_rate = (actual_work_hours / attendance_hours) * 100
+            
+            # 데이터 신뢰도 (태그 수 기반)
+            tag_count = len(tag_data)
+            # 하루 8시간 근무 기준으로 5분마다 태그가 있으면 96개
+            # 80개 이상이면 100%
+            data_reliability = min(100, (tag_count / 80) * 100)
+            
+            # 데이터 완전성
+            data_completeness = min(100, (tag_count / 50) * 100)  # 50개 태그를 100%로
+            
+            # 업무 효율성
+            work_efficiency = work_estimation_rate
+            
+            # 생산성 점수 (실제 작업시간 기준)
+            productivity_score = min(100, (actual_work_hours / 8) * 100) if actual_work_hours > 0 else 0
+            
+            # 교대 근무 정보
+            shift_type = '주간'  # 기본값
+            cross_day_flag = False
+            
+            if first_in and last_out:
+                # 야간 근무 판별 (20시 이후 출근 또는 8시 이전 퇴근)
+                if first_in.hour >= 20 or last_out.hour <= 8:
+                    shift_type = '야간'
+                # 날짜 교차 판별
+                if first_in.date() != last_out.date():
+                    cross_day_flag = True
+            
+            # 결과 반환
+            return {
+                'employee_id': employee_id,
+                'employee_name': emp_info.get('name', emp_info.get('성명', '')) if emp_info is not None else '',
+                'department': emp_info.get('dept_name', emp_info.get('부서명', '')) if emp_info is not None else '',
+                'center': emp_info.get('center', emp_info.get('센터', '')) if emp_info is not None else '',
+                'team': emp_info.get('team', emp_info.get('팀', '')) if emp_info is not None else '',
+                'analysis_date': work_date,
+                'attendance_hours': attendance_hours,
+                'actual_work_hours': actual_work_hours,
+                'work_estimation_rate': work_estimation_rate,
+                'meeting_hours': meeting_hours,
+                'meal_hours': meal_hours,
+                'movement_hours': movement_hours,
+                'rest_hours': rest_hours,
+                'breakfast_time': breakfast_hours,
+                'lunch_time': lunch_hours,
+                'dinner_time': dinner_hours,
+                'midnight_meal_time': midnight_meal_hours,
+                'shift_type': shift_type,
+                'cross_day_flag': cross_day_flag,
+                'data_reliability': data_reliability,
+                'tag_count': tag_count,
+                'data_completeness': data_completeness,
+                'work_efficiency': work_efficiency,
+                'productivity_score': productivity_score
+            }
+            
+        except Exception as e:
+            self.logger.error(f"일일 메트릭 계산 실패: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            return None
+    
+    def _save_employee_analysis(self, analysis_results):
+        """분석 결과를 데이터베이스에 저장"""
+        session = None
+        try:
+            from ...database.schema import DailyWorkData
+            
+            # get_session()이 context manager를 반환하므로 with 문 사용
+            with self.db_manager.get_session() as session:
+                saved_count = 0
+                for result in analysis_results:
+                    try:
+                        # 기존 데이터 확인 및 업데이트/삽입
+                        existing = session.query(DailyWorkData).filter_by(
+                            employee_id=result['employee_id'],
+                            work_date=result['analysis_date']
+                        ).first()
+                        
+                        if existing:
+                            # 업데이트
+                            existing.shift_type = result.get('shift_type', '주간')
+                            existing.actual_work_time = result.get('actual_work_hours', 0)
+                            existing.work_time = result.get('attendance_hours', 0)
+                            existing.rest_time = result.get('rest_hours', 0)
+                            existing.non_work_time = result.get('rest_hours', 0) + result.get('meal_hours', 0)
+                            existing.meal_time = result.get('meal_hours', 0)
+                            existing.breakfast_time = result.get('breakfast_time', 0)
+                            existing.lunch_time = result.get('lunch_time', 0)
+                            existing.dinner_time = result.get('dinner_time', 0)
+                            existing.midnight_meal_time = result.get('midnight_meal_time', 0)
+                            existing.cross_day_flag = result.get('cross_day_flag', False)
+                            existing.efficiency_ratio = result.get('work_efficiency', 0)
+                            existing.data_quality_score = result.get('data_reliability', 0)
+                            saved_count += 1
+                        else:
+                            # 새로 삽입
+                            daily_data = DailyWorkData(
+                                employee_id=result['employee_id'],
+                                work_date=result['analysis_date'],
+                                shift_type=result.get('shift_type', '주간'),
+                                actual_work_time=result.get('actual_work_hours', 0),
+                                work_time=result.get('attendance_hours', 0),
+                                rest_time=result.get('rest_hours', 0),
+                                non_work_time=result.get('rest_hours', 0) + result.get('meal_hours', 0),
+                                meal_time=result.get('meal_hours', 0),
+                                breakfast_time=result.get('breakfast_time', 0),
+                                lunch_time=result.get('lunch_time', 0),
+                                dinner_time=result.get('dinner_time', 0),
+                                midnight_meal_time=result.get('midnight_meal_time', 0),
+                                cross_day_flag=result.get('cross_day_flag', False),
+                                efficiency_ratio=result.get('work_efficiency', 0),
+                                data_quality_score=result.get('data_reliability', 0)
+                            )
+                            session.add(daily_data)
+                            saved_count += 1
+                    except Exception as e:
+                        self.logger.error(f"개별 레코드 저장 실패: {e}")
+                        import traceback
+                        self.logger.error(traceback.format_exc())
+                        continue
+                
+                if saved_count > 0:
+                    session.commit()
+                    self.logger.info(f"{saved_count}개 레코드 저장 완료")
+                
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"분석 결과 저장 실패: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            return False
