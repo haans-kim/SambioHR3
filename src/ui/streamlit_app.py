@@ -25,7 +25,10 @@ setup_logging(log_file="streamlit_app", debug=False)
 from src.utils.recent_views_manager import RecentViewsManager
 
 from src.database import get_database_manager
-from src.analysis import IndividualAnalyzer, OrganizationAnalyzer
+from src.data_processing import PickleManager
+# 명시적 import 경로 사용 (streamlit 재로드 문제 방지)
+from src.analysis.individual_analyzer import IndividualAnalyzer
+from src.analysis.organization_analyzer import OrganizationAnalyzer
 from src.ui.components.individual_dashboard import IndividualDashboard
 from src.ui.components.organization_dashboard import OrganizationDashboard
 from src.ui.components.data_upload import DataUploadComponent
@@ -46,9 +49,17 @@ class SambioHumanApp:
     
     def __init__(self):
         self.db_manager = None
+        self.pickle_manager = None
         self.hmm_model = None
         self.individual_analyzer = None
         self.organization_analyzer = None
+        # UI 컴포넌트 초기값 설정
+        self.individual_dashboard = None
+        self.organization_dashboard = None
+        self.new_organization_dashboard = None
+        self.data_upload = None
+        self.model_config = None
+        self.network_analysis_dashboard = None
         self.initialize_components()
     
     def initialize_components(self):
@@ -57,16 +68,23 @@ class SambioHumanApp:
             # 싱글톤 데이터베이스 매니저 사용
             self.db_manager = get_database_manager()
             
+            # Pickle 매니저 초기화
+            self.pickle_manager = PickleManager()
+            
             # HMM 모델 초기화 제거 - 태그 기반 시스템 사용
             self.hmm_model = None
             
             # 분석기 초기화 (HMM 없이)
             self.individual_analyzer = IndividualAnalyzer(self.db_manager, None)
+            logger.info("IndividualAnalyzer 초기화 완료")
+            
             self.organization_analyzer = OrganizationAnalyzer(self.db_manager, self.individual_analyzer)
+            logger.info("OrganizationAnalyzer 초기화 완료")
             
             # UI 컴포넌트 초기화
             self.individual_dashboard = IndividualDashboard(self.individual_analyzer)
-            self.organization_dashboard = OrganizationDashboard(self.organization_analyzer)
+            self.organization_dashboard = OrganizationDashboard(self.db_manager, self.pickle_manager)
+            # NewOrganizationDashboard는 인자가 필요 없음 (자체적으로 db_manager를 가져옴)
             self.new_organization_dashboard = NewOrganizationDashboard()  # 새로운 조직 대시보드
             self.data_upload = DataUploadComponent(self.db_manager)
             self.model_config = ModelConfigComponent(None)  # HMM 없이
@@ -77,8 +95,11 @@ class SambioHumanApp:
             logger.info("애플리케이션 컴포넌트 초기화 완료")
             
         except Exception as e:
-            logger.error(f"컴포넌트 초기화 실패: {e}")
+            logger.error(f"컴포넌트 초기화 실패: {e}", exc_info=True)
             st.error(f"애플리케이션 초기화 중 오류 발생: {e}")
+            # 기본값 설정
+            if not hasattr(self, 'new_organization_dashboard'):
+                self.new_organization_dashboard = None
     
     def run(self):
         """애플리케이션 실행"""
@@ -552,7 +573,7 @@ class SambioHumanApp:
     
     def render_new_organization_dashboard(self):
         """새로운 조직별 대시보드 렌더링"""
-        if self.new_organization_dashboard:
+        if hasattr(self, 'new_organization_dashboard') and self.new_organization_dashboard:
             self.new_organization_dashboard.render()
         else:
             st.error("조직별 대시보드를 로드할 수 없습니다.")

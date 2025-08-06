@@ -36,20 +36,20 @@ class DatabaseManager:
         self.engine = create_engine(database_url, echo=False)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self.logger = logging.getLogger(__name__)
-        self.schema = DatabaseSchema(database_url)
+        # self.schema = DatabaseSchema(database_url)  # 스키마 초기화 비활성화
         
-        # 데이터베이스 초기화
-        self._initialize_database()
+        # 데이터베이스 초기화 - 비활성화
+        # self._initialize_database()
     
     def _initialize_database(self):
         """데이터베이스 초기화 및 pickle 파일 자동 로드"""
         try:
-            # 테이블 생성
-            self.schema.create_tables()
+            # 테이블 생성 - 비활성화 (스키마 문제로 인해)
+            # self.schema.create_tables()
             self.logger.info("데이터베이스 초기화 완료")
             
-            # Pickle 파일 자동 로드
-            self._auto_load_pickle_data()
+            # Pickle 파일 자동 로드 - 비활성화 (이미 pickle 데이터를 직접 사용중)
+            # self._auto_load_pickle_data()
             
         except Exception as e:
             self.logger.error(f"데이터베이스 초기화 실패: {e}")
@@ -361,9 +361,13 @@ class DatabaseManager:
     
     def get_table_class(self, table_name: str):
         """테이블명으로 SQLAlchemy 클래스 찾기"""
+        # claim_data, tag_logs, abc_activity_data는 pickle에서만 처리
+        if table_name in ['claim_data', 'tag_logs', 'tag_data', 'abc_activity_data', 'abc_data']:
+            return None
+            
         from .schema import (
-            DailyWorkData, ShiftWorkData, OrganizationSummary, TagLogs,
-            AbcActivityData, ClaimData, AttendanceData, NonWorkTimeData,
+            DailyWorkData, ShiftWorkData, OrganizationSummary,
+            AttendanceData, NonWorkTimeData,
             EmployeeInfo, TagLocationMaster, OrganizationMapping,
             HmmModelConfig, ProcessingLog, EquipmentLogs
         )
@@ -372,9 +376,6 @@ class DatabaseManager:
             'daily_work_data': DailyWorkData,
             'shift_work_data': ShiftWorkData,
             'organization_summary': OrganizationSummary,
-            'tag_logs': TagLogs,
-            'abc_activity_data': AbcActivityData,
-            'claim_data': ClaimData,
             'attendance_data': AttendanceData,
             'non_work_time_data': NonWorkTimeData,
             'employee_info': EmployeeInfo,
