@@ -461,50 +461,31 @@ class IndividualDashboard:
             return None
     
     def get_tag_location_master(self):
-        """태깅지점 마스터 데이터 가져오기 (DB에서 직접 로드)"""
+        """태깅지점 마스터 데이터 가져오기 (캐시 활용)"""
         try:
-            from sqlalchemy import text
+            from ...utils.performance_cache import get_performance_cache
+            cache = get_performance_cache()
             
-            # 데이터베이스에서 직접 로드
-            query = """
-            SELECT 
-                "정렬No",
-                "위치",
-                COALESCE("DR_NO", "기기번호") as DR_NO,
-                "게이트명" as DR_NM,
-                "표기명",
-                "입출구분" as INOUT_GB,
-                "공간구분_code",
-                "세부유형_code",
-                "Tag_Code",
-                "공간구분_NM",
-                "세부유형_NM",
-                "라벨링_활동"
-            FROM tag_location_master
-            ORDER BY "정렬No"
-            """
-            
-            with self.db_manager.engine.connect() as conn:
-                tag_location_master = pd.read_sql(text(query), conn)
+            # 캐시에서 데이터 가져오기 (첫 호출 시 DB에서 로드)
+            tag_location_master = cache.get_tag_location_master(self.db_manager)
                 
             if tag_location_master is not None and not tag_location_master.empty:
-                self.logger.info(f"태깅지점 마스터 데이터 로드 성공: {len(tag_location_master)}건")
-                self.logger.info(f"마스터 데이터 컬럼: {tag_location_master.columns.tolist()}")
-                
-                # 디버깅: 정문 관련 태그 확인
-                gate_tags = tag_location_master[tag_location_master['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)]
-                if not gate_tags.empty:
-                    self.logger.info(f"정문 관련 태그 마스터 데이터:")
-                    for idx, row in gate_tags.head(10).iterrows():
-                        self.logger.info(f"  - DR_NO={row['DR_NO']}, DR_NM={row['DR_NM']}, 입출구분={row.get('INOUT_GB', 'N/A')}, Tag_Code={row.get('Tag_Code', 'N/A')}")
-                
-                # Tag_Code 값 확인
-                if 'Tag_Code' in tag_location_master.columns:
-                    unique_codes = tag_location_master['Tag_Code'].unique()
-                    self.logger.info(f"전체 Tag_Code 종류: {unique_codes}")
-                
-                # DR_NO 컬럼 타입 확인 및 문자열 변환
-                tag_location_master['DR_NO'] = tag_location_master['DR_NO'].astype(str).str.strip()
+                # 첫 로드 시에만 상세 로그 출력 (캐시 미스인 경우)
+                if not cache._is_cache_valid('tag_location_master'):
+                    self.logger.info(f"태깅지점 마스터 데이터 로드 성공: {len(tag_location_master)}건")
+                    self.logger.info(f"마스터 데이터 컬럼: {tag_location_master.columns.tolist()}")
+                    
+                    # 디버깅: 정문 관련 태그 확인 (첫 로드 시에만)
+                    gate_tags = tag_location_master[tag_location_master['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)]
+                    if not gate_tags.empty:
+                        self.logger.info(f"정문 관련 태그 마스터 데이터:")
+                        for idx, row in gate_tags.head(10).iterrows():
+                            self.logger.info(f"  - DR_NO={row['DR_NO']}, DR_NM={row['DR_NM']}, 입출구분={row.get('INOUT_GB', 'N/A')}, Tag_Code={row.get('Tag_Code', 'N/A')}")
+                    
+                    # Tag_Code 값 확인 (첫 로드 시에만)
+                    if 'Tag_Code' in tag_location_master.columns:
+                        unique_codes = tag_location_master['Tag_Code'].unique()
+                        self.logger.info(f"전체 Tag_Code 종류: {unique_codes}")
                 
                 return tag_location_master
             else:
@@ -746,155 +727,39 @@ class IndividualDashboard:
             return None
     
     def get_daily_tag_data(self, employee_id: str, selected_date: date):
-        """특정 직원의 특정 날짜 태깅 데이터 가져오기 (Knox/Equipment 데이터 포함)"""
+        """특정 직원의 특정 날짜 태깅 데이터 가져오기 (성능 최적화 버전)"""
         try:
-            from ...database import get_pickle_manager
-            from ...data.integrated_data_processor import IntegratedDataProcessor
-            pickle_manager = get_pickle_manager()
+            # 성능 캐시 사용으로 대용량 pickle 로드 최적화
+            from ...utils.performance_cache import get_performance_cache
             
-            # 태깅 데이터 로드
-            tag_data = pickle_manager.load_dataframe(name='tag_data')
-            if tag_data is None:
-                return None
+            cache = get_performance_cache()
             
             # 근무제 유형 확인
             work_type = self.get_employee_work_type(employee_id, selected_date)
             
-            # 날짜 형식 변환 (YYYYMMDD)
-            date_str = selected_date.strftime('%Y%m%d')
-            date_int = int(date_str)
-            
-            # 사번 형식 확인 및 변환
-            try:
-                emp_id_int = int(employee_id)
-                
-                # 야간/교대 근무의 경우 야간 근무 고려 (선택근무제는 제외)
-                if work_type == 'night_shift':
-                    # 야간 근무자는 전날 저녁 ~ 당일 아침이 한 근무일
-                    # 따라서 '선택 날짜'는 퇴근하는 날짜를 의미
-                    prev_date = selected_date - timedelta(days=1)
-                    prev_date_int = int(prev_date.strftime('%Y%m%d'))
-                    
-                    # 야간 근무자는 전날 저녁부터 당일 아침까지만 필요
-                    # 전날 데이터 (17시 이후)와 당일 데이터 (12시 이전)만 로드
-                    prev_data = tag_data[
-                        (tag_data['사번'] == emp_id_int) & 
-                        (tag_data['ENTE_DT'] == prev_date_int)
-                    ].copy()
-                    
-                    current_data = tag_data[
-                        (tag_data['사번'] == emp_id_int) & 
-                        (tag_data['ENTE_DT'] == date_int)
-                    ].copy()
-                    
-                    # 시간 필터링을 여기서 미리 수행
-                    if not prev_data.empty:
-                        prev_data['hour'] = prev_data['출입시각'].astype(str).str.zfill(6).str[:2].astype(int)
-                        prev_data = prev_data[prev_data['hour'] >= 17]  # 17시 이후만
-                    
-                    if not current_data.empty:
-                        current_data['hour'] = current_data['출입시각'].astype(str).str.zfill(6).str[:2].astype(int)
-                        current_data = current_data[current_data['hour'] < 12]  # 12시 이전만
-                    
-                    # 두 데이터 결합
-                    if not prev_data.empty and not current_data.empty:
-                        daily_data = pd.concat([prev_data, current_data], ignore_index=True)
-                    elif not prev_data.empty:
-                        daily_data = prev_data
-                    elif not current_data.empty:
-                        daily_data = current_data
-                    else:
-                        daily_data = pd.DataFrame()
-                    
-                    self.logger.info(f"야간 근무자 데이터 로드: 전날 저녁({len(prev_data)}건) + 당일 오전({len(current_data)}건) = {len(daily_data)}건")
-                else:
-                    # 일반 근무제는 당일 데이터만
-                    daily_data = tag_data[
-                        (tag_data['사번'] == emp_id_int) & 
-                        (tag_data['ENTE_DT'] == date_int)
-                    ].copy()
-                    
-            except ValueError:
-                # 숫자 변환 실패 시 문자열로 비교
-                tag_data['사번'] = tag_data['사번'].astype(str)
-                daily_data = tag_data[
-                    (tag_data['사번'] == str(employee_id)) & 
-                    (tag_data['ENTE_DT'] == date_int)
-                ].copy()
-            
-            if daily_data.empty:
+            # 캐시된 일별 태그 데이터 로드 (메모리 최적화)
+            daily_data = cache.get_daily_tag_data(employee_id, selected_date, work_type)
+            if daily_data is None or daily_data.empty:
                 return None
             
-            # 시간순 정렬
-            daily_data['time'] = daily_data['출입시각'].astype(str).str.zfill(6)
-            daily_data['datetime'] = pd.to_datetime(
-                daily_data['ENTE_DT'].astype(str) + ' ' + daily_data['time'],
-                format='%Y%m%d %H%M%S'
-            )
-            daily_data = daily_data.sort_values('datetime')
-            
-            # 야간/교대 근무의 경우 야간 근무 시간대 필터링 (선택근무제는 제외)
-            if work_type == 'night_shift':
-                # 야간 근무는 전날 저녁 ~ 당일 아침 (하나의 근무 사이클)
-                # 선택한 날짜 = 퇴근하는 날짜 기준
-                
-                # 전날 저녁 17시 ~ 당일 오전 12시까지로 필터링
-                start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
-                end_time = datetime.combine(selected_date, time(12, 0))
-                
-                # 야간 근무 시간대 필터링
-                daily_data = daily_data[
-                    (daily_data['datetime'] >= start_time) & 
-                    (daily_data['datetime'] < end_time)
-                ]
-                
-                self.logger.info(f"야간 근무 시간대 필터링: {start_time} ~ {end_time}, {len(daily_data)}건")
-                
-                # 실제 출근 시간 확인
-                if not daily_data.empty:
-                    first_tag = daily_data.iloc[0]['datetime']
-                    last_tag = daily_data.iloc[-1]['datetime']
-                    self.logger.info(f"실제 근무: {first_tag.strftime('%m/%d %H:%M')} ~ {last_tag.strftime('%m/%d %H:%M')}")
-                
-                # 정문 태그 확인
-                gate_tags = daily_data[daily_data['DR_NM'].str.contains('정문|GATE', case=False, na=False)]
-                if not gate_tags.empty:
-                    self.logger.info(f"정문 태그 {len(gate_tags)}건 포함됨:")
-                    for _, tag in gate_tags.iterrows():
-                        self.logger.info(f"  - {tag['datetime']}: {tag['DR_NM']}")
-                else:
-                    self.logger.warning("정문 태그가 필터링 후 없음")
-            
-            # Knox 및 Equipment 데이터를 태그 형식으로 추가
+            # Knox 및 Equipment 데이터 추가
             knox_equipment_tags = self._get_knox_and_equipment_tags(employee_id, selected_date, work_type)
             if knox_equipment_tags is not None and not knox_equipment_tags.empty:
-                self.logger.info(f"Knox/Equipment 데이터 {len(knox_equipment_tags)}건을 추가")
-                
-                # 태그별 상세 정보 로깅
-                for _, tag in knox_equipment_tags.iterrows():
-                    self.logger.info(f"  - {tag['datetime']}: {tag['DR_NM']} ({tag['Tag_Code']})")
-                
                 # 야간 근무자의 경우 시간대 필터링
                 if work_type == 'night_shift':
+                    from datetime import datetime, time, timedelta
                     start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
                     end_time = datetime.combine(selected_date, time(12, 0))
-                    
-                    self.logger.info(f"야간 근무자 필터링 적용: {start_time} ~ {end_time}")
-                    knox_equipment_tags_before = len(knox_equipment_tags)
                     
                     knox_equipment_tags = knox_equipment_tags[
                         (knox_equipment_tags['datetime'] >= start_time) & 
                         (knox_equipment_tags['datetime'] < end_time)
                     ]
-                    self.logger.info(f"야간 근무 시간대 필터링 후: {len(knox_equipment_tags)}건 (필터링 전: {knox_equipment_tags_before}건)")
-                else:
-                    self.logger.info(f"주간 근무자(work_type: {work_type}) - 시간대 필터링 미적용")
                 
                 # 기존 데이터와 병합
                 if not knox_equipment_tags.empty:
                     daily_data = pd.concat([daily_data, knox_equipment_tags], ignore_index=True)
                     daily_data = daily_data.sort_values('datetime').reset_index(drop=True)
-                    self.logger.info(f"병합 후 총 {len(daily_data)}건의 태그")
             
             return daily_data
             
