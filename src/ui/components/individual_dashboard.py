@@ -1869,7 +1869,7 @@ class IndividualDashboard:
                         t1_movement_count = 0
                         t1_work_count = 0
                         for idx in daily_data[t1_mask].index:
-                            duration = daily_data.loc[idx, 'duration_minutes']
+                            duration = daily_data.loc[idx, 'duration_minutes'] if 'duration_minutes' in daily_data.columns else 0
                             if pd.isna(duration) or duration <= 10:  # 10분 이하만 이동
                                 daily_data.loc[idx, 'activity_code'] = 'MOVEMENT'
                                 t1_movement_count += 1
@@ -1942,7 +1942,7 @@ class IndividualDashboard:
                             ym_movement_count = 0
                             ym_work_count = 0
                             for idx in daily_data[ym_mask].index:
-                                duration = daily_data.loc[idx, 'duration_minutes']
+                                duration = daily_data.loc[idx, 'duration_minutes'] if 'duration_minutes' in daily_data.columns else 0
                                 if pd.isna(duration) or duration <= 15:  # 15분 이하만 이동
                                     daily_data.loc[idx, 'activity_code'] = 'MOVEMENT'
                                     ym_movement_count += 1
@@ -2175,6 +2175,10 @@ class IndividualDashboard:
                             daily_data.loc[first_entry_idx, 'confidence'] = 95
                             self.logger.info(f"식사 후 업무복귀 처리: {daily_data.loc[first_entry_idx, 'datetime']} (이전: {prev_code} -> WORK)")
                 
+                # meal_indices 초기화 (meal_groups를 사용)
+                meal_indices = []
+                for group in meal_groups:
+                    meal_indices.extend(group)
                 self.logger.info(f"식사 태그 {len(meal_indices)}개 발견")
                 
                 # 디버깅: 식사 전후 출문/입문 데이터 확인

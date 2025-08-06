@@ -1105,7 +1105,18 @@ class OrganizationDashboard:
             while current_date <= end_date:
                 try:
                     self.logger.info(f"  {current_date}: individual_dashboard.execute_analysis 호출")
-                    # individual_dashboard의 execute_analysis 메서드 호출
+                    
+                    # 먼저 해당 날짜에 데이터가 있는지 확인
+                    daily_tag_data = individual_dash.get_daily_tag_data(employee_id, current_date)
+                    if daily_tag_data is None or daily_tag_data.empty:
+                        self.logger.warning(f"  {current_date}: 해당 날짜에 태그 데이터가 없습니다")
+                        continue
+                    
+                    self.logger.info(f"  {current_date}: 태그 데이터 {len(daily_tag_data)}건 발견")
+                    
+                    # individual_dashboard의 execute_analysis 메서드 호출 
+                    # 반드시 employee_id와 selected_date를 설정해야 meal_data를 제대로 가져올 수 있음
+                    self.logger.info(f"  {current_date}: execute_analysis 호출 전 파라미터: employee_id={employee_id}, selected_date={current_date}")
                     analysis_result = individual_dash.execute_analysis(
                         employee_id=employee_id,
                         selected_date=current_date,
@@ -1124,6 +1135,51 @@ class OrganizationDashboard:
                             self.logger.warning(f"  {current_date}: _convert_to_db_format 결과 없음")
                     else:
                         self.logger.warning(f"  {current_date}: analysis_result가 None 또는 빈 값")
+                        # None이 반환된 이유를 더 자세히 조사
+                        self.logger.info(f"  {current_date}: 직접 analyze_daily_data 호출 시도")
+                        try:
+                            # 먼저 meal_data가 있는지 확인
+                            meal_data = individual_dash.get_meal_data(employee_id, current_date)
+                            if meal_data is not None and not meal_data.empty:
+                                self.logger.info(f"  {current_date}: meal_data {len(meal_data)}건 발견")
+                            else:
+                                self.logger.info(f"  {current_date}: meal_data 없음")
+                            
+                            classified_data = individual_dash.classify_activities(daily_tag_data, employee_id, current_date)
+                            self.logger.info(f"  {current_date}: classify_activities 결과: {len(classified_data) if classified_data is not None else 0}건")
+                            
+                            if classified_data is not None and not classified_data.empty:
+                                # M1, M2 태그 확인
+                                m1_count = len(classified_data[classified_data.get('Tag_Code', '') == 'M1'])
+                                m2_count = len(classified_data[classified_data.get('Tag_Code', '') == 'M2'])
+                                meal_activities = len(classified_data[classified_data.get('activity_code', '').isin(['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL'])])
+                                self.logger.info(f"  {current_date}: M1 태그: {m1_count}건, M2 태그: {m2_count}건, 식사 활동: {meal_activities}건")
+                                
+                                analysis_result = individual_dash.analyze_daily_data(employee_id, current_date, classified_data)
+                                self.logger.info(f"  {current_date}: analyze_daily_data 결과: {type(analysis_result)}")
+                                
+                                if analysis_result:
+                                    self.logger.info(f"  {current_date}: analysis_result 키들: {list(analysis_result.keys())}")
+                                    
+                                    # 식사 관련 데이터 확인
+                                    if 'activity_summary' in analysis_result:
+                                        act_sum = analysis_result['activity_summary']
+                                        self.logger.info(f"  {current_date}: 식사 활동 - BREAKFAST:{act_sum.get('BREAKFAST',0)}, LUNCH:{act_sum.get('LUNCH',0)}, DINNER:{act_sum.get('DINNER',0)}")
+                                    
+                                    if 'meal_time_analysis' in analysis_result:
+                                        meal_analysis = analysis_result['meal_time_analysis']
+                                        self.logger.info(f"  {current_date}: meal_time_analysis: {meal_analysis}")
+                                    
+                                    db_result = self._convert_to_db_format(analysis_result, employee_id, current_date)
+                                    if db_result:
+                                        daily_results.append(db_result)
+                                        self.logger.info(f"  {current_date}: 직접 호출로 분석 완료")
+                                else:
+                                    self.logger.warning(f"  {current_date}: analyze_daily_data가 None 반환")
+                        except Exception as direct_e:
+                            self.logger.error(f"  {current_date}: 직접 호출도 실패: {direct_e}")
+                            import traceback
+                            self.logger.error(f"  {current_date}: 직접 호출 스택 트레이스:\n{traceback.format_exc()}")
                     
                 except Exception as e:
                     self.logger.error(f"  {current_date} 분석 실패: {e}")
@@ -1144,10 +1200,24 @@ class OrganizationDashboard:
     def _convert_to_db_format(self, analysis_result, employee_id, work_date):
         """individual_dashboard의 분석 결과를 DB 저장 형식으로 변환"""
         try:
+            # 디버깅을 위한 로그
+            self.logger.info(f"분석 결과 구조 - 직원 {employee_id}:")
+            self.logger.info(f"  전체 키들: {list(analysis_result.keys())}")
+            
             # work_time_analysis에서 데이터 추출
             work_analysis = analysis_result.get('work_time_analysis', {})
             activity_summary = analysis_result.get('activity_summary', {})
             meal_analysis = analysis_result.get('meal_time_analysis', {})
+            
+            # 디버깅 정보
+            self.logger.info(f"  work_analysis 키들: {list(work_analysis.keys()) if work_analysis else '없음'}")
+            self.logger.info(f"  activity_summary 키들: {list(activity_summary.keys()) if activity_summary else '없음'}")
+            self.logger.info(f"  meal_analysis 키들: {list(meal_analysis.keys()) if meal_analysis else '없음'}")
+            
+            if activity_summary:
+                self.logger.info(f"  activity_summary 값들: {activity_summary}")
+            if meal_analysis:
+                self.logger.info(f"  meal_analysis 값들: {meal_analysis}")
             
             # 근태 시간과 실제 작업 시간
             attendance_hours = work_analysis.get('claimed_work_hours', 0)
@@ -1158,18 +1228,90 @@ class OrganizationDashboard:
             movement_hours = activity_summary.get('MOVEMENT', 0) / 60
             rest_hours = (activity_summary.get('REST', 0) + activity_summary.get('IDLE', 0)) / 60
             
-            # 식사 시간
-            meal_hours = (
-                activity_summary.get('BREAKFAST', 0) +
-                activity_summary.get('LUNCH', 0) +
-                activity_summary.get('DINNER', 0) +
-                activity_summary.get('MIDNIGHT_MEAL', 0)
-            ) / 60
-            
+            # 식사 시간 - 개인별 분석과 동일한 방식으로 meal_data에서 직접 계산
+            # 1. activity_summary에서 직접
             breakfast_hours = activity_summary.get('BREAKFAST', 0) / 60
-            lunch_hours = activity_summary.get('LUNCH', 0) / 60
+            lunch_hours = activity_summary.get('LUNCH', 0) / 60  
             dinner_hours = activity_summary.get('DINNER', 0) / 60
             midnight_meal_hours = activity_summary.get('MIDNIGHT_MEAL', 0) / 60
+            
+            # 2. meal_data 테이블에서 직접 계산 (개인별 분석 방식과 동일)
+            try:
+                from .individual_dashboard import IndividualDashboard
+                from src.analysis.individual_analyzer import IndividualAnalyzer
+                
+                # IndividualDashboard 인스턴스 생성 (이미 생성되어 있다면 재사용)
+                individual_analyzer = IndividualAnalyzer(self.db_manager, None)
+                individual_analyzer.pickle_manager = self.pickle_manager
+                individual_dash = IndividualDashboard(individual_analyzer)
+                
+                # meal_data에서 직접 식사 데이터 가져오기
+                meal_data = individual_dash.get_meal_data(employee_id, work_date)
+                if meal_data is not None and not meal_data.empty:
+                    self.logger.info(f"  meal_data에서 {len(meal_data)}건의 식사 데이터 발견")
+                    
+                    # 실제 식사별로 시간 계산 (개인별 분석과 동일한 로직)
+                    calculated_meal_minutes = 0
+                    date_column = '취식일시' if '취식일시' in meal_data.columns else 'meal_datetime'
+                    
+                    for _, meal in meal_data.iterrows():
+                        meal_type = meal.get('식사대분류', meal.get('meal_category', ''))
+                        배식구 = meal.get('배식구', '')
+                        테이크아웃 = meal.get('테이크아웃', '')
+                        
+                        # 배식구 기준 테이크아웃 판단
+                        is_takeout = (테이크아웃 == 'Y') or ('테이크아웃' in str(배식구))
+                        
+                        if is_takeout:
+                            # 테이크아웃은 10분 고정
+                            calculated_meal_minutes += 10
+                        else:
+                            # 현장 식사는 30분 기본, 야식은 20분
+                            if meal_type == '야식':
+                                calculated_meal_minutes += 20
+                            else:
+                                calculated_meal_minutes += 30
+                    
+                    if calculated_meal_minutes > 0:
+                        meal_hours = calculated_meal_minutes / 60
+                        self.logger.info(f"  meal_data에서 직접 계산한 식사시간: {calculated_meal_minutes}분 ({meal_hours:.1f}시간)")
+                    else:
+                        # activity_summary에서 계산
+                        meal_hours = breakfast_hours + lunch_hours + dinner_hours + midnight_meal_hours
+                        self.logger.info(f"  activity_summary에서 계산한 식사시간: {meal_hours:.1f}시간")
+                else:
+                    # meal_data가 없으면 activity_summary에서 계산
+                    meal_hours = breakfast_hours + lunch_hours + dinner_hours + midnight_meal_hours
+                    self.logger.info(f"  meal_data 없음 - activity_summary에서 계산한 식사시간: {meal_hours:.1f}시간")
+            except Exception as meal_e:
+                self.logger.warning(f"  meal_data 계산 실패: {meal_e}")
+                # activity_summary에서 계산
+                meal_hours = breakfast_hours + lunch_hours + dinner_hours + midnight_meal_hours
+                self.logger.info(f"  meal_data 오류로 activity_summary에서 계산한 식사시간: {meal_hours:.1f}시간")
+            
+            # 3. meal_time_analysis에서 시도 (보조)
+            if meal_analysis and 'total_meal_time' in meal_analysis:
+                total_meal_minutes = meal_analysis.get('total_meal_time', 0)
+                if total_meal_minutes > 0:
+                    meal_hours_from_analysis = total_meal_minutes / 60
+                    self.logger.info(f"  meal_analysis에서 식사시간: {total_meal_minutes}분 ({meal_hours_from_analysis:.1f}시간)")
+                    # 더 높은 값을 선택 (데이터 누락 방지)
+                    if meal_hours_from_analysis > meal_hours:
+                        meal_hours = meal_hours_from_analysis
+            
+            # 4. 개별 식사 패턴에서 시도 (meal_time_analysis 내부)
+            if meal_analysis and 'meal_patterns' in meal_analysis:
+                meal_patterns = meal_analysis['meal_patterns']
+                total_meal_from_patterns = 0
+                for meal_type, pattern in meal_patterns.items():
+                    if isinstance(pattern, dict) and 'avg_duration' in pattern and 'frequency' in pattern:
+                        total_meal_from_patterns += pattern['avg_duration'] * pattern['frequency']
+                if total_meal_from_patterns > 0:
+                    meal_hours_from_patterns = total_meal_from_patterns / 60
+                    self.logger.info(f"  meal_patterns에서 계산한 식사시간: {total_meal_from_patterns}분 ({meal_hours_from_patterns:.1f}시간)")
+                    # 더 높은 값을 선택 (데이터 누락 방지)
+                    if meal_hours_from_patterns > meal_hours:
+                        meal_hours = meal_hours_from_patterns
             
             # 데이터 신뢰도
             data_reliability = work_analysis.get('confidence_score', 0)
