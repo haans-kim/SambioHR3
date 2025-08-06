@@ -1109,7 +1109,8 @@ class OrganizationDashboard:
                     # 먼저 해당 날짜에 데이터가 있는지 확인
                     daily_tag_data = individual_dash.get_daily_tag_data(employee_id, current_date)
                     if daily_tag_data is None or daily_tag_data.empty:
-                        self.logger.warning(f"  {current_date}: 해당 날짜에 태그 데이터가 없습니다")
+                        self.logger.info(f"  {current_date}: 해당 날짜에 태그 데이터가 없습니다 (건너뛰기)")
+                        current_date += timedelta(days=1)
                         continue
                     
                     self.logger.info(f"  {current_date}: 태그 데이터 {len(daily_tag_data)}건 발견")

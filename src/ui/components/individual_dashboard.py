@@ -1604,13 +1604,14 @@ class IndividualDashboard:
                     )
                     
                     # 표기명으로 매칭된 경우 정보 업데이트
-                    display_matched = daily_data_temp['Tag_Code_display'].notna()
-                    if display_matched.any():
-                        for col in display_columns:
-                            if col != '표기명' and f'{col}_display' in daily_data_temp.columns:
-                                daily_data.loc[display_matched, col] = daily_data_temp.loc[display_matched, f'{col}_display']
-                        self.logger.info(f"✅ 표기명 매칭으로 {display_matched.sum()}건의 Tag_Code 찾음")
-                        Tag_Code_matched = True
+                    if 'Tag_Code_display' in daily_data_temp.columns:
+                        display_matched = daily_data_temp['Tag_Code_display'].notna()
+                        if display_matched.any():
+                            for col in display_columns:
+                                if col != '표기명' and f'{col}_display' in daily_data_temp.columns:
+                                    daily_data.loc[display_matched, col] = daily_data_temp.loc[display_matched, f'{col}_display']
+                            self.logger.info(f"✅ 표기명 매칭으로 {display_matched.sum()}건의 Tag_Code 찾음")
+                            Tag_Code_matched = True
                 
                 # 2. 표기명으로 못 찾은 경우 게이트명으로 매칭 시도
                 if not Tag_Code_matched and 'DR_NM' in daily_data.columns and '게이트명' in tag_location_master.columns:
@@ -4171,7 +4172,11 @@ class IndividualDashboard:
                 st.info(f"📋 근태 정보: {len(attendance_data)}건 발견")
                 
             # Knox/Equipment 데이터 확인
-            knox_tags = daily_data[daily_data['Tag_Code'] == 'G3']
+            # Tag_Code 컬럼이 있는지 확인
+            if 'Tag_Code' in daily_data.columns:
+                knox_tags = daily_data[daily_data['Tag_Code'] == 'G3']
+            else:
+                knox_tags = pd.DataFrame()
             if not knox_tags.empty:
                 self.logger.info(f"[분류 전] G3 태그 {len(knox_tags)}건 발견:")
                 for idx, row in knox_tags.iterrows():
@@ -4181,20 +4186,23 @@ class IndividualDashboard:
             # 활동 분류 수행 (employee_id와 selected_date 전달)
             classified_data = self.classify_activities(daily_data, employee_id, selected_date)
             
-            # 분류 후 T2 태그 상태 확인
-            t2_classified = classified_data[classified_data['Tag_Code'] == 'T2']
-            if not t2_classified.empty:
-                self.logger.info(f"[classify_activities 후] T2 태그 {len(t2_classified)}건:")
-                for idx, row in t2_classified.head(3).iterrows():
-                    self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code')}, activity_type={row.get('activity_type')}, DR_NM={row['DR_NM']}")
+            # 분류 후 T2 태그 상태 확인 (Tag_Code 컬럼이 있는 경우만)
+            if 'Tag_Code' in classified_data.columns:
+                t2_classified = classified_data[classified_data['Tag_Code'] == 'T2']
+                if not t2_classified.empty:
+                    self.logger.info(f"[classify_activities 후] T2 태그 {len(t2_classified)}건:")
+                    for idx, row in t2_classified.head(3).iterrows():
+                        self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code')}, activity_type={row.get('activity_type')}, DR_NM={row['DR_NM']}")
             
-            # 분류 후 G3 태그 상태 확인
-            g3_classified = classified_data[classified_data['Tag_Code'] == 'G3']
-            if not g3_classified.empty:
-                self.logger.info(f"[classify_activities 후] G3 태그 {len(g3_classified)}건:")
-                for idx, row in g3_classified.iterrows():
-                    self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code', 'N/A')}, " +
-                                   f"활동분류={row.get('활동분류', 'N/A')}, source={row.get('source', 'N/A')}")
+                # 분류 후 G3 태그 상태 확인
+                g3_classified = classified_data[classified_data['Tag_Code'] == 'G3']
+                if not g3_classified.empty:
+                    self.logger.info(f"[classify_activities 후] G3 태그 {len(g3_classified)}건:")
+                    for idx, row in g3_classified.iterrows():
+                        self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code', 'N/A')}, " +
+                                       f"활동분류={row.get('활동분류', 'N/A')}, source={row.get('source', 'N/A')}")
+            else:
+                self.logger.info("[classify_activities 후] Tag_Code 컬럼이 없어 태그별 확인 생략")
             
             # 분석 결과 생성
             analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
@@ -5793,11 +5801,12 @@ class IndividualDashboard:
                 )
                 
                 # 표기명으로 매칭된 경우 Tag_Code 업데이트
-                display_matched = raw_data_temp['Tag_Code_display'].notna()
-                if display_matched.any():
-                    raw_data.loc[display_matched, 'Tag_Code'] = raw_data_temp.loc[display_matched, 'Tag_Code_display']
-                    self.logger.info(f"✅ 표기명 매칭으로 {display_matched.sum()}건의 Tag_Code 찾음")
-                    Tag_Code_matched = True
+                if 'Tag_Code_display' in raw_data_temp.columns:
+                    display_matched = raw_data_temp['Tag_Code_display'].notna()
+                    if display_matched.any():
+                        raw_data.loc[display_matched, 'Tag_Code'] = raw_data_temp.loc[display_matched, 'Tag_Code_display']
+                        self.logger.info(f"✅ 표기명 매칭으로 {display_matched.sum()}건의 Tag_Code 찾음")
+                        Tag_Code_matched = True
                     
                     # 매칭된 다른 정보도 업데이트
                     for col in ['위치', '게이트명', '근무구역여부', '근무', '라벨링']:
