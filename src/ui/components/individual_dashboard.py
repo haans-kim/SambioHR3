@@ -23,6 +23,7 @@ from ...utils.recent_views_manager import RecentViewsManager, render_recent_view
 
 from ...analysis import IndividualAnalyzer
 from ...analysis.network_analyzer import NetworkAnalyzer
+from ...analysis.work_time_estimator import WorkTimeEstimator
 from ...tag_system.confidence_calculator_v2 import ConfidenceCalculatorV2
 from ...tag_system.rule_integration import apply_rules_to_tags, get_rule_integration
 from ...tag_system.confidence_state import ActivityState
@@ -45,10 +46,16 @@ class IndividualDashboard:
         # 신뢰지수 계산기 초기화
         self.confidence_calculator = ConfidenceCalculatorV2()
         
+        # 근무시간 추정기 초기화
+        self.work_time_estimator = WorkTimeEstimator()
+        
         # 색상 팔레트 (activity_types.py에서 가져옴)
         self.colors = {}
         for code, activity in ACTIVITY_TYPES.items():
             self.colors[code] = activity.color
+        
+        # 추정률 표시 컴포넌트 임포트
+        from .estimation_display import render_estimation_metrics
         
         # 이전 버전과의 호환성을 위한 매핑
         self.colors.update({
@@ -63,6 +70,28 @@ class IndividualDashboard:
             'rest': '#4CAF50',
             'low_confidence': '#E0E0E0'
         })
+    
+    def get_employee_info(self, employee_id: str) -> dict:
+        """직원 정보 가져오기"""
+        try:
+            from ...database import get_pickle_manager
+            pickle_manager = get_pickle_manager()
+            
+            # 조직현황 데이터에서 직원 정보 조회
+            org_data = pickle_manager.load_dataframe(name='organization_data')
+            if org_data is not None and not org_data.empty:
+                # 사번으로 직원 찾기
+                emp_id = employee_id.split(' - ')[0] if ' - ' in employee_id else employee_id
+                employee = org_data[org_data['사번'].astype(str) == str(emp_id)]
+                
+                if not employee.empty:
+                    return employee.iloc[0].to_dict()
+            
+            return {'사번': employee_id}
+            
+        except Exception as e:
+            self.logger.warning(f"직원 정보 조회 실패: {e}")
+            return {'사번': employee_id}
     
     def get_available_employees(self):
         """로드된 데이터에서 사용 가능한 직원 목록 가져오기"""
@@ -4062,6 +4091,18 @@ class IndividualDashboard:
             classified_data = self.classify_activities(daily_data, employee_id, selected_date)
             analysis_times['classify_activities'] = time.time() - step_start
             
+            # 추정률 계산
+            step_start = time.time()
+            # 직원 정보 가져오기
+            employee_info = self.get_employee_info(employee_id)
+            
+            # 추정 지표 계산
+            estimation_metrics = self.work_time_estimator.calculate_estimation_metrics(
+                classified_data, 
+                employee_info
+            )
+            analysis_times['estimation_calculation'] = time.time() - step_start
+            
             # 분류 후 T2 태그 상태 확인 (Tag_Code 컬럼이 있는 경우만)
             if 'Tag_Code' in classified_data.columns:
                 t2_classified = classified_data[classified_data['Tag_Code'] == 'T2']
@@ -4085,6 +4126,10 @@ class IndividualDashboard:
             analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
             analysis_times['analyze_daily_data'] = time.time() - step_start
             
+            # 추정 메트릭을 분석 결과에 추가
+            if analysis_result and estimation_metrics:
+                analysis_result['estimation_metrics'] = estimation_metrics
+            
             # 성능 로깅 (return_data일 때만)
             if return_data:
                 total_time = sum(analysis_times.values())
@@ -4093,6 +4138,7 @@ class IndividualDashboard:
                 self.logger.info(f"  - equipment_data 로드: {analysis_times.get('equipment_data', 0):.3f}초")
                 self.logger.info(f"  - attendance_data 로드: {analysis_times.get('attendance_data', 0):.3f}초")
                 self.logger.info(f"  - classify_activities: {analysis_times.get('classify_activities', 0):.3f}초")
+                self.logger.info(f"  - estimation_calculation: {analysis_times.get('estimation_calculation', 0):.3f}초")
                 self.logger.info(f"  - analyze_daily_data: {analysis_times.get('analyze_daily_data', 0):.3f}초")
             
             # analyze_daily_data가 실패한 경우 기본 결과 생성
@@ -4233,6 +4279,33 @@ class IndividualDashboard:
     
     def render_analysis_results(self, analysis_result: dict):
         """분석 결과 렌더링"""
+        # 추정률 표시 (있는 경우)
+        if 'estimation_metrics' in analysis_result:
+            from .estimation_display import render_estimation_metrics
+            
+            # 근무시간 계산 (여러 소스에서 시도)
+            work_hours = 0
+            
+            # 1. total_work_time에서 가져오기
+            if 'total_work_time' in analysis_result and analysis_result['total_work_time'] > 0:
+                work_hours = analysis_result['total_work_time'] / 60  # 분을 시간으로 변환
+            # 2. work_time_analysis에서 가져오기
+            elif 'work_time_analysis' in analysis_result:
+                work_hours = analysis_result['work_time_analysis'].get('actual_work_hours', 0)
+            # 3. activity_summary에서 계산
+            elif 'activity_summary' in analysis_result:
+                work_minutes = 0
+                work_activities = ['WORK', 'FOCUSED_WORK', 'EQUIPMENT_OPERATION', 'MEETING', 
+                                 'G3_MEETING', 'KNOX_APPROVAL', 'KNOX_MAIL']
+                for activity in work_activities:
+                    work_minutes += analysis_result['activity_summary'].get(activity, 0)
+                work_hours = work_minutes / 60
+            # 4. 기본값 사용 (8시간)
+            if work_hours == 0:
+                work_hours = 8.0  # 기본 근무시간
+                
+            render_estimation_metrics(analysis_result['estimation_metrics'], work_hours)
+        
         # 근태 정보 표시 (있는 경우)
         if 'attendance_data' in analysis_result:
             self.render_attendance_info(analysis_result['attendance_data'])
