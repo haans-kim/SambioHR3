@@ -20,8 +20,8 @@ class WorkTimeEstimator:
         # 직군별 기본 추정률 (생산직 vs 사무직)
         self.BASE_ESTIMATION_RATES = {
             'production': 0.85,  # 생산직: 태그 데이터 풍부
-            'office': 0.65,      # 사무직: 태그 데이터 제한적
-            'unknown': 0.70      # 미분류
+            'office': 0.82,      # 사무직: 기본 82% 인정 (표준 근무시간 대비)
+            'unknown': 0.75      # 미분류
         }
         
         # 데이터 품질 지표
@@ -67,23 +67,41 @@ class WorkTimeEstimator:
             )
             metrics['office_estimation'] = office_result
             
-            # 꼬리물기 확률이 높으면 낮은 신뢰도
-            if office_result['tailgating_probability'] > 0.7:
-                metrics['estimation_rate'] = 30.0
-                metrics['confidence_interval'] = (20, 40)
-                metrics['variance'] = 0.08
-                metrics['data_quality_score'] = 0.3
+            # 꼬리물기 확률이 매우 높은 경우만 페널티
+            if office_result['tailgating_probability'] > 0.95:  # 0.9 -> 0.95로 상향 (매우 확실한 경우만)
+                # 그래도 최소 65%는 인정
+                metrics['estimation_rate'] = 65.0  # 50 -> 65으로 상향
+                metrics['confidence_interval'] = (55, 75)  # 40-60 -> 55-75으로 상향
+                metrics['variance'] = 0.05
+                metrics['data_quality_score'] = 0.4
                 
                 # 품질 세부 항목
                 metrics['quality_breakdown'] = {
-                    'tag_coverage': 0.2,
-                    'activity_density': 0.2,
-                    'time_continuity': 0.3,
-                    'location_diversity': 0.4,
+                    'tag_coverage': 0.3,
+                    'activity_density': 0.3,
+                    'time_continuity': 0.4,
+                    'location_diversity': 0.5,
                     'tailgating_warning': True
                 }
                 
                 logger.warning(f"사무직 꼬리물기 의심: 확률 {office_result['tailgating_probability']:.1%}")
+                return metrics
+            
+            # 일반 사무직: 데이터 부족은 정상이므로 기본 80% 이상 인정
+            elif office_result['tailgating_probability'] < 0.5:
+                metrics['estimation_rate'] = 82.0
+                metrics['confidence_interval'] = (75, 88)
+                metrics['variance'] = 0.02
+                metrics['data_quality_score'] = 0.7
+                
+                metrics['quality_breakdown'] = {
+                    'tag_coverage': 0.5,
+                    'activity_density': 0.5,
+                    'time_continuity': 0.6,
+                    'location_diversity': 0.6,
+                    'office_normal': True  # 사무직 정상 표시
+                }
+                
                 return metrics
         
         # 2. 데이터 품질 평가
@@ -197,8 +215,8 @@ class WorkTimeEstimator:
             time_range = (daily_data[time_col].max() - daily_data[time_col].min()).total_seconds() / 3600
             if time_range > 0:
                 tags_per_hour = len(daily_data) / time_range
-                # 시간당 10개 이상이면 100%, 2개 이하면 20%
-                scores['tag_coverage'] = min(1.0, max(0.2, tags_per_hour / 10))
+                # 사무직 특성 고려: 시간당 5개 이상이면 100%, 1개 이하면 50%
+                scores['tag_coverage'] = min(1.0, max(0.5, tags_per_hour / 5))
             else:
                 scores['tag_coverage'] = 0.2
         else:
@@ -254,12 +272,16 @@ class WorkTimeEstimator:
             조정된 추정률 (0-1)
         """
         # 품질이 좋으면 추정률 상승, 나쁘면 하락
-        # 품질 0.5를 기준으로 ±20% 조정
-        adjustment_factor = 1 + (quality_score - 0.5) * 0.4
+        # 사무직은 조정 폭을 줄임 (품질 0.5를 기준으로 ±10% 조정)
+        if base_rate > 0.8:  # 사무직
+            adjustment_factor = 1 + (quality_score - 0.5) * 0.2
+        else:  # 생산직
+            adjustment_factor = 1 + (quality_score - 0.5) * 0.3
         adjusted_rate = base_rate * adjustment_factor
         
-        # 0-1 범위로 제한
-        return max(0.3, min(0.95, adjusted_rate))
+        # 0-1 범위로 제한 (사무직은 최소 70% 보장)
+        min_rate = 0.7 if base_rate > 0.8 else 0.3
+        return max(min_rate, min(0.95, adjusted_rate))
     
     def calculate_variance(self, daily_data: pd.DataFrame, job_type: str) -> float:
         """
@@ -379,18 +401,18 @@ class WorkTimeEstimator:
         breakdown = metrics.get('quality_breakdown', {})
         
         if breakdown.get('tag_coverage', 1) < 0.5:
-            recommendations.append("📍 태그 리더기 추가 설치로 데이터 수집 개선 필요")
+            recommendations.append("태그 리더기 추가 설치로 데이터 수집 개선 필요")
         
         if breakdown.get('activity_density', 1) < 0.5:
-            recommendations.append("💻 시스템 사용 로그 연동 확대 필요")
+            recommendations.append("시스템 사용 로그 연동 확대 필요")
         
         if breakdown.get('time_continuity', 1) < 0.5:
-            recommendations.append("⏰ 태그 인식 간격이 너무 깁니다")
+            recommendations.append("태그 인식 간격이 너무 깁니다")
         
         if breakdown.get('location_diversity', 1) < 0.5:
-            recommendations.append("🗺️ 이동 경로 태그 포인트 보강 필요")
+            recommendations.append("이동 경로 태그 포인트 보강 필요")
         
         if not recommendations:
-            recommendations.append("✅ 데이터 품질이 양호합니다")
+            recommendations.append("데이터 품질이 양호합니다")
         
         return recommendations

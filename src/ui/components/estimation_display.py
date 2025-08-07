@@ -21,12 +21,14 @@ def render_estimation_metrics(metrics: Dict, work_hours: float = None):
     # 메인 컨테이너
     with st.container():
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    padding: 1.5rem;
-                    border-radius: 10px;
-                    color: white;
+        <div style="background: #f8f9fa;
+                    border-left: 4px solid #0066cc;
+                    padding: 1rem 1.5rem;
                     margin-bottom: 1rem;">
-            <h3 style="margin: 0; color: white;">📊 근무시간 추정 신뢰도</h3>
+            <h3 style="margin: 0; color: #333; font-weight: 500;">
+                <span style="color: #0066cc; margin-right: 8px;">▎</span>
+                근무시간 추정 신뢰도
+            </h3>
         </div>
         """, unsafe_allow_html=True)
         
@@ -77,7 +79,7 @@ def render_estimation_metrics(metrics: Dict, work_hours: float = None):
             )
         
         # 품질 세부 항목
-        with st.expander("📈 데이터 품질 상세 분석", expanded=False):
+        with st.expander("데이터 품질 상세 분석", expanded=False):
             render_quality_breakdown(metrics.get('quality_breakdown', {}))
         
         # 근무시간 추정 범위
@@ -88,17 +90,17 @@ def render_estimation_metrics(metrics: Dict, work_hours: float = None):
 def create_gauge_chart(estimation_rate: float) -> go.Figure:
     """추정률 게이지 차트 생성"""
     
-    # 색상 결정
+    # 색상 결정 (비즈니스 스타일)
     if estimation_rate >= 90:
-        color = "#2E7D32"
+        color = "#0066cc"  # 진한 파랑 (매우 신뢰)
     elif estimation_rate >= 80:
-        color = "#43A047"
+        color = "#0099cc"  # 파랑 (신뢰)
     elif estimation_rate >= 70:
-        color = "#FFA726"
+        color = "#66b3ff"  # 연한 파랑 (양호)
     elif estimation_rate >= 60:
-        color = "#EF5350"
+        color = "#ff9933"  # 주황 (주의)
     else:
-        color = "#B71C1C"
+        color = "#cc3333"  # 빨강 (위험)
     
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
@@ -110,11 +112,11 @@ def create_gauge_chart(estimation_rate: float) -> go.Figure:
             'axis': {'range': [None, 100], 'tickwidth': 1},
             'bar': {'color': color},
             'steps': [
-                {'range': [0, 60], 'color': "#ffebee"},
-                {'range': [60, 70], 'color': "#fff3e0"},
-                {'range': [70, 80], 'color': "#fff8e1"},
-                {'range': [80, 90], 'color': "#f1f8e9"},
-                {'range': [90, 100], 'color': "#e8f5e9"}
+                {'range': [0, 60], 'color': "#f5f5f5"},
+                {'range': [60, 70], 'color': "#f0f0f0"},
+                {'range': [70, 80], 'color': "#e8f0f8"},
+                {'range': [80, 90], 'color': "#e0ebf5"},
+                {'range': [90, 100], 'color': "#d6e6f5"}
             ],
             'threshold': {
                 'line': {'color': "red", 'width': 4},
@@ -155,15 +157,18 @@ def render_quality_breakdown(breakdown: Dict):
             
             # 색상 결정
             if score >= 0.8:
-                color = "🟢"
+                color = "●"  # 높음
+                color_style = "color: #0066cc;"
             elif score >= 0.6:
-                color = "🟡"
+                color = "●"  # 보통
+                color_style = "color: #ff9933;"
             else:
-                color = "🔴"
+                color = "●"  # 낮음
+                color_style = "color: #cc3333;"
             
             col1, col2 = st.columns([3, 1])
             with col1:
-                st.markdown(f"{color} **{label}** - {description}")
+                st.markdown(f"<span style='{color_style}'>{color}</span> **{label}** - {description}", unsafe_allow_html=True)
                 st.progress(score)
             with col2:
                 st.markdown(f"**{score_pct:.1f}%**")
@@ -171,71 +176,122 @@ def render_quality_breakdown(breakdown: Dict):
 
 def render_estimated_hours(metrics: Dict, actual_hours: float):
     """추정 근무시간 범위 표시"""
-    lower_rate = metrics['confidence_interval'][0] / 100
-    upper_rate = metrics['confidence_interval'][1] / 100
+    estimation_rate = metrics.get('estimation_rate', 50) / 100
+    variance = metrics.get('variance', 0.02)
     
-    lower_hours = actual_hours * lower_rate
-    upper_hours = actual_hours * upper_rate
+    # 정규분포 기반 추정값 계산
+    import numpy as np
+    estimated_hours = actual_hours * estimation_rate
+    std_dev = np.sqrt(variance) * actual_hours
+    
+    # 68% 신뢰구간 (1 표준편차)
+    one_sigma_lower = max(0, estimated_hours - std_dev)
+    one_sigma_upper = min(actual_hours, estimated_hours + std_dev)
+    
+    # 95% 신뢰구간 (2 표준편차)
+    two_sigma_lower = max(0, estimated_hours - 2*std_dev)
+    two_sigma_upper = min(actual_hours, estimated_hours + 2*std_dev)
     
     st.markdown("---")
-    st.markdown("### ⏰ 추정 근무시간")
+    st.markdown("""
+    <div style="margin-top: 1rem;">
+        <h4 style="color: #333; font-weight: 500;">
+            <span style="color: #0066cc;">▎</span> 실제 근무시간 추정
+        </h4>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 전체 시간과 추정 시간 구분 표시
+    st.info(f"📍 전체 체류시간: {actual_hours:.1f}시간 (출근~퇴근)")
+    
+    # 사무직 특별 안내
+    if metrics.get('estimation_type') == 'office':
+        st.info("""
+        💼 **사무직 근무 특성 안내**
+        - 사무직은 주로 자리에서 PC 작업을 수행하여 이동 태그가 적습니다
+        - 표준 근무시간(8시간) 대비 약 82%를 실근무로 추정합니다
+        - 점심시간 및 정규 휴식시간은 이미 반영되었습니다
+        """)
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.metric(
-            label="최소 추정",
-            value=f"{lower_hours:.1f}시간",
-            help="95% 신뢰수준 하한"
+            label="예상 범위 (68%)",
+            value=f"{one_sigma_lower:.1f}~{one_sigma_upper:.1f}시간",
+            help="정규분포 1σ 구간 (68% 확률)"
         )
     
     with col2:
         st.metric(
-            label="추정 근무시간",
-            value=f"{actual_hours:.1f}시간",
-            delta=f"±{(upper_hours-lower_hours)/2:.1f}시간"
+            label="추정 실근무",
+            value=f"{estimated_hours:.1f}시간",
+            delta=f"±{std_dev:.1f}시간",
+            help="평균값 ± 표준편차"
         )
     
     with col3:
         st.metric(
-            label="최대 추정",
-            value=f"{upper_hours:.1f}시간",
-            help="95% 신뢰수준 상한"
+            label="최대 범위 (95%)",
+            value=f"{two_sigma_lower:.1f}~{two_sigma_upper:.1f}시간",
+            help="정규분포 2σ 구간 (95% 확률)"
         )
     
-    # 시각적 범위 표시
+    # 정규분포 시각화
     fig = go.Figure()
     
-    # 신뢰구간 박스
-    fig.add_trace(go.Box(
-        x=[lower_hours, actual_hours, actual_hours, actual_hours, upper_hours],
-        name="추정 범위",
-        boxmean='sd',
-        marker_color='lightblue',
-        showlegend=False
+    # 정규분포 곡선 생성
+    x_range = np.linspace(max(0, estimated_hours - 4*std_dev), 
+                         min(actual_hours, estimated_hours + 4*std_dev), 100)
+    y_normal = (1/(std_dev * np.sqrt(2*np.pi))) * np.exp(-0.5*((x_range - estimated_hours)/std_dev)**2)
+    
+    # 정규분포 곡선
+    fig.add_trace(go.Scatter(
+        x=x_range,
+        y=y_normal,
+        mode='lines',
+        name='확률분포',
+        line=dict(color='#0066cc', width=2),
+        fill='tozeroy',
+        fillcolor='rgba(0, 102, 204, 0.1)'
     ))
     
-    # 실제 값 표시
+    # 1σ 구간 강조
+    x_1sigma = x_range[(x_range >= one_sigma_lower) & (x_range <= one_sigma_upper)]
+    y_1sigma = (1/(std_dev * np.sqrt(2*np.pi))) * np.exp(-0.5*((x_1sigma - estimated_hours)/std_dev)**2)
     fig.add_trace(go.Scatter(
-        x=[actual_hours],
-        y=[0],
-        mode='markers',
-        name='추정값',
-        marker=dict(size=15, color='red', symbol='diamond'),
-        showlegend=False
+        x=x_1sigma,
+        y=y_1sigma,
+        fill='tozeroy',
+        fillcolor='rgba(0, 102, 204, 0.3)',
+        line=dict(width=0),
+        showlegend=False,
+        hoverinfo='skip'
     ))
+    
+    # 추정값 표시
+    fig.add_vline(x=estimated_hours, line_dash="solid", line_color="#0066cc",
+                  annotation_text=f"추정: {estimated_hours:.1f}h",
+                  annotation_position="top")
+    
+    # 체류시간 표시
+    fig.add_vline(x=actual_hours, line_dash="dash", line_color="gray",
+                  annotation_text=f"체류: {actual_hours:.1f}h",
+                  annotation_position="top right")
     
     fig.update_layout(
-        height=150,
+        height=200,
         showlegend=False,
         xaxis_title="근무시간 (시간)",
-        yaxis_visible=False,
-        margin=dict(l=0, r=0, t=20, b=40),
+        yaxis_title="확률밀도",
+        margin=dict(l=0, r=0, t=40, b=40),
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0.05)'
+        plot_bgcolor='rgba(0,0,0,0.02)',
+        xaxis=dict(range=[max(0, estimated_hours - 3*std_dev), 
+                          min(actual_hours * 1.1, estimated_hours + 3*std_dev)])
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 
 def get_quality_delta(score: float) -> str:
@@ -255,6 +311,6 @@ def render_recommendations(recommendations: list):
     if not recommendations:
         return
     
-    with st.expander("💡 데이터 품질 개선 제안", expanded=False):
+    with st.expander("데이터 품질 개선 제안", expanded=False):
         for rec in recommendations:
             st.markdown(f"• {rec}")

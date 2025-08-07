@@ -27,11 +27,11 @@ class OfficeWorkerEstimator:
             'standard_work_hours': 8  # 표준 근무시간
         }
         
-        # 꼬리물기 패턴 감지 임계값
+        # 꼬리물기 패턴 감지 임계값 (사무직 특성 고려하여 대폭 완화)
         self.TAILGATING_THRESHOLDS = {
-            'entry_to_activity': 120,    # 입문 후 첫 활동까지 시간 (분)
-            'last_activity_to_exit': 120, # 마지막 활동 후 퇴문까지 시간 (분)
-            'min_activities': 3,          # 최소 활동 수 (이보다 적으면 의심)
+            'entry_to_activity': 240,    # 입문 후 첫 활동까지 시간 (4시간으로 완화)
+            'last_activity_to_exit': 240, # 마지막 활동 후 퇴문까지 시간 (4시간으로 완화)
+            'min_activities': 1,          # 최소 활동 수 (1개로 완화)
             'lunch_gap': 90               # 점심시간 최대 간격 (분)
         }
     
@@ -232,8 +232,8 @@ class OfficeWorkerEstimator:
     def probabilistic_estimation(self, entry_exit: Dict, activities: pd.DataFrame,
                                 time_col: str) -> float:
         """확률적 근무시간 추정"""
-        # 기본값: 표준 근무시간의 70%
-        base_hours = self.OFFICE_PATTERNS['standard_work_hours'] * 0.7
+        # 기본값: 표준 근무시간의 90% (사무직 표준 근무 가정)
+        base_hours = self.OFFICE_PATTERNS['standard_work_hours'] * 0.90
         
         # 조정 요인
         adjustments = 0.0
