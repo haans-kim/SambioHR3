@@ -22,11 +22,25 @@ class OrganizationSelector:
         """조직 데이터 캐싱"""
         if self._org_data_cache is None:
             try:
-                from ....data_processing import PickleManager
-                pickle_manager = PickleManager()
+                from src.database import get_pickle_manager
+                pickle_manager = get_pickle_manager()
+                
+                # organization_data 시도
                 self._org_data_cache = pickle_manager.load_dataframe(name='organization_data')
+                if self._org_data_cache is None:
+                    # organization 시도
+                    self._org_data_cache = pickle_manager.load_dataframe(name='organization')
+                
+                if self._org_data_cache is None:
+                    self.logger.warning("organization_data와 organization 모두 찾을 수 없습니다")
+                    self._org_data_cache = pd.DataFrame()
+                else:
+                    self.logger.info(f"조직 데이터 로드 성공: {len(self._org_data_cache)}행")
+                    
             except Exception as e:
                 self.logger.error(f"조직 데이터 로드 실패: {e}")
+                import traceback
+                self.logger.error(traceback.format_exc())
                 self._org_data_cache = pd.DataFrame()
         return self._org_data_cache
     

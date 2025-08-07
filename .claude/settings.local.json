@@ -43,7 +43,10 @@
       "Bash(git pull:*)",
       "Bash(gh pr create:*)",
       "Bash(cat:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(timeout 5 streamlit run src/ui/streamlit_app.py)",
+      "Bash(git log:*)",
+      "mcp__sequential-thinking__sequentialthinking"
     ],
     "deny": []
   }

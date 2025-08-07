@@ -110,9 +110,11 @@ class PickleManager:
         """
         try:
             # 파일 경로 찾기
+            self.logger.debug(f"Loading {name} from {self.base_path}")
             file_path = self._find_file(name, version)
             
             if not file_path:
+                self.logger.debug(f"File not found: {name} in {self.base_path}")
                 raise FileNotFoundError(f"파일을 찾을 수 없습니다: {name} (version: {version})")
             
             # 로드 실행

@@ -10,8 +10,11 @@ import plotly.express as px
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Tuple
 import logging
+import time
 
 from ..database import get_database_manager, get_pickle_manager
+from ..analysis.individual_analyzer import IndividualAnalyzer
+from ..analysis.organization_analyzer import OrganizationAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -61,19 +64,18 @@ class OrganizationDashboard:
             
             col1, col2 = st.columns(2)
             with col1:
-                analyzed_emp = total_stats.get('analyzed_employees', 0) if total_stats else 0
+                analyzed_employees = total_stats.get('analyzed_employees', 0) or 0
                 st.metric(
                     label="총 분석 인원",
-                    value=f"{analyzed_emp:,}" if analyzed_emp else "0"
+                    value=f"{int(analyzed_employees):,}" if analyzed_employees is not None else "0"
                 )
             with col2:
-                avg_eff = total_stats.get('avg_efficiency', 0) if total_stats else 0
-                eff_change = total_stats.get('efficiency_change', 0) if total_stats else 0
-                
+                avg_efficiency = total_stats.get('avg_efficiency', 0) or 0
+                efficiency_change = total_stats.get('efficiency_change')
                 st.metric(
                     label="평균 근무율",
-                    value=f"{avg_eff:.1f}%" if avg_eff is not None else "N/A",
-                    delta=f"{eff_change:.1f}%" if eff_change and eff_change != 0 else None
+                    value=f"{float(avg_efficiency):.1f}%" if avg_efficiency is not None else "0.0%",
+                    delta=f"{float(efficiency_change):.1f}%" if efficiency_change is not None else None
                 )
             
             # 센터별 현황
@@ -104,37 +106,52 @@ class OrganizationDashboard:
         with col2:
             # 센터 선택
             centers = self.get_center_list()
-            selected_center = st.selectbox("센터 선택", centers)
+            if centers:
+                selected_center = st.selectbox("센터 선택", centers)
+            else:
+                st.error("조직 데이터를 찾을 수 없습니다. 데이터 로드를 먼저 실행해주세요.")
+                selected_center = None
         
         # 팀별 통계
         if selected_center:
             team_stats = self.get_team_statistics(selected_date, selected_center)
             
+            # 상단 요약 (team_stats가 없어도 표시)
+            st.markdown(f"### {selected_center} 현황")
+            
             if team_stats:
-                # 상단 요약
-                st.markdown(f"### {selected_center} 현황")
                 col1, col2 = st.columns(2)
                 with col1:
-                    total_emp = team_stats.get('total_employees', 0) if team_stats else 0
+                    total_employees = team_stats.get('total_employees', 0) or 0
                     st.metric(
                         label="총 분석 인원",
-                        value=f"{total_emp:,}" if total_emp else "0"
+                        value=f"{int(total_employees):,}" if total_employees is not None else "0"
                     )
                 with col2:
-                    avg_eff = team_stats.get('avg_efficiency', 0) if team_stats else 0
+                    avg_efficiency = team_stats.get('avg_efficiency', 0) or 0
                     st.metric(
                         label="평균 근무율",
-                        value=f"{avg_eff:.1f}%" if avg_eff is not None else "N/A"
+                        value=f"{float(avg_efficiency):.1f}%" if avg_efficiency is not None else "0.0%"
                     )
-                
-                # 팀별 카드 그리드
-                st.markdown(f"### {selected_center} 현황")
-                team_data = self.get_team_summary(selected_date, selected_center)
-                
-                if team_data:
-                    self.render_team_cards(team_data)
-                else:
-                    st.info("선택한 센터의 데이터가 없습니다.")
+            else:
+                st.info("데이터베이스에 저장된 통계가 없습니다. 아래 버튼으로 실시간 분석을 실행하세요.")
+            
+            # 팀별 카드 그리드
+            st.markdown(f"### {selected_center} 팀별 현황")
+            team_data = self.get_team_summary(selected_date, selected_center)
+            
+            if team_data:
+                self.render_team_cards(team_data)
+            else:
+                st.info("팀별 데이터가 없습니다.")
+            
+            # 상세 분석 실행 버튼 추가 (항상 표시)
+            st.markdown("---")
+            st.markdown("### 실시간 분석")
+            st.write("개인별 분석을 실시간으로 실행하고 소요시간을 측정합니다.")
+            
+            if st.button("🔍 상세 분석 실행 (소요시간 측정)", key="run_detail_analysis", type="primary", use_container_width=True):
+                self.run_detailed_analysis_with_timing(selected_date, selected_center)
     
     def render_group_analysis(self):
         """그룹별 분석 화면"""
@@ -151,7 +168,11 @@ class OrganizationDashboard:
         with col2:
             # 센터 선택
             centers = self.get_center_list()
-            selected_center = st.selectbox("센터 선택", centers, key="group_center")
+            if centers:
+                selected_center = st.selectbox("센터 선택", centers, key="group_center")
+            else:
+                st.error("조직 데이터를 찾을 수 없습니다. 데이터 로드를 먼저 실행해주세요.")
+                selected_center = None
         
         # 그룹별 통계
         if selected_center:
@@ -162,16 +183,16 @@ class OrganizationDashboard:
                 st.markdown(f"### {selected_center} 현황")
                 col1, col2 = st.columns(2)
                 with col1:
-                    total_emp = group_stats.get('total_employees', 0) if group_stats else 0
+                    total_employees = group_stats.get('total_employees', 0) or 0
                     st.metric(
                         label="총 분석 인원",
-                        value=f"{total_emp:,}" if total_emp else "0"
+                        value=f"{int(total_employees):,}" if total_employees is not None else "0"
                     )
                 with col2:
-                    avg_eff = group_stats.get('avg_efficiency', 0) if group_stats else 0
+                    avg_efficiency = group_stats.get('avg_efficiency', 0) or 0
                     st.metric(
                         label="평균 근무율",
-                        value=f"{avg_eff:.1f}%" if avg_eff is not None else "N/A"
+                        value=f"{float(avg_efficiency):.1f}%" if avg_efficiency is not None else "0.0%"
                     )
                 
                 # 그룹별 카드 그리드
@@ -206,6 +227,7 @@ class OrganizationDashboard:
                 
                 if not grade_data.empty:
                     efficiency = grade_data['avg_efficiency_ratio'].iloc[0]
+                    efficiency = efficiency if efficiency is not None else 0
                     color = self.get_efficiency_color(efficiency)
                     trend = self.get_efficiency_trend(efficiency, 0)  # TODO: 이전 날짜 대비 계산
                     
@@ -254,6 +276,9 @@ class OrganizationDashboard:
         cell_color = color_map.get(color, '#999999')
         symbol = trend_symbol.get(trend, '')
         
+        # Handle None efficiency
+        efficiency_text = f"{efficiency:.0f}%" if efficiency is not None else "0%"
+        
         st.markdown(
             f"""
             <div style="
@@ -264,7 +289,7 @@ class OrganizationDashboard:
                 text-align: center;
             ">
                 <span style="font-size: 20px; font-weight: bold; color: {cell_color};">
-                    {efficiency:.0f}%
+                    {efficiency_text}
                 </span>
                 <span style="color: {cell_color};">
                     {symbol}
@@ -285,11 +310,13 @@ class OrganizationDashboard:
                     team = teams.iloc[i + j]
                     
                     with cols[j]:
-                        color = self.get_efficiency_color(team['avg_efficiency_ratio'])
+                        efficiency = team['avg_efficiency_ratio'] if team['avg_efficiency_ratio'] is not None else 0
+                        employees = team['analyzed_employees'] if team['analyzed_employees'] is not None else 0
+                        color = self.get_efficiency_color(efficiency)
                         self.render_team_card(
                             team['team_name'],
-                            team['avg_efficiency_ratio'],
-                            team['analyzed_employees'],
+                            efficiency,
+                            employees,
                             color
                         )
     
@@ -303,6 +330,9 @@ class OrganizationDashboard:
         
         bg_color = color_map.get(color, '#999999')
         
+        # Handle None efficiency
+        efficiency_text = f"{efficiency:.1f}%" if efficiency is not None else "0.0%"
+        
         st.markdown(
             f"""
             <div style="
@@ -315,7 +345,7 @@ class OrganizationDashboard:
                 <h4 style="margin: 0; color: #333;">{name}</h4>
                 <div style="margin: 10px 0;">
                     <span style="font-size: 24px; font-weight: bold; color: {bg_color};">
-                        {efficiency:.1f}%
+                        {efficiency_text}
                     </span>
                     <br>
                     <span style="color: #666;">평균 효율성</span>
@@ -349,11 +379,13 @@ class OrganizationDashboard:
                     group = groups.iloc[i + j]
                     
                     with cols[j]:
-                        color = self.get_efficiency_color(group['avg_efficiency_ratio'])
+                        efficiency = group['avg_efficiency_ratio'] if group['avg_efficiency_ratio'] is not None else 0
+                        employees = group['analyzed_employees'] if group['analyzed_employees'] is not None else 0
+                        color = self.get_efficiency_color(efficiency)
                         self.render_group_card(
                             group['group_name'],
-                            group['avg_efficiency_ratio'],
-                            group['analyzed_employees'],
+                            efficiency,
+                            employees,
                             color
                         )
     
@@ -422,6 +454,8 @@ class OrganizationDashboard:
     
     def get_efficiency_color(self, efficiency: float) -> str:
         """효율성에 따른 색상 결정"""
+        if efficiency is None:
+            efficiency = 0
         if efficiency >= 90:
             return 'green'
         elif efficiency >= 80:
@@ -549,12 +583,165 @@ class OrganizationDashboard:
     
     def get_center_list(self) -> List[str]:
         """센터 목록 조회"""
-        query = """
-        SELECT DISTINCT center_name
-        FROM daily_analysis_results
-        WHERE center_name IS NOT NULL
-        ORDER BY center_name
-        """
+        try:
+            # pickle 데이터에서 조직 정보 가져오기
+            org_data = self.pickle_manager.load_dataframe('organization_data')
+            if org_data is None or org_data.empty:
+                logger.warning("organization_data를 찾을 수 없습니다. organization 시도")
+                org_data = self.pickle_manager.load_dataframe('organization')
+                if org_data is None or org_data.empty:
+                    logger.warning("organization도 찾을 수 없습니다")
+                    return []
+            
+            # 센터 목록 추출
+            if '센터' in org_data.columns:
+                centers = org_data['센터'].dropna().unique().tolist()
+                return sorted(centers)
+            elif 'center' in org_data.columns:
+                centers = org_data['center'].dropna().unique().tolist()
+                return sorted(centers)
+            else:
+                logger.warning("센터 컬럼을 찾을 수 없습니다")
+                return []
+        except Exception as e:
+            logger.error(f"센터 목록 조회 오류: {e}")
+            # DB에서 시도
+            query = """
+            SELECT DISTINCT center_name
+            FROM daily_analysis_results
+            WHERE center_name IS NOT NULL
+            ORDER BY center_name
+            """
+            
+            result = self.db_manager.execute_query(query)
+            return [row['center_name'] for row in result] if result else []
+    
+    def run_detailed_analysis_with_timing(self, selected_date: date, selected_center: str):
+        """상세 분석 실행 및 소요시간 측정"""
+        st.markdown("### 상세 분석 실행 중...")
         
-        result = self.db_manager.execute_query(query)
-        return [row['center_name'] for row in result] if result else []
+        # 분석기 초기화
+        individual_analyzer = IndividualAnalyzer(self.db_manager, None)
+        
+        # 조직 데이터에서 해당 센터의 직원 목록 가져오기
+        org_df = self.pickle_manager.load_dataframe('organization_data')
+        center_employees = org_df[org_df['센터'] == selected_center]
+        
+        # 팀별로 그룹화
+        teams = center_employees['팀'].dropna().unique()
+        
+        st.write(f"분석 대상: {len(teams)}개 팀, {len(center_employees)}명")
+        
+        # 진행률 표시
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # 결과 저장
+        results = []
+        
+        # 날짜 범위 설정
+        start_date = datetime.combine(selected_date, datetime.min.time())
+        end_date = datetime.combine(selected_date, datetime.max.time())
+        
+        total_employees = len(center_employees)
+        processed = 0
+        
+        # 팀별로 처리
+        for team in teams:
+            team_employees = center_employees[center_employees['팀'] == team]
+            team_results = []
+            
+            for idx, row in team_employees.iterrows():
+                emp_id = row['사번']
+                emp_name = row['성명']
+                
+                status_text.text(f"분석 중: {team} - {emp_name} ({processed+1}/{total_employees})")
+                
+                # 개인별 분석 실행 및 시간 측정
+                start_time = time.time()
+                try:
+                    analysis_result = individual_analyzer.analyze_individual(
+                        str(emp_id), start_date, end_date
+                    )
+                    elapsed_time = time.time() - start_time
+                    
+                    # 결과 저장 (None 값 처리)
+                    work_hours = analysis_result.get('work_time_analysis', {}).get('actual_work_hours', 0) or 0
+                    efficiency = analysis_result.get('efficiency_analysis', {}).get('work_efficiency', 0) or 0
+                    
+                    team_results.append({
+                        '팀': str(team) if team is not None else '',
+                        '사번': str(emp_id) if emp_id is not None else '',
+                        '성명': str(emp_name) if emp_name is not None else '',
+                        '직급': str(row.get('직급명', '')) if row.get('직급명') is not None else '',
+                        '근무시간': f"{float(work_hours):.1f}시간" if work_hours is not None else "0.0시간",
+                        '효율성': f"{float(efficiency):.1f}%" if efficiency is not None else "0.0%",
+                        '분석시간': f"{elapsed_time:.3f}초",
+                        '상태': '성공'
+                    })
+                    
+                except Exception as e:
+                    elapsed_time = time.time() - start_time
+                    team_results.append({
+                        '팀': str(team) if team is not None else '',
+                        '사번': str(emp_id) if emp_id is not None else '',
+                        '성명': str(emp_name) if emp_name is not None else '',
+                        '직급': str(row.get('직급명', '')) if row.get('직급명') is not None else '',
+                        '근무시간': '-',
+                        '효율성': '-',
+                        '분석시간': f"{elapsed_time:.3f}초",
+                        '상태': f'실패: {str(e)[:30]}'
+                    })
+                
+                processed += 1
+                progress_bar.progress(processed / total_employees)
+            
+            # 팀 결과 추가
+            results.extend(team_results)
+            
+            # 팀별 요약 표시
+            if team_results:
+                avg_time = sum(float(r['분석시간'].replace('초', '')) for r in team_results) / len(team_results)
+                st.write(f"**{team}**: {len(team_results)}명 분석 완료 (평균 {avg_time:.3f}초/명)")
+        
+        # 전체 결과 테이블 표시
+        st.markdown("### 분석 결과")
+        
+        if results:
+            # DataFrame 생성
+            result_df = pd.DataFrame(results)
+            
+            # 요약 통계
+            success_count = len([r for r in results if r['상태'] == '성공'])
+            fail_count = len(results) - success_count
+            total_time = sum(float(r['분석시간'].replace('초', '')) for r in results)
+            avg_time = total_time / len(results) if results else 0
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("총 분석 인원", f"{len(results)}명")
+            with col2:
+                st.metric("성공/실패", f"{success_count}/{fail_count}")
+            with col3:
+                st.metric("총 소요시간", f"{total_time:.1f}초")
+            with col4:
+                st.metric("평균 시간", f"{avg_time:.3f}초/명")
+            
+            # 결과 테이블 표시
+            st.dataframe(
+                result_df,
+                use_container_width=True,
+                height=600
+            )
+            
+            # CSV 다운로드 버튼
+            csv = result_df.to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                label="📥 결과 다운로드 (CSV)",
+                data=csv,
+                file_name=f"analysis_result_{selected_center}_{selected_date}.csv",
+                mime="text/csv"
+            )
+        
+        status_text.text("분석 완료!")
+        progress_bar.empty()

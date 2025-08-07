@@ -461,50 +461,31 @@ class IndividualDashboard:
             return None
     
     def get_tag_location_master(self):
-        """태깅지점 마스터 데이터 가져오기 (DB에서 직접 로드)"""
+        """태깅지점 마스터 데이터 가져오기 (캐시 활용)"""
         try:
-            from sqlalchemy import text
+            from ...utils.performance_cache import get_performance_cache
+            cache = get_performance_cache()
             
-            # 데이터베이스에서 직접 로드
-            query = """
-            SELECT 
-                "정렬No",
-                "위치",
-                COALESCE("DR_NO", "기기번호") as DR_NO,
-                "게이트명" as DR_NM,
-                "표기명",
-                "입출구분" as INOUT_GB,
-                "공간구분_code",
-                "세부유형_code",
-                "Tag_Code",
-                "공간구분_NM",
-                "세부유형_NM",
-                "라벨링_활동"
-            FROM tag_location_master
-            ORDER BY "정렬No"
-            """
-            
-            with self.db_manager.engine.connect() as conn:
-                tag_location_master = pd.read_sql(text(query), conn)
+            # 캐시에서 데이터 가져오기 (첫 호출 시 DB에서 로드)
+            tag_location_master = cache.get_tag_location_master(self.db_manager)
                 
             if tag_location_master is not None and not tag_location_master.empty:
-                self.logger.info(f"태깅지점 마스터 데이터 로드 성공: {len(tag_location_master)}건")
-                self.logger.info(f"마스터 데이터 컬럼: {tag_location_master.columns.tolist()}")
-                
-                # 디버깅: 정문 관련 태그 확인
-                gate_tags = tag_location_master[tag_location_master['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)]
-                if not gate_tags.empty:
-                    self.logger.info(f"정문 관련 태그 마스터 데이터:")
-                    for idx, row in gate_tags.head(10).iterrows():
-                        self.logger.info(f"  - DR_NO={row['DR_NO']}, DR_NM={row['DR_NM']}, 입출구분={row.get('INOUT_GB', 'N/A')}, Tag_Code={row.get('Tag_Code', 'N/A')}")
-                
-                # Tag_Code 값 확인
-                if 'Tag_Code' in tag_location_master.columns:
-                    unique_codes = tag_location_master['Tag_Code'].unique()
-                    self.logger.info(f"전체 Tag_Code 종류: {unique_codes}")
-                
-                # DR_NO 컬럼 타입 확인 및 문자열 변환
-                tag_location_master['DR_NO'] = tag_location_master['DR_NO'].astype(str).str.strip()
+                # 첫 로드 시에만 상세 로그 출력 (캐시 미스인 경우)
+                if not cache._is_cache_valid('tag_location_master'):
+                    self.logger.info(f"태깅지점 마스터 데이터 로드 성공: {len(tag_location_master)}건")
+                    self.logger.info(f"마스터 데이터 컬럼: {tag_location_master.columns.tolist()}")
+                    
+                    # 디버깅: 정문 관련 태그 확인 (첫 로드 시에만)
+                    gate_tags = tag_location_master[tag_location_master['DR_NM'].str.contains('정문|SPEED GATE', case=False, na=False)]
+                    if not gate_tags.empty:
+                        self.logger.info(f"정문 관련 태그 마스터 데이터:")
+                        for idx, row in gate_tags.head(10).iterrows():
+                            self.logger.info(f"  - DR_NO={row['DR_NO']}, DR_NM={row['DR_NM']}, 입출구분={row.get('INOUT_GB', 'N/A')}, Tag_Code={row.get('Tag_Code', 'N/A')}")
+                    
+                    # Tag_Code 값 확인 (첫 로드 시에만)
+                    if 'Tag_Code' in tag_location_master.columns:
+                        unique_codes = tag_location_master['Tag_Code'].unique()
+                        self.logger.info(f"전체 Tag_Code 종류: {unique_codes}")
                 
                 return tag_location_master
             else:
@@ -516,13 +497,13 @@ class IndividualDashboard:
             return None
     
     def get_employee_work_type(self, employee_id: str, selected_date: date):
-        """직원의 근무제 유형 확인"""
+        """직원의 근무제 유형 확인 (캐시 활용)"""
         try:
-            from ...database import get_pickle_manager
-            pickle_manager = get_pickle_manager()
+            from ...utils.performance_cache import get_performance_cache
+            cache = get_performance_cache()
             
-            # Claim 데이터에서 근무제 유형 확인
-            claim_data = pickle_manager.load_dataframe(name='claim_data')
+            # Claim 데이터에서 근무제 유형 확인 (캐시 활용)
+            claim_data = cache.get_claim_data()
             if claim_data is not None and '사번' in claim_data.columns:
                 # 사번 형식 맞추기
                 if ' - ' in str(employee_id):
@@ -746,155 +727,39 @@ class IndividualDashboard:
             return None
     
     def get_daily_tag_data(self, employee_id: str, selected_date: date):
-        """특정 직원의 특정 날짜 태깅 데이터 가져오기 (Knox/Equipment 데이터 포함)"""
+        """특정 직원의 특정 날짜 태깅 데이터 가져오기 (성능 최적화 버전)"""
         try:
-            from ...database import get_pickle_manager
-            from ...data.integrated_data_processor import IntegratedDataProcessor
-            pickle_manager = get_pickle_manager()
+            # 성능 캐시 사용으로 대용량 pickle 로드 최적화
+            from ...utils.performance_cache import get_performance_cache
             
-            # 태깅 데이터 로드
-            tag_data = pickle_manager.load_dataframe(name='tag_data')
-            if tag_data is None:
-                return None
+            cache = get_performance_cache()
             
             # 근무제 유형 확인
             work_type = self.get_employee_work_type(employee_id, selected_date)
             
-            # 날짜 형식 변환 (YYYYMMDD)
-            date_str = selected_date.strftime('%Y%m%d')
-            date_int = int(date_str)
-            
-            # 사번 형식 확인 및 변환
-            try:
-                emp_id_int = int(employee_id)
-                
-                # 야간/교대 근무의 경우 야간 근무 고려 (선택근무제는 제외)
-                if work_type == 'night_shift':
-                    # 야간 근무자는 전날 저녁 ~ 당일 아침이 한 근무일
-                    # 따라서 '선택 날짜'는 퇴근하는 날짜를 의미
-                    prev_date = selected_date - timedelta(days=1)
-                    prev_date_int = int(prev_date.strftime('%Y%m%d'))
-                    
-                    # 야간 근무자는 전날 저녁부터 당일 아침까지만 필요
-                    # 전날 데이터 (17시 이후)와 당일 데이터 (12시 이전)만 로드
-                    prev_data = tag_data[
-                        (tag_data['사번'] == emp_id_int) & 
-                        (tag_data['ENTE_DT'] == prev_date_int)
-                    ].copy()
-                    
-                    current_data = tag_data[
-                        (tag_data['사번'] == emp_id_int) & 
-                        (tag_data['ENTE_DT'] == date_int)
-                    ].copy()
-                    
-                    # 시간 필터링을 여기서 미리 수행
-                    if not prev_data.empty:
-                        prev_data['hour'] = prev_data['출입시각'].astype(str).str.zfill(6).str[:2].astype(int)
-                        prev_data = prev_data[prev_data['hour'] >= 17]  # 17시 이후만
-                    
-                    if not current_data.empty:
-                        current_data['hour'] = current_data['출입시각'].astype(str).str.zfill(6).str[:2].astype(int)
-                        current_data = current_data[current_data['hour'] < 12]  # 12시 이전만
-                    
-                    # 두 데이터 결합
-                    if not prev_data.empty and not current_data.empty:
-                        daily_data = pd.concat([prev_data, current_data], ignore_index=True)
-                    elif not prev_data.empty:
-                        daily_data = prev_data
-                    elif not current_data.empty:
-                        daily_data = current_data
-                    else:
-                        daily_data = pd.DataFrame()
-                    
-                    self.logger.info(f"야간 근무자 데이터 로드: 전날 저녁({len(prev_data)}건) + 당일 오전({len(current_data)}건) = {len(daily_data)}건")
-                else:
-                    # 일반 근무제는 당일 데이터만
-                    daily_data = tag_data[
-                        (tag_data['사번'] == emp_id_int) & 
-                        (tag_data['ENTE_DT'] == date_int)
-                    ].copy()
-                    
-            except ValueError:
-                # 숫자 변환 실패 시 문자열로 비교
-                tag_data['사번'] = tag_data['사번'].astype(str)
-                daily_data = tag_data[
-                    (tag_data['사번'] == str(employee_id)) & 
-                    (tag_data['ENTE_DT'] == date_int)
-                ].copy()
-            
-            if daily_data.empty:
+            # 캐시된 일별 태그 데이터 로드 (메모리 최적화)
+            daily_data = cache.get_daily_tag_data(employee_id, selected_date, work_type)
+            if daily_data is None or daily_data.empty:
                 return None
             
-            # 시간순 정렬
-            daily_data['time'] = daily_data['출입시각'].astype(str).str.zfill(6)
-            daily_data['datetime'] = pd.to_datetime(
-                daily_data['ENTE_DT'].astype(str) + ' ' + daily_data['time'],
-                format='%Y%m%d %H%M%S'
-            )
-            daily_data = daily_data.sort_values('datetime')
-            
-            # 야간/교대 근무의 경우 야간 근무 시간대 필터링 (선택근무제는 제외)
-            if work_type == 'night_shift':
-                # 야간 근무는 전날 저녁 ~ 당일 아침 (하나의 근무 사이클)
-                # 선택한 날짜 = 퇴근하는 날짜 기준
-                
-                # 전날 저녁 17시 ~ 당일 오전 12시까지로 필터링
-                start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
-                end_time = datetime.combine(selected_date, time(12, 0))
-                
-                # 야간 근무 시간대 필터링
-                daily_data = daily_data[
-                    (daily_data['datetime'] >= start_time) & 
-                    (daily_data['datetime'] < end_time)
-                ]
-                
-                self.logger.info(f"야간 근무 시간대 필터링: {start_time} ~ {end_time}, {len(daily_data)}건")
-                
-                # 실제 출근 시간 확인
-                if not daily_data.empty:
-                    first_tag = daily_data.iloc[0]['datetime']
-                    last_tag = daily_data.iloc[-1]['datetime']
-                    self.logger.info(f"실제 근무: {first_tag.strftime('%m/%d %H:%M')} ~ {last_tag.strftime('%m/%d %H:%M')}")
-                
-                # 정문 태그 확인
-                gate_tags = daily_data[daily_data['DR_NM'].str.contains('정문|GATE', case=False, na=False)]
-                if not gate_tags.empty:
-                    self.logger.info(f"정문 태그 {len(gate_tags)}건 포함됨:")
-                    for _, tag in gate_tags.iterrows():
-                        self.logger.info(f"  - {tag['datetime']}: {tag['DR_NM']}")
-                else:
-                    self.logger.warning("정문 태그가 필터링 후 없음")
-            
-            # Knox 및 Equipment 데이터를 태그 형식으로 추가
+            # Knox 및 Equipment 데이터 추가
             knox_equipment_tags = self._get_knox_and_equipment_tags(employee_id, selected_date, work_type)
             if knox_equipment_tags is not None and not knox_equipment_tags.empty:
-                self.logger.info(f"Knox/Equipment 데이터 {len(knox_equipment_tags)}건을 추가")
-                
-                # 태그별 상세 정보 로깅
-                for _, tag in knox_equipment_tags.iterrows():
-                    self.logger.info(f"  - {tag['datetime']}: {tag['DR_NM']} ({tag['Tag_Code']})")
-                
                 # 야간 근무자의 경우 시간대 필터링
                 if work_type == 'night_shift':
+                    from datetime import datetime, time, timedelta
                     start_time = datetime.combine(selected_date - timedelta(days=1), time(17, 0))
                     end_time = datetime.combine(selected_date, time(12, 0))
-                    
-                    self.logger.info(f"야간 근무자 필터링 적용: {start_time} ~ {end_time}")
-                    knox_equipment_tags_before = len(knox_equipment_tags)
                     
                     knox_equipment_tags = knox_equipment_tags[
                         (knox_equipment_tags['datetime'] >= start_time) & 
                         (knox_equipment_tags['datetime'] < end_time)
                     ]
-                    self.logger.info(f"야간 근무 시간대 필터링 후: {len(knox_equipment_tags)}건 (필터링 전: {knox_equipment_tags_before}건)")
-                else:
-                    self.logger.info(f"주간 근무자(work_type: {work_type}) - 시간대 필터링 미적용")
                 
                 # 기존 데이터와 병합
                 if not knox_equipment_tags.empty:
                     daily_data = pd.concat([daily_data, knox_equipment_tags], ignore_index=True)
                     daily_data = daily_data.sort_values('datetime').reset_index(drop=True)
-                    self.logger.info(f"병합 후 총 {len(daily_data)}건의 태그")
             
             return daily_data
             
@@ -1604,13 +1469,14 @@ class IndividualDashboard:
                     )
                     
                     # 표기명으로 매칭된 경우 정보 업데이트
-                    display_matched = daily_data_temp['Tag_Code_display'].notna()
-                    if display_matched.any():
-                        for col in display_columns:
-                            if col != '표기명' and f'{col}_display' in daily_data_temp.columns:
-                                daily_data.loc[display_matched, col] = daily_data_temp.loc[display_matched, f'{col}_display']
-                        self.logger.info(f"✅ 표기명 매칭으로 {display_matched.sum()}건의 Tag_Code 찾음")
-                        Tag_Code_matched = True
+                    if 'Tag_Code_display' in daily_data_temp.columns:
+                        display_matched = daily_data_temp['Tag_Code_display'].notna()
+                        if display_matched.any():
+                            for col in display_columns:
+                                if col != '표기명' and f'{col}_display' in daily_data_temp.columns:
+                                    daily_data.loc[display_matched, col] = daily_data_temp.loc[display_matched, f'{col}_display']
+                            self.logger.info(f"✅ 표기명 매칭으로 {display_matched.sum()}건의 Tag_Code 찾음")
+                            Tag_Code_matched = True
                 
                 # 2. 표기명으로 못 찾은 경우 게이트명으로 매칭 시도
                 if not Tag_Code_matched and 'DR_NM' in daily_data.columns and '게이트명' in tag_location_master.columns:
@@ -1869,7 +1735,7 @@ class IndividualDashboard:
                         t1_movement_count = 0
                         t1_work_count = 0
                         for idx in daily_data[t1_mask].index:
-                            duration = daily_data.loc[idx, 'duration_minutes']
+                            duration = daily_data.loc[idx, 'duration_minutes'] if 'duration_minutes' in daily_data.columns else 0
                             if pd.isna(duration) or duration <= 10:  # 10분 이하만 이동
                                 daily_data.loc[idx, 'activity_code'] = 'MOVEMENT'
                                 t1_movement_count += 1
@@ -1942,7 +1808,7 @@ class IndividualDashboard:
                             ym_movement_count = 0
                             ym_work_count = 0
                             for idx in daily_data[ym_mask].index:
-                                duration = daily_data.loc[idx, 'duration_minutes']
+                                duration = daily_data.loc[idx, 'duration_minutes'] if 'duration_minutes' in daily_data.columns else 0
                                 if pd.isna(duration) or duration <= 15:  # 15분 이하만 이동
                                     daily_data.loc[idx, 'activity_code'] = 'MOVEMENT'
                                     ym_movement_count += 1
@@ -2175,6 +2041,10 @@ class IndividualDashboard:
                             daily_data.loc[first_entry_idx, 'confidence'] = 95
                             self.logger.info(f"식사 후 업무복귀 처리: {daily_data.loc[first_entry_idx, 'datetime']} (이전: {prev_code} -> WORK)")
                 
+                # meal_indices 초기화 (meal_groups를 사용)
+                meal_indices = []
+                for group in meal_groups:
+                    meal_indices.extend(group)
                 self.logger.info(f"식사 태그 {len(meal_indices)}개 발견")
                 
                 # 디버깅: 식사 전후 출문/입문 데이터 확인
@@ -4122,53 +3992,84 @@ class IndividualDashboard:
                     st.session_state.recent_views_manager.clear_all()
                     st.rerun()
     
-    def execute_analysis(self):
-        """분석 실행"""
-        employee_id = st.session_state.get('selected_employee')
-        selected_date = st.session_state.get('analysis_date')
+    def execute_analysis(self, employee_id=None, selected_date=None, return_data=False):
+        """분석 실행
+        
+        Args:
+            employee_id: 직원 ID (None이면 session_state에서 가져옴)
+            selected_date: 분석 날짜 (None이면 session_state에서 가져옴)
+            return_data: True면 데이터만 반환, False면 UI 렌더링
+        """
+        # 파라미터가 없으면 session_state에서 가져오기
+        if employee_id is None:
+            employee_id = st.session_state.get('selected_employee')
+        if selected_date is None:
+            selected_date = st.session_state.get('analysis_date')
         
         if not employee_id or not selected_date:
-            st.error("직원과 분석 날짜를 선택해주세요.")
-            return
+            if not return_data:
+                st.error("직원과 분석 날짜를 선택해주세요.")
+            return None
         
         try:
+            import time
+            analysis_times = {}  # 각 단계별 시간 측정
+            
             # 분석 실행
-            with st.spinner("분석 중..."):
-                # 실제 데이터 가져오기
+            step_start = time.time()
+            if return_data:
+                # 데이터만 반환하는 경우 스피너 없이 실행
                 daily_data = self.get_daily_tag_data(employee_id, selected_date)
-                
-                if daily_data is None or daily_data.empty:
+            else:
+                # UI 렌더링하는 경우 스피너 표시
+                with st.spinner("분석 중..."):
+                    daily_data = self.get_daily_tag_data(employee_id, selected_date)
+            analysis_times['tag_data'] = time.time() - step_start
+            
+            if daily_data is None or daily_data.empty:
+                if not return_data:
                     st.warning(f"선택한 날짜({selected_date})에 해당 직원({employee_id})의 데이터가 없습니다.")
-                    return
+                return None
+            
+            # 장비 데이터 로드
+            step_start = time.time()
+            equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
+            analysis_times['equipment_data'] = time.time() - step_start
+            if equipment_data is not None and not equipment_data.empty and not return_data:
+                st.info(f"🔧 장비 사용 데이터: {len(equipment_data)}건 발견")
                 
-                # 장비 데이터 로드
-                equipment_data = self.get_employee_equipment_data(employee_id, selected_date)
-                if equipment_data is not None and not equipment_data.empty:
-                    st.info(f"🔧 장비 사용 데이터: {len(equipment_data)}건 발견")
+            # 근태 데이터 로드
+            step_start = time.time()
+            attendance_data = self.get_employee_attendance_data(employee_id, selected_date)
+            analysis_times['attendance_data'] = time.time() - step_start
+            if attendance_data is not None and not attendance_data.empty and not return_data:
+                st.info(f"📋 근태 정보: {len(attendance_data)}건 발견")
                 
-                # 근태 데이터 로드
-                attendance_data = self.get_employee_attendance_data(employee_id, selected_date)
-                if attendance_data is not None and not attendance_data.empty:
-                    st.info(f"📋 근태 정보: {len(attendance_data)}건 발견")
-                
-                # Knox/Equipment 데이터 확인
+            # Knox/Equipment 데이터 확인
+            # Tag_Code 컬럼이 있는지 확인
+            if 'Tag_Code' in daily_data.columns:
                 knox_tags = daily_data[daily_data['Tag_Code'] == 'G3']
-                if not knox_tags.empty:
-                    self.logger.info(f"[분류 전] G3 태그 {len(knox_tags)}건 발견:")
-                    for idx, row in knox_tags.iterrows():
-                        self.logger.info(f"  - {row['datetime']}: Tag_Code={row.get('Tag_Code')}, source={row.get('source', 'N/A')}, " +
-                                       f"activity_code={row.get('activity_code', 'N/A')}, 활동분류={row.get('활동분류', 'N/A')}")
-                
-                # 활동 분류 수행 (employee_id와 selected_date 전달)
-                classified_data = self.classify_activities(daily_data, employee_id, selected_date)
-                
-                # 분류 후 T2 태그 상태 확인
+            else:
+                knox_tags = pd.DataFrame()
+            if not knox_tags.empty:
+                self.logger.info(f"[분류 전] G3 태그 {len(knox_tags)}건 발견:")
+                for idx, row in knox_tags.iterrows():
+                    self.logger.info(f"  - {row['datetime']}: Tag_Code={row.get('Tag_Code')}, source={row.get('source', 'N/A')}, " +
+                                   f"activity_code={row.get('activity_code', 'N/A')}, 활동분류={row.get('활동분류', 'N/A')}")
+            
+            # 활동 분류 수행 (employee_id와 selected_date 전달)
+            step_start = time.time()
+            classified_data = self.classify_activities(daily_data, employee_id, selected_date)
+            analysis_times['classify_activities'] = time.time() - step_start
+            
+            # 분류 후 T2 태그 상태 확인 (Tag_Code 컬럼이 있는 경우만)
+            if 'Tag_Code' in classified_data.columns:
                 t2_classified = classified_data[classified_data['Tag_Code'] == 'T2']
                 if not t2_classified.empty:
                     self.logger.info(f"[classify_activities 후] T2 태그 {len(t2_classified)}건:")
                     for idx, row in t2_classified.head(3).iterrows():
                         self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code')}, activity_type={row.get('activity_type')}, DR_NM={row['DR_NM']}")
-                
+            
                 # 분류 후 G3 태그 상태 확인
                 g3_classified = classified_data[classified_data['Tag_Code'] == 'G3']
                 if not g3_classified.empty:
@@ -4176,46 +4077,67 @@ class IndividualDashboard:
                     for idx, row in g3_classified.iterrows():
                         self.logger.info(f"  - {row['datetime']}: activity_code={row.get('activity_code', 'N/A')}, " +
                                        f"활동분류={row.get('활동분류', 'N/A')}, source={row.get('source', 'N/A')}")
-                
-                # 분석 결과 생성
-                analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
-                
-                # analyze_daily_data가 실패한 경우 기본 결과 생성
-                if analysis_result is None:
+            else:
+                self.logger.info("[classify_activities 후] Tag_Code 컬럼이 없어 태그별 확인 생략")
+            
+            # 분석 결과 생성
+            step_start = time.time()
+            analysis_result = self.analyze_daily_data(employee_id, selected_date, classified_data)
+            analysis_times['analyze_daily_data'] = time.time() - step_start
+            
+            # 성능 로깅 (return_data일 때만)
+            if return_data:
+                total_time = sum(analysis_times.values())
+                self.logger.info(f"[execute_analysis 성능 분석] 총 {total_time:.3f}초")
+                self.logger.info(f"  - tag_data 로드: {analysis_times.get('tag_data', 0):.3f}초")
+                self.logger.info(f"  - equipment_data 로드: {analysis_times.get('equipment_data', 0):.3f}초")
+                self.logger.info(f"  - attendance_data 로드: {analysis_times.get('attendance_data', 0):.3f}초")
+                self.logger.info(f"  - classify_activities: {analysis_times.get('classify_activities', 0):.3f}초")
+                self.logger.info(f"  - analyze_daily_data: {analysis_times.get('analyze_daily_data', 0):.3f}초")
+            
+            # analyze_daily_data가 실패한 경우 기본 결과 생성
+            if analysis_result is None:
+                if not return_data:
                     st.error("데이터 분석 중 오류가 발생했습니다. 기본 정보만 표시합니다.")
-                    analysis_result = self.create_sample_analysis_result(employee_id, (selected_date, selected_date))
-                
-                # 장비 데이터를 분석 결과에 추가
-                if equipment_data is not None and not equipment_data.empty:
-                    analysis_result['equipment_data'] = equipment_data
-                
-                # 근태 데이터를 분석 결과에 추가
-                if attendance_data is not None and not attendance_data.empty:
-                    analysis_result['attendance_data'] = attendance_data
-                
-                # 직원 정보 추가 (최근 조회 기록 저장용)
-                employee_info = self.get_employee_info(employee_id)
-                analysis_result['employee_info'] = employee_info
-                
-                # 최근 조회 기록에 추가
-                if 'recent_views_manager' in st.session_state:
-                    employee_name = employee_info.get('name', employee_id)
-                    department = employee_info.get('department', 'N/A')
-                    st.session_state.recent_views_manager.add_view(
-                        employee_id=employee_id,
-                        employee_name=employee_name,
-                        analysis_date=selected_date.isoformat(),
-                        department=department
-                    )
-                
-                # 결과 렌더링
-                self.render_analysis_results(analysis_result)
+                analysis_result = self.create_sample_analysis_result(employee_id, (selected_date, selected_date))
+            
+            # 장비 데이터를 분석 결과에 추가
+            if equipment_data is not None and not equipment_data.empty:
+                analysis_result['equipment_data'] = equipment_data
+            
+            # 근태 데이터를 분석 결과에 추가
+            if attendance_data is not None and not attendance_data.empty:
+                analysis_result['attendance_data'] = attendance_data
+            
+            # 직원 정보 추가 (최근 조회 기록 저장용)
+            employee_info = self.get_employee_info(employee_id)
+            analysis_result['employee_info'] = employee_info
+            
+            # 최근 조회 기록에 추가 (UI 모드일 때만)
+            if not return_data and 'recent_views_manager' in st.session_state:
+                employee_name = employee_info.get('name', employee_id)
+                department = employee_info.get('department', 'N/A')
+                st.session_state.recent_views_manager.add_view(
+                    employee_id=employee_id,
+                    employee_name=employee_name,
+                    analysis_date=selected_date.isoformat(),
+                    department=department
+                )
+            
+            # return_data가 True인 경우 데이터만 반환
+            if return_data:
+                return analysis_result
+            
+            # 결과 렌더링
+            self.render_analysis_results(analysis_result)
                 
         except Exception as e:
-            st.error(f"분석 중 오류 발생: {e}")
+            if not return_data:
+                st.error(f"분석 중 오류 발생: {e}")
             self.logger.error(f"개인 분석 오류: {e}")
             import traceback
             self.logger.error(f"전체 스택 트레이스:\n{traceback.format_exc()}")
+            return None
     
     def create_sample_analysis_result(self, employee_id: str, date_range: tuple):
         """샘플 분석 결과 생성"""
@@ -5767,11 +5689,12 @@ class IndividualDashboard:
                 )
                 
                 # 표기명으로 매칭된 경우 Tag_Code 업데이트
-                display_matched = raw_data_temp['Tag_Code_display'].notna()
-                if display_matched.any():
-                    raw_data.loc[display_matched, 'Tag_Code'] = raw_data_temp.loc[display_matched, 'Tag_Code_display']
-                    self.logger.info(f"✅ 표기명 매칭으로 {display_matched.sum()}건의 Tag_Code 찾음")
-                    Tag_Code_matched = True
+                if 'Tag_Code_display' in raw_data_temp.columns:
+                    display_matched = raw_data_temp['Tag_Code_display'].notna()
+                    if display_matched.any():
+                        raw_data.loc[display_matched, 'Tag_Code'] = raw_data_temp.loc[display_matched, 'Tag_Code_display']
+                        self.logger.info(f"✅ 표기명 매칭으로 {display_matched.sum()}건의 Tag_Code 찾음")
+                        Tag_Code_matched = True
                     
                     # 매칭된 다른 정보도 업데이트
                     for col in ['위치', '게이트명', '근무구역여부', '근무', '라벨링']:
