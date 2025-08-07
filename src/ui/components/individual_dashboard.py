@@ -49,6 +49,10 @@ class IndividualDashboard:
         # 근무시간 추정기 초기화
         self.work_time_estimator = WorkTimeEstimator()
         
+        # 집중근무 시간대 분석기 초기화
+        from ...analysis.focus_time_analyzer import FocusTimeAnalyzer
+        self.focus_analyzer = FocusTimeAnalyzer()
+        
         # 색상 팔레트 (activity_types.py에서 가져옴)
         self.colors = {}
         for code, activity in ACTIVITY_TYPES.items():
@@ -56,6 +60,9 @@ class IndividualDashboard:
         
         # 추정률 표시 컴포넌트 임포트
         from .estimation_display import render_estimation_metrics
+        
+        # 집중근무 시간대 표시 컴포넌트 임포트
+        from .focus_time_display import render_focus_time_analysis
         
         # 이전 버전과의 호환성을 위한 매핑
         self.colors.update({
@@ -4103,6 +4110,14 @@ class IndividualDashboard:
             )
             analysis_times['estimation_calculation'] = time.time() - step_start
             
+            # 집중근무 시간대 분석
+            step_start = time.time()
+            focus_time_analysis = self.focus_analyzer.analyze_focus_time(
+                classified_data,
+                employee_info
+            )
+            analysis_times['focus_time_analysis'] = time.time() - step_start
+            
             # 분류 후 T2 태그 상태 확인 (Tag_Code 컬럼이 있는 경우만)
             if 'Tag_Code' in classified_data.columns:
                 t2_classified = classified_data[classified_data['Tag_Code'] == 'T2']
@@ -4129,6 +4144,10 @@ class IndividualDashboard:
             # 추정 메트릭을 분석 결과에 추가
             if analysis_result and estimation_metrics:
                 analysis_result['estimation_metrics'] = estimation_metrics
+            
+            # 집중근무 시간대 분석을 분석 결과에 추가
+            if analysis_result and focus_time_analysis:
+                analysis_result['focus_time_analysis'] = focus_time_analysis
             
             # 성능 로깅 (return_data일 때만)
             if return_data:
@@ -4305,6 +4324,11 @@ class IndividualDashboard:
                 work_hours = 8.0  # 기본 근무시간
                 
             render_estimation_metrics(analysis_result['estimation_metrics'], work_hours)
+        
+        # 집중근무 시간대 분석 표시 (있는 경우)
+        if 'focus_time_analysis' in analysis_result:
+            from .focus_time_display import render_focus_time_analysis
+            render_focus_time_analysis(analysis_result['focus_time_analysis'])
         
         # 근태 정보 표시 (있는 경우)
         if 'attendance_data' in analysis_result:
