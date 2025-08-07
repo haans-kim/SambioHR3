@@ -269,7 +269,12 @@ class OrganizationDashboard:
                     </h4>
                 </div>
                 """.format(year, month), unsafe_allow_html=True)
-                st.markdown(f"**최소: {month_data['실제근무시간'].min():.2f}h | 최대: {month_data['실제근무시간'].max():.2f}h**")
+                min_val = month_data['실제근무시간'].min()
+                max_val = month_data['실제근무시간'].max()
+                if pd.notna(min_val) and pd.notna(max_val):
+                    st.markdown(f"**최소: {min_val:.2f}h | 최대: {max_val:.2f}h**")
+                else:
+                    st.markdown("**데이터가 없습니다**")
                 
                 # 평균 행과 열 추가
                 # 열 평균 (센터 평균) 계산
@@ -316,7 +321,13 @@ class OrganizationDashboard:
                         gray = min(245, gray)
                         return f'background-color: rgb({gray}, {gray}, {gray})'
                 
-                styled_df = total_pivot.style.format("{:.1f}").applymap(color_cells)
+                # None 값 처리를 위한 포맷 함수
+                def format_value(val):
+                    if pd.isna(val):
+                        return "-"
+                    return f"{val:.1f}"
+                
+                styled_df = total_pivot.style.format(format_value).applymap(color_cells)
                 st.dataframe(styled_df, use_container_width=True)
                 
                 # 주차별 상세 데이터를 하나의 통합 테이블로 표시
@@ -363,10 +374,15 @@ class OrganizationDashboard:
                 # 날짜 정보 추가 (최소/최대)
                 min_hours = weekly_df.min().min()
                 max_hours = weekly_df.max().max()
-                st.markdown(f"**최소: {min_hours:.1f}h | 최대: {max_hours:.1f}h**")
+                
+                # None 체크 추가
+                if pd.notna(min_hours) and pd.notna(max_hours):
+                    st.markdown(f"**최소: {min_hours:.1f}h | 최대: {max_hours:.1f}h**")
+                else:
+                    st.markdown("**데이터가 없습니다**")
                 
                 # 스타일 적용
-                styled_weekly = weekly_df.style.format("{:.1f}").applymap(color_cells)
+                styled_weekly = weekly_df.style.format(format_value).applymap(color_cells)
                 st.dataframe(styled_weekly, use_container_width=True)
                 
                 # 시각화

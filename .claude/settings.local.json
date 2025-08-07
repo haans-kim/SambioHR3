@@ -41,7 +41,9 @@
       "Bash(git checkout:*)",
       "Bash(mkdir:*)",
       "Bash(git pull:*)",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "Bash(cat:*)",
+      "Bash(pip install:*)"
     ],
     "deny": []
   }

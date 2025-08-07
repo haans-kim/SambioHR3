@@ -61,15 +61,19 @@ class OrganizationDashboard:
             
             col1, col2 = st.columns(2)
             with col1:
+                analyzed_emp = total_stats.get('analyzed_employees', 0) if total_stats else 0
                 st.metric(
                     label="총 분석 인원",
-                    value=f"{total_stats['analyzed_employees']:,}"
+                    value=f"{analyzed_emp:,}" if analyzed_emp else "0"
                 )
             with col2:
+                avg_eff = total_stats.get('avg_efficiency', 0) if total_stats else 0
+                eff_change = total_stats.get('efficiency_change', 0) if total_stats else 0
+                
                 st.metric(
                     label="평균 근무율",
-                    value=f"{total_stats['avg_efficiency']:.1f}%",
-                    delta=f"{total_stats['efficiency_change']:.1f}%" if total_stats['efficiency_change'] else None
+                    value=f"{avg_eff:.1f}%" if avg_eff is not None else "N/A",
+                    delta=f"{eff_change:.1f}%" if eff_change and eff_change != 0 else None
                 )
             
             # 센터별 현황
@@ -111,14 +115,16 @@ class OrganizationDashboard:
                 st.markdown(f"### {selected_center} 현황")
                 col1, col2 = st.columns(2)
                 with col1:
+                    total_emp = team_stats.get('total_employees', 0) if team_stats else 0
                     st.metric(
                         label="총 분석 인원",
-                        value=f"{team_stats['total_employees']:,}"
+                        value=f"{total_emp:,}" if total_emp else "0"
                     )
                 with col2:
+                    avg_eff = team_stats.get('avg_efficiency', 0) if team_stats else 0
                     st.metric(
                         label="평균 근무율",
-                        value=f"{team_stats['avg_efficiency']:.1f}%"
+                        value=f"{avg_eff:.1f}%" if avg_eff is not None else "N/A"
                     )
                 
                 # 팀별 카드 그리드
@@ -156,14 +162,16 @@ class OrganizationDashboard:
                 st.markdown(f"### {selected_center} 현황")
                 col1, col2 = st.columns(2)
                 with col1:
+                    total_emp = group_stats.get('total_employees', 0) if group_stats else 0
                     st.metric(
                         label="총 분석 인원",
-                        value=f"{group_stats['total_employees']:,}"
+                        value=f"{total_emp:,}" if total_emp else "0"
                     )
                 with col2:
+                    avg_eff = group_stats.get('avg_efficiency', 0) if group_stats else 0
                     st.metric(
                         label="평균 근무율",
-                        value=f"{group_stats['avg_efficiency']:.1f}%"
+                        value=f"{avg_eff:.1f}%" if avg_eff is not None else "N/A"
                     )
                 
                 # 그룹별 카드 그리드
