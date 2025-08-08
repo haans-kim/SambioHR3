@@ -2133,7 +2133,7 @@ class IndividualDashboard:
                 if t2_mask.any():
                     t2_wrong = t2_mask & (~daily_data['activity_code'].isin(['COMMUTE_IN']))
                     if t2_wrong.any():
-                        self.logger.warning(f"태그 기반 분류 후 T2 태그 {t2_wrong.sum()}건을 COMMUTE_IN으로 수정")
+                        # self.logger.warning(f"태그 기반 분류 후 T2 태그 {t2_wrong.sum()}건을 COMMUTE_IN으로 수정")
                         daily_data.loc[t2_wrong, 'activity_code'] = 'COMMUTE_IN'
                         daily_data.loc[t2_wrong, 'activity_type'] = 'commute'
                         daily_data.loc[t2_wrong, 'confidence'] = 100
@@ -2362,7 +2362,7 @@ class IndividualDashboard:
             # M1/M2 태그와 Knox PIMS의 duration을 먼저 백업
             if 'Tag_Code' in daily_data.columns:
                 m1_m2_mask = daily_data['Tag_Code'].isin(['M1', 'M2'])
-                m1_m2_durations = daily_data.loc[m1_m2_mask, 'duration_minutes'].copy() if 'duration_minutes' in daily_data.columns and m1_m2_mask.any() else pd.Series()
+                m1_m2_durations = daily_data.loc[m1_m2_mask, 'duration_minutes'].copy() if 'duration_minutes' in daily_data.columns and m1_m2_mask.any() else pd.Series(dtype='float64')
             
             # Knox PIMS duration 백업
             knox_pims_mask = pd.Series([False] * len(daily_data))
@@ -2747,7 +2747,7 @@ class IndividualDashboard:
                 if t2_mask.any():
                     t2_wrong = t2_mask & (~daily_data['activity_code'].isin(['COMMUTE_IN']))
                     if t2_wrong.any():
-                        self.logger.warning(f"최종 보호: T2 태그 {t2_wrong.sum()}건을 COMMUTE_IN으로 수정")
+                        # self.logger.warning(f"최종 보호: T2 태그 {t2_wrong.sum()}건을 COMMUTE_IN으로 수정")
                         for idx in daily_data[t2_wrong].index:
                             prev_code = daily_data.loc[idx, 'activity_code']
                             daily_data.loc[idx, 'activity_code'] = 'COMMUTE_IN'
@@ -3164,7 +3164,7 @@ class IndividualDashboard:
                     
                     # 60분을 초과하는 간격은 5분으로 제한 (비정상적인 gap 방지)
                     if duration > 60:
-                        self.logger.warning(f"긴 시간 간격 감지: {current_row['datetime']} ~ {next_time} ({duration:.0f}분) -> 5분으로 제한")
+                        # self.logger.warning(f"긴 시간 간격 감지: {current_row['datetime']} ~ {next_time} ({duration:.0f}분) -> 5분으로 제한")
                         duration = 5
                 else:
                     # 마지막 태그는 5분으로 설정

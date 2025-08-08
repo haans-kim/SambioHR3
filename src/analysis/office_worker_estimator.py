@@ -153,7 +153,7 @@ class OfficeWorkerEstimator:
         
         # 시스템 사용 로그
         if 'source' in data.columns:
-            system_data = data[data['source'].isin(['EAM', 'LAMS', 'MES'])]
+            system_data = data[data['source'].isin(['EAM', 'LAMS', 'MES'])].astype(activities.dtypes, errors='ignore')
             activities = pd.concat([activities, system_data])
         
         # 중복 제거 및 시간순 정렬
@@ -175,7 +175,7 @@ class OfficeWorkerEstimator:
             
             if gap_minutes > self.TAILGATING_THRESHOLDS['entry_to_activity']:
                 factors.append(('long_entry_gap', 0.3))
-                logger.warning(f"입문 후 {gap_minutes:.0f}분간 활동 없음 - 꼬리물기 의심")
+                # logger.warning(f"입문 후 {gap_minutes:.0f}분간 활동 없음 - 꼬리물기 의심")
         
         # 2. 마지막 활동 후 퇴문까지 시간
         if entry_exit['last_exit'] and not activities.empty:
@@ -184,7 +184,7 @@ class OfficeWorkerEstimator:
             
             if gap_minutes > self.TAILGATING_THRESHOLDS['last_activity_to_exit']:
                 factors.append(('long_exit_gap', 0.3))
-                logger.warning(f"마지막 활동 후 {gap_minutes:.0f}분간 활동 없음 - 꼬리물기 의심")
+                # logger.warning(f"마지막 활동 후 {gap_minutes:.0f}분간 활동 없음 - 꼬리물기 의심")
         
         # 3. 전체 활동 수
         if len(activities) < self.TAILGATING_THRESHOLDS['min_activities']:
