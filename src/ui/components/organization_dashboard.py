@@ -383,10 +383,20 @@ class OrganizationDashboard:
                     
                     while current_date <= end_dt:
                         date_start_time = time.time()
-                        status_text.text(f"📅 {current_date} 분석 중... ({len(employees)}명)")
                         
-                        # 배치 분석 실행
-                        batch_results = batch_processor.batch_analyze_employees(employees, current_date)
+                        # 해당 날짜에 유효한 Claim시간을 가진 직원만 필터링
+                        valid_employees_for_date = self._filter_employees_with_valid_claim(employees, current_date)
+                        
+                        status_text.text(f"📅 {current_date} 분석 중... (전체: {len(employees)}명, 유효: {len(valid_employees_for_date)}명)")
+                        
+                        # 유효한 직원이 없으면 다음 날짜로
+                        if not valid_employees_for_date:
+                            self.logger.info(f"{current_date}: 유효한 Claim 데이터를 가진 직원이 없어 건너뜀")
+                            current_date += timedelta(days=1)
+                            continue
+                        
+                        # 배치 분석 실행 (유효한 직원만)
+                        batch_results = batch_processor.batch_analyze_employees(valid_employees_for_date, current_date)
                         
                         # 결과 저장
                         saved_count = batch_processor.save_results_to_db(batch_results)
@@ -407,32 +417,66 @@ class OrganizationDashboard:
                         # 실시간 통계 업데이트
                         stat_metric1.metric("분석 완료", f"{len(all_results)}명")
                         stat_metric2.metric("현재 날짜", f"{current_date}")
-                        stat_metric3.metric("처리 속도", f"{len(batch_results)/date_elapsed:.1f}명/초" if date_elapsed > 0 else "-")
+                        stat_metric3.metric("처리 속도", f"{len(valid_employees_for_date)/date_elapsed:.1f}명/초" if date_elapsed > 0 else "-")
                         stat_metric4.metric("총 소요시간", f"{total_elapsed:.1f}초")
                         
-                        # 결과 테이블 업데이트
-                        if success_results:
+                        # 결과 테이블 업데이트 - 전체 누적 결과로 단일 테이블 표시
+                        if all_results:
                             # 활동별 시간을 더 정확하게 계산
                             def get_activity_time(r, activity_keys):
                                 activity_dist = r.get('activity_analysis', {}).get('activity_distribution', {})
                                 total_minutes = sum(activity_dist.get(key, 0) for key in activity_keys)
                                 return f"{total_minutes/60:.1f}h"
                             
+                            # 체류시간 계산 (출근부터 퇴근까지 사내 총 체류시간)
+                            def get_total_stay_time(r):
+                                timeline = r.get('timeline_analysis', {}).get('timeline', [])
+                                if not timeline:
+                                    # timeline이 없으면 모든 활동시간의 합계로 계산
+                                    activity_dist = r.get('activity_analysis', {}).get('activity_distribution', {})
+                                    total_minutes = sum(activity_dist.values())
+                                    return f"{total_minutes/60:.1f}h"
+                                
+                                # timeline에서 첫 출입과 마지막 출입 시간으로 체류시간 계산
+                                try:
+                                    # 첫 번째와 마지막 타임스탬프 찾기
+                                    timestamps = []
+                                    for entry in timeline:
+                                        if entry.get('timestamp'):
+                                            timestamps.append(pd.to_datetime(entry['timestamp']))
+                                    
+                                    if len(timestamps) >= 2:
+                                        stay_duration = (max(timestamps) - min(timestamps)).total_seconds() / 3600
+                                        return f"{stay_duration:.1f}h"
+                                    else:
+                                        # 타임스탬프가 부족하면 활동시간 합계 사용
+                                        activity_dist = r.get('activity_analysis', {}).get('activity_distribution', {})
+                                        total_minutes = sum(activity_dist.values())
+                                        return f"{total_minutes/60:.1f}h"
+                                except:
+                                    # 오류 시 활동시간 합계로 대체
+                                    activity_dist = r.get('activity_analysis', {}).get('activity_distribution', {})
+                                    total_minutes = sum(activity_dist.values())
+                                    return f"{total_minutes/60:.1f}h"
+                            
+                            # 최대 50개의 최신 결과만 표시
+                            display_results = all_results[-50:] if len(all_results) > 50 else all_results
+                            
                             df_results = pd.DataFrame([{
                                 '날짜': r['analysis_date'],
                                 '사번': r['employee_id'],
                                 'Claim시간': f"{r.get('work_time_analysis', {}).get('claimed_work_hours', 0):.1f}h",
                                 '실제근무': f"{r.get('work_time_analysis', {}).get('actual_work_hours', 0):.1f}h",
-                                '업무시간': get_activity_time(r, ['업무', '업무(확실)']),
+                                '체류시간': get_total_stay_time(r),
                                 '출입시간': get_activity_time(r, ['출입(IN)', '출입(OUT)']),
                                 '효율성': f"{r.get('work_time_analysis', {}).get('work_efficiency', r.get('work_time_analysis', {}).get('efficiency_ratio', 0)):.1f}%",
                                 '신뢰도': f"{r.get('data_quality', {}).get('overall_quality_score', 0):.0f}%",
                                 '태그수': r.get('data_quality', {}).get('total_tags', 0),
                                 '활동종류': len(r.get('activity_analysis', {}).get('activity_distribution', {}))
-                            } for r in success_results[:30]])  # 30개로 확장
+                            } for r in display_results])
                             
-                            # 수평 스크롤 가능한 테이블로 표시
-                            st.dataframe(
+                            # 단일 테이블로 업데이트 (results_table 사용)
+                            results_table.dataframe(
                                 df_results, 
                                 use_container_width=True,
                                 height=400,  # 테이블 높이 고정
@@ -441,7 +485,7 @@ class OrganizationDashboard:
                                     "사번": st.column_config.TextColumn("사번", width="medium"), 
                                     "Claim시간": st.column_config.TextColumn("Claim시간", width="small"),
                                     "실제근무": st.column_config.TextColumn("실제근무", width="small"),
-                                    "업무시간": st.column_config.TextColumn("업무시간", width="small"),
+                                    "체류시간": st.column_config.TextColumn("체류시간", width="small"),
                                     "출입시간": st.column_config.TextColumn("출입시간", width="small"),
                                     "효율성": st.column_config.TextColumn("효율성", width="small"),
                                     "신뢰도": st.column_config.TextColumn("신뢰도", width="small"),
@@ -463,7 +507,7 @@ class OrganizationDashboard:
                         
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            st.metric("분석 완료", f"{len(all_results)}건")
+                            st.metric("유효 분석 완료", f"{len(all_results)}건")
                         with col2:
                             st.metric("평균 근무시간", f"{avg_work_hours:.1f}시간")
                         with col3:
@@ -795,17 +839,99 @@ class OrganizationDashboard:
             # 문자열로 변환
             employee_list = [str(emp_id) for emp_id in employee_list]
             
-            self.logger.info(f"조회된 직원 수: {len(employee_list)}")
-            if len(employee_list) > 0:
-                self.logger.info(f"첫 5명: {employee_list[:5]}")
+            # Claim 데이터와 교차 확인하여 Claim시간이 0이 아닌 직원만 필터링 (전체 기간 기준)
+            filtered_employees = self._filter_employees_with_valid_claim(employee_list, target_date=None)
             
-            return employee_list
+            self.logger.info(f"조직 기준 직원 수: {len(employee_list)}")
+            self.logger.info(f"Claim 데이터 있는 직원 수: {len(filtered_employees)}")
+            if len(filtered_employees) > 0:
+                self.logger.info(f"분석 대상 첫 5명: {filtered_employees[:5]}")
+            
+            return filtered_employees
                 
         except Exception as e:
             self.logger.error(f"직원 목록 조회 오류: {e}")
             import traceback
             self.logger.error(traceback.format_exc())
             return []
+    
+    def _filter_employees_with_valid_claim(self, employee_list: List[str], target_date: date = None) -> List[str]:
+        """Claim시간이 0이 아닌 직원만 필터링"""
+        try:
+            # Claim 데이터 로드
+            claim_df = self.pickle_manager.load_dataframe('claim_data')
+            if claim_df is None or claim_df.empty:
+                self.logger.warning("Claim 데이터를 찾을 수 없습니다. 모든 직원 포함")
+                return employee_list
+            
+            self.logger.info(f"Claim 데이터 로드 성공: {len(claim_df)}행")
+            
+            # 특정 날짜 필터링 (제공된 경우)
+            if target_date and '근무일' in claim_df.columns:
+                # 날짜 형식 통일
+                claim_df['근무일'] = pd.to_datetime(claim_df['근무일'], errors='coerce')
+                target_datetime = pd.to_datetime(target_date)
+                claim_df = claim_df[claim_df['근무일'].dt.date == target_datetime.date()]
+                self.logger.info(f"{target_date} 날짜 필터링 후 Claim 데이터: {len(claim_df)}행")
+            
+            # 사번을 문자열로 변환하여 비교
+            if '사번' in claim_df.columns:
+                claim_df['사번'] = claim_df['사번'].astype(str)
+                
+                # 근무시간 파싱 함수
+                def parse_work_time(time_str):
+                    try:
+                        if pd.isna(time_str) or time_str == '' or time_str == '0':
+                            return 0.0
+                        # "HH:MM" 형태를 시간으로 변환
+                        if ':' in str(time_str):
+                            parts = str(time_str).split(':')
+                            if len(parts) >= 2:
+                                return float(parts[0]) + float(parts[1]) / 60
+                            else:
+                                return float(parts[0])
+                        else:
+                            return float(time_str)
+                    except:
+                        return 0.0
+                
+                # 근무시간 파싱 및 필터링
+                if '근무시간' in claim_df.columns:
+                    claim_df['근무시간_parsed'] = claim_df['근무시간'].apply(parse_work_time)
+                    
+                    # 디버깅: 샘플 데이터 확인
+                    self.logger.info(f"Claim 데이터 샘플 (처음 10행):")
+                    for i in range(min(10, len(claim_df))):
+                        row = claim_df.iloc[i]
+                        self.logger.info(f"  사번: {row.get('사번', 'N/A')}, 근무시간: {row.get('근무시간', 'N/A')}, 파싱됨: {row.get('근무시간_parsed', 'N/A')}")
+                    
+                    # 근무시간이 0보다 큰 직원들
+                    valid_employees = claim_df[claim_df['근무시간_parsed'] > 0]['사번'].unique().tolist()
+                    valid_employees = [str(emp) for emp in valid_employees]
+                    
+                    # 원래 직원 목록에서 유효한 직원만 필터링
+                    filtered = [emp for emp in employee_list if emp in valid_employees]
+                    
+                    self.logger.info(f"전체 Claim 데이터 중 유효한(>0) 근무시간 직원: {len(valid_employees)}명")
+                    self.logger.info(f"조직 내 원래 직원: {len(employee_list)}명")
+                    self.logger.info(f"조직 내 유효한 근무시간 직원: {len(filtered)}명")
+                    
+                    # 실제로 필터링되었는지 확인
+                    if len(filtered) < len(employee_list):
+                        excluded = [emp for emp in employee_list if emp not in valid_employees]
+                        self.logger.info(f"제외된 직원 (처음 5명): {excluded[:5]}")
+                    
+                    return filtered
+                else:
+                    self.logger.warning("Claim 데이터에 '근무시간' 컬럼이 없습니다")
+                    return employee_list
+            else:
+                self.logger.warning("Claim 데이터에 '사번' 컬럼이 없습니다")
+                return employee_list
+                
+        except Exception as e:
+            self.logger.error(f"Claim 데이터 필터링 오류: {e}")
+            return employee_list  # 오류 시 원본 목록 반환
     
     def _save_organization_analysis_result(self, org_id: str, org_name: str, org_level: str,
                                           start_date, end_date, employee_count: int,
