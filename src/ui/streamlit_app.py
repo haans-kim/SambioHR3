@@ -154,13 +154,6 @@ class SambioHumanApp:
             if st.button("작업지시 관리", use_container_width=True):
                 st.session_state.current_page = "작업지시 관리"
             
-            # 대규모 배치 분석 메뉴 추가
-            st.markdown("---")
-            st.markdown("### 🚀 고급 기능")
-            
-            if st.button("대규모 배치 분석", use_container_width=True, type="primary"):
-                st.session_state.current_page = "대규모 배치 분석"
-            
             # 현재 페이지가 없으면 홈으로 설정
             if 'current_page' not in st.session_state:
                 st.session_state.current_page = "홈"

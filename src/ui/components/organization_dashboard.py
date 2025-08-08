@@ -27,6 +27,10 @@ class OrganizationDashboard:
     def get_organizations_by_level(self, org_level: str) -> list:
         """조직 레벨에 따른 조직 목록 조회"""
         try:
+            # 전사 레벨 처리
+            if org_level == "company":
+                return [("all", "전사")]
+            
             # 캐시 확인
             if org_level in self._organizations_cache:
                 return self._organizations_cache[org_level]
@@ -248,8 +252,8 @@ class OrganizationDashboard:
         with col1:
             org_level = st.selectbox(
                 "조직 레벨",
-                ["team", "group", "center"],
-                format_func=lambda x: {"team": "팀", "group": "그룹", "center": "센터"}.get(x, x),
+                ["company", "center", "team", "group"],
+                format_func=lambda x: {"company": "전사", "center": "센터", "team": "팀", "group": "그룹"}.get(x, x),
                 key="org_level_select"
             )
         
@@ -858,6 +862,46 @@ class OrganizationDashboard:
         """조직에 속한 직원 ID 목록 가져오기"""
         try:
             self.logger.info(f"조직 직원 조회: {org_name} ({org_level})")
+            
+            # 전사 레벨인 경우 Claim 데이터가 0이 아닌 모든 직원 반환
+            if org_level == 'company':
+                claim_df = self.pickle_manager.load_dataframe('claim_data')
+                if claim_df is not None and not claim_df.empty:
+                    # 근무시간이 0이 아닌 직원들만 선택
+                    if '근무시간' in claim_df.columns:
+                        # 근무시간을 숫자로 변환
+                        def parse_work_time(time_str):
+                            try:
+                                if pd.isna(time_str) or time_str == '':
+                                    return 0.0
+                                if ':' in str(time_str):
+                                    hours, minutes = str(time_str).split(':')
+                                    return float(hours) + float(minutes) / 60
+                                else:
+                                    return float(time_str)
+                            except:
+                                return 0.0
+                        
+                        claim_df['근무시간_hours'] = claim_df['근무시간'].apply(parse_work_time)
+                        valid_claim_df = claim_df[claim_df['근무시간_hours'] > 0]
+                        
+                        if '사번' in valid_claim_df.columns:
+                            employee_ids = valid_claim_df['사번'].unique().tolist()
+                            # 정수형으로 변환 시도
+                            employee_ids = [str(int(emp_id)) if isinstance(emp_id, (int, float)) else str(emp_id) for emp_id in employee_ids]
+                            self.logger.info(f"전사 레벨: Claim > 0인 직원 {len(employee_ids)}명 발견")
+                            return employee_ids
+                    
+                # Claim 데이터가 없으면 모든 직원 반환
+                org_df = self.pickle_manager.load_dataframe('organization_data')
+                if org_df is None or org_df.empty:
+                    org_df = self.pickle_manager.load_dataframe('organization')
+                if org_df is not None and '사번' in org_df.columns:
+                    employee_ids = org_df['사번'].unique().tolist()
+                    employee_ids = [str(int(emp_id)) if isinstance(emp_id, (int, float)) else str(emp_id) for emp_id in employee_ids]
+                    self.logger.info(f"전사 레벨: 전체 직원 {len(employee_ids)}명")
+                    return employee_ids
+                return []
             
             # pickle 데이터에서 조직 정보 가져오기
             org_df = self.pickle_manager.load_dataframe('organization_data')
