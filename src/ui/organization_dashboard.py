@@ -47,10 +47,11 @@ class OrganizationDashboard:
         col1, col2, col3 = st.columns([1, 1, 1])
         
         with col1:
-            # 날짜 선택
+            # 날짜 선택 (데이터가 있는 6월로 기본값 설정)
+            default_date = date(2025, 6, 15)
             selected_date = st.date_input(
                 "분석 날짜",
-                value=date.today() - timedelta(days=1),
+                value=default_date,
                 max_value=date.today()
             )
         
@@ -96,9 +97,11 @@ class OrganizationDashboard:
         col1, col2, col3 = st.columns([1, 1, 1])
         
         with col1:
+            # 데이터가 있는 6월 날짜를 기본값으로 설정
+            default_date = date(2025, 6, 15)
             selected_date = st.date_input(
                 "분석 날짜",
-                value=date.today() - timedelta(days=1),
+                value=default_date,
                 max_value=date.today(),
                 key="team_date"
             )
@@ -148,19 +151,28 @@ class OrganizationDashboard:
             # 상세 분석 실행 버튼 추가 (항상 표시)
             st.markdown("---")
             st.markdown("### 실시간 분석")
-            st.write("개인별 분석을 실시간으로 실행하고 소요시간을 측정합니다.")
             
-            if st.button("🔍 상세 분석 실행 (소요시간 측정)", key="run_detail_analysis", type="primary", use_container_width=True):
-                self.run_detailed_analysis_with_timing(selected_date, selected_center)
+            # 고속 배치 처리 자동 사용
+            st.info("🚀 고속 배치 처리 모드 (Process 기반 병렬 처리)")
+            
+            # 워커 수 선택
+            num_workers = st.slider("병렬 워커 수", 1, 8, 4, key="num_workers_simple")
+            
+            # 분석 실행 버튼
+            if st.button("🔍 상세 분석 실행", type="primary", use_container_width=True):
+                # 고속 배치 처리로 실행
+                self.run_detailed_analysis_with_timing(selected_date, selected_center, True, "fast", num_workers)
     
     def render_group_analysis(self):
         """그룹별 분석 화면"""
         col1, col2, col3 = st.columns([1, 1, 1])
         
         with col1:
+            # 데이터가 있는 6월 날짜를 기본값으로 설정
+            default_date = date(2025, 6, 15)
             selected_date = st.date_input(
                 "분석 날짜",
-                value=date.today() - timedelta(days=1),
+                value=default_date,
                 max_value=date.today(),
                 key="group_date"
             )
@@ -616,7 +628,7 @@ class OrganizationDashboard:
             result = self.db_manager.execute_query(query)
             return [row['center_name'] for row in result] if result else []
     
-    def run_detailed_analysis_with_timing(self, selected_date: date, selected_center: str):
+    def run_detailed_analysis_with_timing(self, selected_date: date, selected_center: str, use_batch: bool = False, batch_type: str = None, num_workers: int = 4):
         """상세 분석 실행 및 소요시간 측정"""
         st.markdown("### 상세 분석 실행 중...")
         
@@ -632,116 +644,476 @@ class OrganizationDashboard:
         
         st.write(f"분석 대상: {len(teams)}개 팀, {len(center_employees)}명")
         
-        # 진행률 표시
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        # 결과 저장
-        results = []
-        
-        # 날짜 범위 설정
-        start_date = datetime.combine(selected_date, datetime.min.time())
-        end_date = datetime.combine(selected_date, datetime.max.time())
-        
-        total_employees = len(center_employees)
-        processed = 0
-        
-        # 팀별로 처리
-        for team in teams:
-            team_employees = center_employees[center_employees['팀'] == team]
-            team_results = []
+        # 배치 처리 사용 시
+        if use_batch and batch_type:
+            st.info(f"배치 처리 모드: {batch_type}")
             
-            for idx, row in team_employees.iterrows():
-                emp_id = row['사번']
-                emp_name = row['성명']
-                
-                status_text.text(f"분석 중: {team} - {emp_name} ({processed+1}/{total_employees})")
-                
-                # 개인별 분석 실행 및 시간 측정
-                start_time = time.time()
+            if batch_type == "simple":
+                # SimpleBatchProcessor 사용
                 try:
-                    analysis_result = individual_analyzer.analyze_individual(
-                        str(emp_id), start_date, end_date
-                    )
-                    elapsed_time = time.time() - start_time
+                    from ..analysis.simple_batch_processor import SimpleBatchProcessor
                     
-                    # 결과 저장 (None 값 처리)
-                    work_hours = analysis_result.get('work_time_analysis', {}).get('actual_work_hours', 0) or 0
-                    efficiency = analysis_result.get('efficiency_analysis', {}).get('work_efficiency', 0) or 0
+                    # 매개변수로 받은 num_workers 사용
+                    st.info(f"병렬 워커 수: {num_workers}개")
                     
-                    team_results.append({
-                        '팀': str(team) if team is not None else '',
-                        '사번': str(emp_id) if emp_id is not None else '',
-                        '성명': str(emp_name) if emp_name is not None else '',
-                        '직급': str(row.get('직급명', '')) if row.get('직급명') is not None else '',
-                        '근무시간': f"{float(work_hours):.1f}시간" if work_hours is not None else "0.0시간",
-                        '효율성': f"{float(efficiency):.1f}%" if efficiency is not None else "0.0%",
-                        '분석시간': f"{elapsed_time:.3f}초",
-                        '상태': '성공'
-                    })
-                    
+                    with st.spinner("배치 프로세서 초기화 중..."):
+                        batch_processor = SimpleBatchProcessor(num_workers=num_workers)
                 except Exception as e:
-                    elapsed_time = time.time() - start_time
-                    team_results.append({
-                        '팀': str(team) if team is not None else '',
-                        '사번': str(emp_id) if emp_id is not None else '',
-                        '성명': str(emp_name) if emp_name is not None else '',
-                        '직급': str(row.get('직급명', '')) if row.get('직급명') is not None else '',
-                        '근무시간': '-',
-                        '효율성': '-',
-                        '분석시간': f"{elapsed_time:.3f}초",
-                        '상태': f'실패: {str(e)[:30]}'
-                    })
+                    st.error(f"SimpleBatchProcessor 초기화 실패: {str(e)}")
+                    logger.error(f"SimpleBatchProcessor 초기화 실패: {e}", exc_info=True)
+                    return
                 
-                processed += 1
-                progress_bar.progress(processed / total_employees)
+                # 직원 ID 리스트 생성
+                employee_ids = center_employees['사번'].astype(str).tolist()
+                
+                st.info(f"분석 대상: {len(employee_ids)}명")
+                
+                try:
+                    # 진행 상황 표시를 위한 placeholder
+                    progress_placeholder = st.empty()
+                    status_placeholder = st.empty()
+                    
+                    # 배치 분석 실행 및 시간 측정
+                    start_time = time.time()
+                    
+                    progress_placeholder.progress(0.3)
+                    status_placeholder.info(f"📊 {len(employee_ids)}명 분석 시작...")
+                    
+                    batch_results = batch_processor.batch_analyze_employees(employee_ids, selected_date)
+                    
+                    progress_placeholder.progress(0.7)
+                    status_placeholder.info(f"💾 데이터베이스에 저장 중...")
+                    
+                    # 결과 저장
+                    saved_count = batch_processor.save_results_to_db(batch_results)
+                    
+                    total_time = time.time() - start_time
+                    
+                    progress_placeholder.progress(1.0)
+                    status_placeholder.success(f"✅ 분석 완료! {len(batch_results)}명 처리, {saved_count}건 저장")
+                except Exception as e:
+                    st.error(f"배치 분석 실패: {str(e)}")
+                    logger.error(f"배치 분석 실패: {e}", exc_info=True)
+                    return
+                
+                # 결과 표시
+                st.success(f"✅ 배치 분석 완료!")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("총 분석 인원", f"{len(batch_results)}명")
+                with col2:
+                    st.metric("DB 저장", f"{saved_count}건")
+                with col3:
+                    st.metric("총 소요시간", f"{total_time:.1f}초")
+                with col4:
+                    st.metric("처리 속도", f"{len(batch_results)/total_time:.1f}명/초")
+                
+                # 결과 DataFrame 생성 및 표시
+                st.markdown("### 📊 분석 결과 상세")
+                
+                # 디버깅 정보
+                st.write(f"분석 결과: {len(batch_results)}건")
+                
+                result_list = []
+                success_count = 0
+                no_data_count = 0
+                error_count = 0
+                
+                for result in batch_results:
+                    status = result.get('status', 'unknown')
+                    
+                    # 직원 정보 매칭
+                    emp_info = center_employees[center_employees['사번'].astype(str) == result['employee_id']]
+                    if not emp_info.empty:
+                        emp_info = emp_info.iloc[0]
+                        emp_name = str(emp_info.get('성명', ''))
+                        emp_team = str(emp_info.get('팀', ''))
+                        emp_grade = str(emp_info.get('직급명', ''))
+                    else:
+                        emp_name = ''
+                        emp_team = ''
+                        emp_grade = ''
+                    
+                    if status == 'success':
+                        success_count += 1
+                        result_list.append({
+                            '팀': emp_team,
+                            '사번': result['employee_id'],
+                            '성명': emp_name,
+                            '직급': emp_grade,
+                            '근무시간': f"{result['work_time_analysis']['actual_work_hours']:.1f}시간",
+                            '효율성': f"{result['work_time_analysis']['efficiency_ratio']:.1f}%",
+                            '태그수': result.get('tag_count', 0),
+                            '상태': '✅ 성공'
+                        })
+                    elif status == 'no_data':
+                        no_data_count += 1
+                        result_list.append({
+                            '팀': emp_team,
+                            '사번': result['employee_id'],
+                            '성명': emp_name,
+                            '직급': emp_grade,
+                            '근무시간': '-',
+                            '효율성': '-',
+                            '태그수': 0,
+                            '상태': '⚠️ 데이터 없음'
+                        })
+                    else:
+                        error_count += 1
+                        result_list.append({
+                            '팀': emp_team,
+                            '사번': result['employee_id'],
+                            '성명': emp_name,
+                            '직급': emp_grade,
+                            '근무시간': '-',
+                            '효율성': '-',
+                            '태그수': 0,
+                            '상태': f'❌ 오류: {result.get("error", "알 수 없음")[:20]}'
+                        })
+                
+                # 상태 요약
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("✅ 성공", f"{success_count}명")
+                with col2:
+                    st.metric("⚠️ 데이터 없음", f"{no_data_count}명")
+                with col3:
+                    st.metric("❌ 오류", f"{error_count}명")
+                
+                # 결과 테이블 표시
+                if result_list:
+                    result_df = pd.DataFrame(result_list)
+                    
+                    # 정렬 (팀 > 사번)
+                    result_df = result_df.sort_values(['팀', '사번'])
+                    
+                    # Streamlit 버전에 따라 hide_index 파라미터 처리
+                    try:
+                        st.dataframe(
+                            result_df,
+                            use_container_width=True,
+                            height=600,
+                            hide_index=True
+                        )
+                    except TypeError:
+                        # 구버전 Streamlit은 hide_index를 지원하지 않음
+                        st.dataframe(
+                            result_df,
+                            use_container_width=True,
+                            height=600
+                        )
+                    
+                    # CSV 다운로드
+                    csv = result_df.to_csv(index=False, encoding='utf-8-sig')
+                    st.download_button(
+                        label="📥 결과 다운로드 (CSV)",
+                        data=csv,
+                        file_name=f"batch_analysis_{selected_center}_{selected_date}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.warning("분석 결과가 없습니다.")
             
-            # 팀 결과 추가
-            results.extend(team_results)
+            elif batch_type == "fast":
+                # FastBatchProcessor 사용  
+                try:
+                    from ..analysis.fast_batch_processor import FastBatchProcessor
+                    
+                    # 매개변수로 받은 num_workers 사용
+                    st.info(f"🚀 Process 기반 병렬 워커: {num_workers}개")
+                    
+                    with st.spinner("고속 배치 프로세서 초기화 중..."):
+                        batch_processor = FastBatchProcessor(num_workers=num_workers)
+                except Exception as e:
+                    st.error(f"FastBatchProcessor 초기화 실패: {str(e)}")
+                    logger.error(f"FastBatchProcessor 초기화 실패: {e}", exc_info=True)
+                    return
+                
+                # 직원 ID 리스트 생성
+                employee_ids = center_employees['사번'].astype(str).tolist()
+                
+                st.info(f"분석 대상: {len(employee_ids)}명")
+                
+                try:
+                    # 진행 상황 표시
+                    progress_placeholder = st.empty()
+                    status_placeholder = st.empty()
+                    
+                    # 배치 분석 실행
+                    start_time = time.time()
+                    
+                    progress_placeholder.progress(0.3)
+                    status_placeholder.info(f"🚀 {len(employee_ids)}명 고속 분석 시작...")
+                    
+                    batch_results = batch_processor.batch_analyze_employees(employee_ids, selected_date)
+                    
+                    progress_placeholder.progress(0.7)
+                    status_placeholder.info(f"💾 데이터베이스에 저장 중...")
+                    
+                    # 결과 저장
+                    saved_count = batch_processor.save_results_to_db(batch_results)
+                    
+                    total_time = time.time() - start_time
+                    
+                    progress_placeholder.progress(1.0)
+                    status_placeholder.success(f"✅ 고속 분석 완료! {len(batch_results)}명 처리, {saved_count}건 저장")
+                except Exception as e:
+                    st.error(f"고속 배치 분석 실패: {str(e)}")
+                    logger.error(f"고속 배치 분석 실패: {e}", exc_info=True)
+                    return
+                
+                # 결과 표시
+                st.success(f"✅ 고속 배치 분석 완료!")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("총 분석 인원", f"{len(batch_results)}명")
+                with col2:
+                    st.metric("DB 저장", f"{saved_count}건")
+                with col3:
+                    st.metric("총 소요시간", f"{total_time:.1f}초")
+                with col4:
+                    st.metric("처리 속도", f"{len(batch_results)/total_time:.1f}명/초")
+                
+                # 결과 DataFrame 생성 및 표시
+                st.markdown("### 📊 분석 결과 상세")
+                
+                result_list = []
+                for result in batch_results:
+                    status = result.get('status', 'unknown')
+                    
+                    # 직원 정보 매칭
+                    emp_info = center_employees[center_employees['사번'].astype(str) == result['employee_id']]
+                    if not emp_info.empty:
+                        emp_info = emp_info.iloc[0]
+                        emp_name = str(emp_info.get('성명', ''))
+                        emp_team = str(emp_info.get('팀', ''))
+                        emp_grade = str(emp_info.get('직급명', ''))
+                    else:
+                        emp_name = ''
+                        emp_team = ''
+                        emp_grade = ''
+                    
+                    if status == 'success':
+                        result_list.append({
+                            '팀': emp_team,
+                            '사번': result['employee_id'],
+                            '성명': emp_name,
+                            '직급': emp_grade,
+                            '근무시간': f"{result['work_time_analysis']['actual_work_hours']:.1f}시간",
+                            '효율성': f"{result['work_time_analysis']['efficiency_ratio']:.1f}%",
+                            '태그수': result.get('tag_count', 0),
+                            '상태': '✅ 성공'
+                        })
+                    elif status == 'no_data':
+                        result_list.append({
+                            '팀': emp_team,
+                            '사번': result['employee_id'],
+                            '성명': emp_name,
+                            '직급': emp_grade,
+                            '근무시간': '-',
+                            '효율성': '-',
+                            '태그수': 0,
+                            '상태': '⚠️ 데이터 없음'
+                        })
+                    else:
+                        result_list.append({
+                            '팀': emp_team,
+                            '사번': result['employee_id'],
+                            '성명': emp_name,
+                            '직급': emp_grade,
+                            '근무시간': '-',
+                            '효율성': '-',
+                            '태그수': 0,
+                            '상태': '❌ 오류'
+                        })
+                
+                if result_list:
+                    result_df = pd.DataFrame(result_list)
+                    result_df = result_df.sort_values(['팀', '사번'])
+                    
+                    try:
+                        st.dataframe(
+                            result_df,
+                            use_container_width=True,
+                            height=600,
+                            hide_index=True
+                        )
+                    except TypeError:
+                        st.dataframe(
+                            result_df,
+                            use_container_width=True,
+                            height=600
+                        )
+                    
+                    # CSV 다운로드
+                    csv = result_df.to_csv(index=False, encoding='utf-8-sig')
+                    st.download_button(
+                        label="📥 결과 다운로드 (CSV)",
+                        data=csv,
+                        file_name=f"fast_batch_analysis_{selected_center}_{selected_date}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.warning("분석 결과가 없습니다.")
+                
+            else:  # optimized
+                # OptimizedBatchProcessor 사용
+                from ..analysis.optimized_batch_processor import OptimizedBatchProcessor
+                
+                # 설정 옵션
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    db_type = st.selectbox("DB 타입", ["sqlite", "postgresql", "hybrid"], key="db_type")
+                with col2:
+                    cache_type = st.selectbox("캐시 타입", ["memory", "redis", "shared_memory"], key="cache_type")
+                with col3:
+                    num_workers = st.slider("병렬 워커 수", 1, 12, 8, key="opt_workers")
+                
+                try:
+                    batch_processor = OptimizedBatchProcessor(
+                        db_type=db_type,
+                        cache_type=cache_type,
+                        num_workers=num_workers
+                    )
+                    
+                    # 배치 분석 실행
+                    start_time = time.time()
+                    results = batch_processor.batch_analyze_optimized(selected_date)
+                    total_time = time.time() - start_time
+                    
+                    # 결과 표시
+                    st.success(f"✅ 최적화 배치 분석 완료!")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("총 분석 인원", f"{len(results)}명")
+                    with col2:
+                        st.metric("총 소요시간", f"{total_time:.1f}초")
+                    with col3:
+                        st.metric("처리 속도", f"{len(results)/total_time:.1f}명/초")
+                    
+                    # 결과 테이블
+                    if results:
+                        result_df = pd.DataFrame(results)
+                        st.dataframe(result_df, use_container_width=True, height=400)
+                        
+                except Exception as e:
+                    st.error(f"최적화 배치 처리 실패: {str(e)}")
+                    st.info("PostgreSQL 또는 Redis가 설치되지 않은 경우 'sqlite'와 'memory' 옵션을 사용하세요.")
             
-            # 팀별 요약 표시
-            if team_results:
-                avg_time = sum(float(r['분석시간'].replace('초', '')) for r in team_results) / len(team_results)
-                st.write(f"**{team}**: {len(team_results)}명 분석 완료 (평균 {avg_time:.3f}초/명)")
+            # 배치 처리 완료 - return 제거하여 UI가 유지되도록 함
         
-        # 전체 결과 테이블 표시
-        st.markdown("### 분석 결과")
-        
-        if results:
-            # DataFrame 생성
-            result_df = pd.DataFrame(results)
+        # 기존 개별 처리 방식 (배치 처리 미사용 시에만 실행)
+        elif not use_batch:
+            # 진행률 표시
+            progress_bar = st.progress(0)
+            status_text = st.empty()
             
-            # 요약 통계
-            success_count = len([r for r in results if r['상태'] == '성공'])
-            fail_count = len(results) - success_count
-            total_time = sum(float(r['분석시간'].replace('초', '')) for r in results)
-            avg_time = total_time / len(results) if results else 0
+            # 결과 저장
+            results = []
             
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("총 분석 인원", f"{len(results)}명")
-            with col2:
-                st.metric("성공/실패", f"{success_count}/{fail_count}")
-            with col3:
-                st.metric("총 소요시간", f"{total_time:.1f}초")
-            with col4:
-                st.metric("평균 시간", f"{avg_time:.3f}초/명")
+            # 날짜 범위 설정
+            start_date = datetime.combine(selected_date, datetime.min.time())
+            end_date = datetime.combine(selected_date, datetime.max.time())
             
-            # 결과 테이블 표시
-            st.dataframe(
-                result_df,
-                use_container_width=True,
-                height=600
-            )
+            total_employees = len(center_employees)
+            processed = 0
             
-            # CSV 다운로드 버튼
-            csv = result_df.to_csv(index=False, encoding='utf-8-sig')
-            st.download_button(
-                label="📥 결과 다운로드 (CSV)",
-                data=csv,
-                file_name=f"analysis_result_{selected_center}_{selected_date}.csv",
-                mime="text/csv"
-            )
-        
-        status_text.text("분석 완료!")
-        progress_bar.empty()
+            # 팀별로 처리
+            for team in teams:
+                team_employees = center_employees[center_employees['팀'] == team]
+                team_results = []
+                
+                for idx, row in team_employees.iterrows():
+                    emp_id = row['사번']
+                    emp_name = row['성명']
+                    
+                    status_text.text(f"분석 중: {team} - {emp_name} ({processed+1}/{total_employees})")
+                    
+                    # 개인별 분석 실행 및 시간 측정
+                    start_time = time.time()
+                    try:
+                        analysis_result = individual_analyzer.analyze_individual(
+                            str(emp_id), start_date, end_date
+                        )
+                        elapsed_time = time.time() - start_time
+                        
+                        # 결과 저장 (None 값 처리)
+                        work_hours = analysis_result.get('work_time_analysis', {}).get('actual_work_hours', 0) or 0
+                        efficiency = analysis_result.get('efficiency_analysis', {}).get('work_efficiency', 0) or 0
+                        
+                        team_results.append({
+                            '팀': str(team) if team is not None else '',
+                            '사번': str(emp_id) if emp_id is not None else '',
+                            '성명': str(emp_name) if emp_name is not None else '',
+                            '직급': str(row.get('직급명', '')) if row.get('직급명') is not None else '',
+                            '근무시간': f"{float(work_hours):.1f}시간" if work_hours is not None else "0.0시간",
+                            '효율성': f"{float(efficiency):.1f}%" if efficiency is not None else "0.0%",
+                            '분석시간': f"{elapsed_time:.3f}초",
+                            '상태': '성공'
+                        })
+                        
+                    except Exception as e:
+                        elapsed_time = time.time() - start_time
+                        team_results.append({
+                            '팀': str(team) if team is not None else '',
+                            '사번': str(emp_id) if emp_id is not None else '',
+                            '성명': str(emp_name) if emp_name is not None else '',
+                            '직급': str(row.get('직급명', '')) if row.get('직급명') is not None else '',
+                            '근무시간': '-',
+                            '효율성': '-',
+                            '분석시간': f"{elapsed_time:.3f}초",
+                            '상태': f'실패: {str(e)[:30]}'
+                        })
+                    
+                    processed += 1
+                    progress_bar.progress(processed / total_employees)
+                
+                # 팀 결과 추가
+                results.extend(team_results)
+                
+                # 팀별 요약 표시
+                if team_results:
+                    avg_time = sum(float(r['분석시간'].replace('초', '')) for r in team_results) / len(team_results)
+                    st.write(f"**{team}**: {len(team_results)}명 분석 완료 (평균 {avg_time:.3f}초/명)")
+            
+            # 전체 결과 테이블 표시
+            st.markdown("### 분석 결과")
+            
+            if results:
+                # DataFrame 생성
+                result_df = pd.DataFrame(results)
+                
+                # 요약 통계
+                success_count = len([r for r in results if r['상태'] == '성공'])
+                fail_count = len(results) - success_count
+                total_time = sum(float(r['분석시간'].replace('초', '')) for r in results)
+                avg_time = total_time / len(results) if results else 0
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("총 분석 인원", f"{len(results)}명")
+                with col2:
+                    st.metric("성공/실패", f"{success_count}/{fail_count}")
+                with col3:
+                    st.metric("총 소요시간", f"{total_time:.1f}초")
+                with col4:
+                    st.metric("평균 시간", f"{avg_time:.3f}초/명")
+                
+                # 결과 테이블 표시
+                st.dataframe(
+                    result_df,
+                    use_container_width=True,
+                    height=600
+                )
+                
+                # CSV 다운로드 버튼
+                csv = result_df.to_csv(index=False, encoding='utf-8-sig')
+                st.download_button(
+                    label="📥 결과 다운로드 (CSV)",
+                    data=csv,
+                    file_name=f"analysis_result_{selected_center}_{selected_date}.csv",
+                    mime="text/csv"
+                )
+            
+            status_text.text("분석 완료!")
+            progress_bar.empty()

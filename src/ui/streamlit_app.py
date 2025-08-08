@@ -36,6 +36,7 @@ from src.ui.components.model_config import ModelConfigComponent
 from src.ui.components.transition_rule_editor import TransitionRuleEditor
 from src.ui.components.rule_editor import RuleEditorComponent
 from src.ui.organization_dashboard import OrganizationDashboard as NewOrganizationDashboard
+from src.ui.components.batch_analysis_monitor import BatchAnalysisMonitor
 try:
     from src.ui.components.network_analysis_dashboard_optimized import NetworkAnalysisDashboard
 except ImportError:
@@ -153,6 +154,13 @@ class SambioHumanApp:
             if st.button("작업지시 관리", use_container_width=True):
                 st.session_state.current_page = "작업지시 관리"
             
+            # 대규모 배치 분석 메뉴 추가
+            st.markdown("---")
+            st.markdown("### 🚀 고급 기능")
+            
+            if st.button("대규모 배치 분석", use_container_width=True, type="primary"):
+                st.session_state.current_page = "대규모 배치 분석"
+            
             # 현재 페이지가 없으면 홈으로 설정
             if 'current_page' not in st.session_state:
                 st.session_state.current_page = "홈"
@@ -201,6 +209,8 @@ class SambioHumanApp:
             self.render_real_time_monitoring()
         elif current_page == '작업지시 관리':
             self.render_work_order_management()
+        elif current_page == '대규모 배치 분석':
+            self.render_batch_analysis()
     
     def render_home_page(self):
         """홈 페이지 렌더링"""
@@ -596,6 +606,24 @@ class SambioHumanApp:
         
         work_order_ui = WorkOrderManagementUI()
         work_order_ui.render()
+    
+    def render_batch_analysis(self):
+        """대규모 배치 분석 페이지 렌더링"""
+        # 헤더
+        st.markdown("""
+        <div style="background: linear-gradient(90deg, #FF6B6B 0%, #FF8E53 100%); padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem;">
+            <h2 style="color: white; margin: 0; font-size: 1.8rem;">
+                🚀 대규모 배치 분석
+            </h2>
+            <p style="color: rgba(255,255,255,0.9); margin: 0.3rem 0 0 0; font-size: 0.95rem;">
+                병렬 처리를 통한 초고속 조직 단위 분석
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 배치 분석 모니터 렌더링
+        batch_monitor = BatchAnalysisMonitor()
+        batch_monitor.render()
 
 
 def main():

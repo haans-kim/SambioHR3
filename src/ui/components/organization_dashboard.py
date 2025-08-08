@@ -242,76 +242,71 @@ class OrganizationDashboard:
         """대시보드 렌더링"""
         st.markdown("### 조직별 근무 분석")
         
-        # 탭 생성
-        tab1, tab2, tab3 = st.tabs(["센터-직급별 분석", "기존 조직 분석", "상세 분석"])
+        # 조직 선택 및 기간 설정 (탭 제거하고 바로 표시)
+        col1, col2, col3 = st.columns(3)
         
-        with tab1:
-            self.render_center_grade_analysis()
+        with col1:
+            org_level = st.selectbox(
+                "조직 레벨",
+                ["team", "group", "center"],
+                format_func=lambda x: {"team": "팀", "group": "그룹", "center": "센터"}.get(x, x),
+                key="org_level_select"
+            )
         
-        with tab2:
-            # 기존 조직 선택 및 기간 설정
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                org_level = st.selectbox(
-                    "조직 레벨",
-                    ["team", "group", "center"],
-                    format_func=lambda x: {"team": "팀", "group": "그룹", "center": "센터"}.get(x, x),
-                    key="org_level_select"
+        with col2:
+            # 실제 데이터베이스에서 조직 목록 가져오기
+            organizations = self.get_organizations_by_level(org_level)
+            if organizations:
+                # 조직 코드를 인덱스로, 조직명을 표시 텍스트로 사용
+                org_options = {org[0]: org[1] for org in organizations}
+                org_id = st.selectbox(
+                    "조직 선택",
+                    options=list(org_options.keys()),
+                    format_func=lambda x: org_options[x],
+                    key="org_id_select"
                 )
-            
-            with col2:
-                # 실제 데이터베이스에서 조직 목록 가져오기
-                organizations = self.get_organizations_by_level(org_level)
-                if organizations:
-                    # 조직 코드를 인덱스로, 조직명을 표시 텍스트로 사용
-                    org_options = {org[0]: org[1] for org in organizations}
-                    org_id = st.selectbox(
-                        "조직 선택",
-                        options=list(org_options.keys()),
-                        format_func=lambda x: org_options[x],
-                        key="org_id_select"
-                    )
-                else:
-                    org_id = st.selectbox(
-                        "조직 선택",
-                        ["데이터 없음"],
-                        key="org_id_select"
-                    )
-            
-            with col3:
-                # 데이터베이스에서 사용 가능한 날짜 범위 가져오기
-                available_dates = self.get_available_date_range()
-                if available_dates:
-                    min_date, max_date = available_dates
-                    # 기본값 설정 (최근 30일 또는 가능한 범위)
-                    default_start = max(min_date, max_date - timedelta(days=30))
-                    default_end = max_date
-                    
-                    date_range = st.date_input(
-                        "분석 기간",
-                        value=(default_start, default_end),
-                        min_value=min_date,
-                        max_value=max_date,
-                        key="org_date_range"
-                    )
-                else:
-                    st.warning("사용 가능한 데이터가 없습니다.")
-                    date_range = st.date_input(
-                        "분석 기간",
-                        value=(date.today() - timedelta(days=30), date.today()),
-                        key="org_date_range"
-                    )
-            
-            # 분석 실행
-            if st.button("조직 분석 실행", type="primary"):
-                self.execute_organization_analysis(org_id, org_level, date_range)
+            else:
+                org_id = st.selectbox(
+                    "조직 선택",
+                    ["데이터 없음"],
+                    key="org_id_select"
+                )
         
-        with tab3:
-            st.info("상세 분석 기능은 개발 중입니다.")
+        with col3:
+            # 데이터베이스에서 사용 가능한 날짜 범위 가져오기
+            available_dates = self.get_available_date_range()
+            if available_dates:
+                min_date, max_date = available_dates
+                # 기본값 설정 (최근 30일 또는 가능한 범위)
+                default_start = max(min_date, max_date - timedelta(days=30))
+                default_end = max_date
+                
+                date_range = st.date_input(
+                    "분석 기간",
+                    value=(default_start, default_end),
+                    min_value=min_date,
+                    max_value=max_date,
+                    key="org_date_range"
+                )
+            else:
+                st.warning("사용 가능한 데이터가 없습니다.")
+                date_range = st.date_input(
+                    "분석 기간",
+                    value=(date.today() - timedelta(days=30), date.today()),
+                    key="org_date_range"
+                )
+        
+        # 분석 실행
+        if st.button("조직 분석 실행", type="primary"):
+            self.execute_organization_analysis(org_id, org_level, date_range)
     
     def execute_organization_analysis(self, org_id: str, org_level: str, date_range: tuple):
         """조직 분석 실행 - 개인별 분석 수행 후 DB 저장"""
+        
+        # 고속 배치 처리 자동 사용
+        use_batch = True  # 항상 고속 배치 처리 사용
+        st.info("🚀 고속 배치 처리 모드로 실행합니다.")
+        
         with st.spinner("조직 분석 중..."):
             try:
                 # 날짜 처리
@@ -347,6 +342,108 @@ class OrganizationDashboard:
                 
                 st.info(f"{org_name} 소속 {len(employees)}명의 직원 분석을 시작합니다.")
                 
+                # 배치 처리 사용 여부에 따라 분기
+                if use_batch:
+                    # 새로운 배치 프로세서 사용
+                    st.success("🚀 고속 배치 처리 모드로 실행합니다.")
+                    
+                    try:
+                        from src.analysis.fast_batch_processor import FastBatchProcessor
+                        # 고속 배치 프로세서 초기화 (Process 기반 병렬 처리)
+                        batch_processor = FastBatchProcessor(num_workers=4)
+                    except ImportError:
+                        st.warning("FastBatchProcessor를 찾을 수 없습니다. SimpleBatchProcessor를 사용합니다.")
+                        from src.analysis.simple_batch_processor import SimpleBatchProcessor
+                        batch_processor = SimpleBatchProcessor(num_workers=4)
+                    
+                    # Progress bar
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    # 실시간 통계 표시
+                    stat_container = st.container()
+                    with stat_container:
+                        stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
+                        stat_metric1 = stat_col1.empty()
+                        stat_metric2 = stat_col2.empty()
+                        stat_metric3 = stat_col3.empty()
+                        stat_metric4 = stat_col4.empty()
+                    
+                    # 실시간 분석 결과 테이블
+                    st.markdown("### 📊 실시간 분석 결과")
+                    results_table = st.empty()
+                    
+                    # 날짜별로 분석 수행
+                    all_results = []
+                    current_date = start_date if not isinstance(start_date, tuple) else start_date[0]
+                    end_dt = end_date if not isinstance(end_date, tuple) else end_date[-1]
+                    
+                    import time
+                    total_start_time = time.time()
+                    
+                    while current_date <= end_dt:
+                        date_start_time = time.time()
+                        status_text.text(f"📅 {current_date} 분석 중... ({len(employees)}명)")
+                        
+                        # 배치 분석 실행
+                        batch_results = batch_processor.batch_analyze_employees(employees, current_date)
+                        
+                        # 결과 저장
+                        saved_count = batch_processor.save_results_to_db(batch_results)
+                        
+                        # 소요 시간 계산
+                        date_elapsed = time.time() - date_start_time
+                        total_elapsed = time.time() - total_start_time
+                        
+                        # 진행률 업데이트
+                        progress = (current_date - (start_date if not isinstance(start_date, tuple) else start_date[0])).days + 1
+                        total_days = (end_dt - (start_date if not isinstance(start_date, tuple) else start_date[0])).days + 1
+                        progress_bar.progress(progress / total_days)
+                        
+                        # 결과 요약
+                        success_results = [r for r in batch_results if r.get('status') == 'success']
+                        all_results.extend(success_results)
+                        
+                        # 실시간 통계 업데이트
+                        stat_metric1.metric("분석 완료", f"{len(all_results)}명")
+                        stat_metric2.metric("현재 날짜", f"{current_date}")
+                        stat_metric3.metric("처리 속도", f"{len(batch_results)/date_elapsed:.1f}명/초" if date_elapsed > 0 else "-")
+                        stat_metric4.metric("총 소요시간", f"{total_elapsed:.1f}초")
+                        
+                        # 결과 테이블 업데이트
+                        if success_results:
+                            df_results = pd.DataFrame([{
+                                '날짜': r['analysis_date'],
+                                '사번': r['employee_id'],
+                                '근무시간': f"{r['work_time_analysis']['actual_work_hours']:.1f}h",
+                                '효율성': f"{r['work_time_analysis']['efficiency_ratio']:.1f}%",
+                                '태그수': r.get('tag_count', 0)
+                            } for r in success_results[:10]])  # 처음 10개만 표시
+                            
+                            results_table.dataframe(df_results, use_container_width=True)
+                        
+                        # 다음 날짜로
+                        current_date += timedelta(days=1)
+                    
+                    # 최종 결과 요약
+                    status_text.text("✅ 배치 분석 완료!")
+                    
+                    # 통계 계산
+                    if all_results:
+                        avg_work_hours = sum(r['work_time_analysis']['actual_work_hours'] for r in all_results) / len(all_results)
+                        avg_efficiency = sum(r['work_time_analysis']['efficiency_ratio'] for r in all_results) / len(all_results)
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("분석 완료", f"{len(all_results)}건")
+                        with col2:
+                            st.metric("평균 근무시간", f"{avg_work_hours:.1f}시간")
+                        with col3:
+                            st.metric("평균 효율성", f"{avg_efficiency:.1f}%")
+                    
+                    return  # 배치 처리 완료 후 종료
+                
+                # 기존 방식 (순차 처리)
                 # Progress bar
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -774,22 +871,23 @@ class OrganizationDashboard:
             # 데이터가 없을 경우 기본 차트 표시
             self.render_organization_charts()
     
-    def render_center_grade_analysis(self):
-        """센터-직급별 근무시간 분석"""
-        st.markdown("""
-        <div style="background: #f8f9fa; 
-                    border-left: 3px solid #2E86AB; 
-                    padding: 0.8rem 1.2rem; 
-                    border-radius: 0 6px 6px 0; 
-                    margin: 1rem 0 0.5rem 0;">
-            <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
-                Center-Grade Weekly Analysis
-            </h4>
-            <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
-                센터-직급별 주간 근무시간 비교
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+    # 센터-직급별 분석 기능 제거 (2025-08-08)
+    # def render_center_grade_analysis(self):
+    #     """센터-직급별 근무시간 분석"""
+    #     st.markdown("""
+    #     <div style="background: #f8f9fa; 
+    #                 border-left: 3px solid #2E86AB; 
+    #                 padding: 0.8rem 1.2rem; 
+    #                 border-radius: 0 6px 6px 0; 
+    #                 margin: 1rem 0 0.5rem 0;">
+    #         <h4 style="margin: 0; color: #2E86AB; font-weight: 600; font-size: 1.1rem;">
+    #             Center-Grade Weekly Analysis
+    #         </h4>
+    #         <p style="margin: 0.3rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+    #             센터-직급별 주간 근무시간 비교
+    #         </p>
+    #     </div>
+    #     """, unsafe_allow_html=True)
         
         # 월 선택 - 데이터베이스의 날짜 범위 기반
         col1, col2 = st.columns([2, 6])
