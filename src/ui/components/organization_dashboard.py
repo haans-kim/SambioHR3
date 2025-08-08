@@ -1542,25 +1542,22 @@ class OrganizationDashboard:
                         # 개인별 분석 결과를 그대로 사용
                         work_analysis = analysis_result.get('work_time_analysis', {})
                         meal_analysis = analysis_result.get('meal_time_analysis', {})
-                        activity_summary = analysis_result.get('activity_summary', {})
+                        activity_analysis = analysis_result.get('activity_analysis', {})
                         
                         # 식사시간 계산 - 여러 소스에서 확인
                         meal_hours = 0
                         
-                        # 1. activity_summary에서 식사 관련 시간 확인 (분 단위)
-                        breakfast_minutes = activity_summary.get('BREAKFAST', 0)
-                        lunch_minutes = activity_summary.get('LUNCH', 0)
-                        dinner_minutes = activity_summary.get('DINNER', 0)
-                        midnight_meal_minutes = activity_summary.get('MIDNIGHT_MEAL', 0)
-                        activity_meal_minutes = breakfast_minutes + lunch_minutes + dinner_minutes + midnight_meal_minutes
+                        # 1. activity_analysis의 activity_distribution에서 식사 시간 확인 (분 단위)
+                        activity_dist = activity_analysis.get('activity_distribution', {})
+                        activity_meal_minutes = activity_dist.get('식사', 0)
                         
                         if activity_meal_minutes > 0:
                             meal_hours = activity_meal_minutes / 60
                             self.logger.info(f"  {current_date}: activity_summary에서 계산한 식사시간: {activity_meal_minutes}분 ({meal_hours:.1f}시간)")
                         
-                        # 2. meal_time_analysis의 total_meal_time 확인
-                        if meal_analysis and 'total_meal_time' in meal_analysis:
-                            total_meal_minutes = meal_analysis.get('total_meal_time', 0)
+                        # 2. meal_time_analysis의 total_meal_minutes 확인
+                        if meal_analysis and 'total_meal_minutes' in meal_analysis:
+                            total_meal_minutes = meal_analysis.get('total_meal_minutes', 0)
                             if total_meal_minutes > 0:
                                 meal_hours_from_analysis = total_meal_minutes / 60
                                 self.logger.info(f"  {current_date}: meal_analysis에서 식사시간: {total_meal_minutes}분 ({meal_hours_from_analysis:.1f}시간)")
@@ -1584,10 +1581,10 @@ class OrganizationDashboard:
                         
                         self.logger.info(f"  {current_date}: 최종 식사시간: {meal_hours:.1f}시간")
                         
-                        # 활동별 시간 계산 (activity_summary는 분 단위)
-                        meeting_minutes = activity_summary.get('MEETING', 0)
-                        movement_minutes = activity_summary.get('MOVEMENT', 0)
-                        rest_minutes = activity_summary.get('REST', 0) + activity_summary.get('IDLE', 0)
+                        # 활동별 시간 계산 (activity_distribution은 분 단위)
+                        meeting_minutes = activity_dist.get('회의', 0) + activity_dist.get('교육', 0)
+                        movement_minutes = activity_dist.get('경유', 0) + activity_dist.get('이동', 0)
+                        rest_minutes = activity_dist.get('휴게', 0)
                         
                         db_result = {
                             'employee_id': employee_id,
