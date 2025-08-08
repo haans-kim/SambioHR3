@@ -55,13 +55,15 @@ class IndividualAnalyzer:
         개인별 종합 분석
         
         Args:
-            employee_id: 직원 ID
+            employee_id: 직원 ID (문자열 또는 정수)
             start_date: 분석 시작일
             end_date: 분석 종료일
             
         Returns:
             Dict: 분석 결과
         """
+        # employee_id를 문자열로 변환 (정수로 들어올 수 있음)
+        employee_id = str(employee_id)
         self.logger.debug(f"개인별 분석 시작: {employee_id}, {start_date} ~ {end_date}")
         
         try:
@@ -110,6 +112,12 @@ class IndividualAnalyzer:
     def _get_data(self, table_name: str, employee_id: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """데이터 조회 (pickle 파일에서 로드)"""
         try:
+            # employee_id를 정수로 변환 (pickle 데이터가 정수형으로 저장됨)
+            try:
+                emp_id_int = int(employee_id)
+            except ValueError:
+                emp_id_int = employee_id
+                
             # pickle 파일에서 전체 데이터 로드 후 필터링
             if table_name == 'claim_data':
                 try:
@@ -117,12 +125,8 @@ class IndividualAnalyzer:
                     if claim_df is not None and not claim_df.empty:
                         # 직원 ID와 날짜로 필터링
                         if '사번' in claim_df.columns:
-                            # 사번을 정수로 변환하여 비교
-                            try:
-                                emp_id = int(employee_id)
-                                claim_df = claim_df[claim_df['사번'] == emp_id]
-                            except ValueError:
-                                claim_df = claim_df[claim_df['사번'] == employee_id]
+                            # 정수형 비교 우선, 실패시 문자열 비교
+                            claim_df = claim_df[claim_df['사번'] == emp_id_int]
                         if '근무일' in claim_df.columns:
                             claim_df['근무일'] = pd.to_datetime(claim_df['근무일'], errors='coerce')
                             claim_df = claim_df[(claim_df['근무일'] >= start_date) & (claim_df['근무일'] <= end_date)]
@@ -141,11 +145,8 @@ class IndividualAnalyzer:
                     if tag_df is not None and not tag_df.empty:
                         # 직원 ID와 날짜로 필터링 - '사번' 컬럼 사용
                         if '사번' in tag_df.columns:
-                            try:
-                                emp_id = int(employee_id)
-                                tag_df = tag_df[tag_df['사번'] == emp_id]
-                            except ValueError:
-                                tag_df = tag_df[tag_df['사번'] == employee_id]
+                            # 정수형 비교 (pickle 데이터가 정수형)
+                            tag_df = tag_df[tag_df['사번'] == emp_id_int]
                         if 'ENTE_DT' in tag_df.columns:
                             # YYYYMMDD 형식을 datetime으로 변환
                             tag_df['date'] = pd.to_datetime(tag_df['ENTE_DT'].astype(str), format='%Y%m%d', errors='coerce')
@@ -188,9 +189,37 @@ class IndividualAnalyzer:
         if tag_data.empty:
             return {'timeline': [], 'summary': {}}
 
-        # 1. TagStateClassifier를 사용하여 1차 분류 수행
-        # DataFrame을 dict 리스트로 변환하여 전달
-        tag_sequence = tag_data.to_dict('records')
+        # 1. 데이터 전처리: classifier가 기대하는 형식으로 변환
+        tag_sequence = []
+        for _, row in tag_data.iterrows():
+            # timestamp 생성 (ENTE_DT + 출입시각)
+            try:
+                date_str = str(row['ENTE_DT'])
+                time_str = str(row['출입시각']).zfill(6)  # 6자리로 패딩
+                timestamp = pd.to_datetime(f"{date_str} {time_str}", format='%Y%m%d %H%M%S')
+            except:
+                timestamp = None
+            
+            # tag_code 추출 (DR_NM에서 태그 코드 추출)
+            dr_nm = row.get('DR_NM', '')
+            tag_code = self._extract_tag_code(dr_nm)
+            
+            # O 태그 여부 확인
+            has_o_tag = 'O' in dr_nm or '사무실' in dr_nm or 'Office' in dr_nm
+            
+            tag_sequence.append({
+                'timestamp': timestamp,
+                'tag_code': tag_code,
+                'has_o_tag': has_o_tag,
+                'dr_nm': dr_nm,
+                'inout_gb': row.get('INOUT_GB', ''),
+                'employee_id': row.get('사번', '')
+            })
+        
+        # 시간순 정렬
+        tag_sequence = sorted(tag_sequence, key=lambda x: x['timestamp'] if x['timestamp'] else pd.Timestamp.min)
+        
+        # 2. TagStateClassifier를 사용하여 분류 수행
         classified_sequence = self.state_classifier.classify_sequence(tag_sequence)
 
         # 2. 꼬리물기 패턴 후처리
@@ -209,6 +238,35 @@ class IndividualAnalyzer:
 
         return {'timeline': classified_sequence, 'summary': summary}
 
+    def _extract_tag_code(self, dr_nm: str) -> str:
+        """DR_NM에서 태그 코드 추출"""
+        # 태그 매핑 규칙
+        if '사무실' in dr_nm or 'Office' in dr_nm or 'OFFICE' in dr_nm:
+            return 'O'  # 사무실
+        elif '식당' in dr_nm or 'CAFETERIA' in dr_nm:
+            return 'M1'  # 식당
+        elif '게이트' in dr_nm or 'GATE' in dr_nm or 'S/G' in dr_nm:
+            if '입문' in dr_nm:
+                return 'T2'  # 입문
+            elif '출문' in dr_nm:
+                return 'T3'  # 출문
+            else:
+                return 'T1'  # 경유
+        elif '회의' in dr_nm or 'MEETING' in dr_nm:
+            return 'G3'  # 회의실
+        elif '교육' in dr_nm or 'TRAINING' in dr_nm:
+            return 'G4'  # 교육장
+        elif '휴게' in dr_nm or 'REST' in dr_nm:
+            return 'N1'  # 휴게실
+        elif '브릿지' in dr_nm or 'BRIDGE' in dr_nm:
+            return 'T1'  # 경유
+        elif '생산' in dr_nm or 'PRODUCTION' in dr_nm or 'P3' in dr_nm or 'P4' in dr_nm:
+            return 'G1'  # 생산 구역
+        elif '창고' in dr_nm or 'WAREHOUSE' in dr_nm:
+            return 'G2'  # 창고
+        else:
+            return 'T1'  # 기본값: 경유
+    
     def _handle_tailgating(self, sequence: List[Dict]):
         """
         T1(경유)이 장시간 지속되는 '꼬리물기' 패턴을 감지하고 '업무'로 상태를 보정.

@@ -279,12 +279,11 @@ class SimpleBatchProcessor:
                 scheduled_hours = 8
                 work_type = '일반근무'
             
-            # 식사 횟수
-            meal_count = len(emp_meal_data)
+            # 원본 식사 데이터 건수
+            raw_meal_count = len(emp_meal_data)
             
-            # 실제 근무시간 추정 (간단한 로직)
-            # 총 시간에서 식사시간(30분 * 횟수) 빼기
-            actual_work_hours = max(0, total_hours - (meal_count * 0.5))
+            # 실제 근무시간 추정 (식사 시간을 시간 단위로 변환하여 차감)  
+            actual_work_hours = max(0, total_hours - (total_meal_minutes / 60))
             
             # 효율성 계산
             if scheduled_hours > 0:
@@ -292,11 +291,51 @@ class SimpleBatchProcessor:
             else:
                 efficiency_ratio = 0
             
-            # 활동 요약 (간단 버전)
+            # 활동별 시간 계산 (분 단위)
+            work_minutes = int(actual_work_hours * 60)  # 작업시간
+            meal_minutes = total_meal_minutes  # 실제 계산된 식사 시간
+            meeting_minutes = int(total_hours * 60 * 0.08)  # 회의시간 (전체의 8% 가숡)
+            movement_minutes = int(total_hours * 60 * 0.05)  # 이동시간 (전체의 5% 가정)
+            rest_minutes = max(0, int((total_hours * 60) - work_minutes - meal_minutes - meeting_minutes - movement_minutes))
+            
+            # 식사 상세 분석 (테이크아웃 구분)
+            breakfast_count = 0
+            lunch_count = 0
+            dinner_count = 0
+            midnight_count = 0
+            total_meal_minutes = 0  # 총 식사 시간
+            
+            if not emp_meal_data.empty:
+                for _, meal in emp_meal_data.iterrows():
+                    meal_type = meal.get('식사구분명', '')
+                    is_takeout = meal.get('테이크아웃', '') == 'Y'  # 테이크아웃 여부
+                    
+                    # 식사 시간: 테이크아웃(M2) 10분, 식당(M1) 30분
+                    meal_duration = 10 if is_takeout else 30
+                    
+                    if '조식' in meal_type or '아침' in meal_type:
+                        breakfast_count += 1
+                        total_meal_minutes += meal_duration
+                    elif '중식' in meal_type or '점심' in meal_type:
+                        lunch_count += 1
+                        total_meal_minutes += meal_duration
+                    elif '석식' in meal_type or '저녁' in meal_type:
+                        dinner_count += 1
+                        total_meal_minutes += meal_duration
+                    elif '야식' in meal_type or '야간' in meal_type:
+                        midnight_count += 1
+                        total_meal_minutes += meal_duration
+            
+            # 실제 식사 횟수
+            meal_count = breakfast_count + lunch_count + dinner_count + midnight_count
+            
+            # 활동 요약
             activity_summary = {
-                'WORK': actual_work_hours * 60,  # 분 단위
-                'MEAL': meal_count * 30,  # 식사당 30분 가정
-                'REST': max(0, (total_hours - actual_work_hours - meal_count * 0.5) * 60)
+                'WORK': work_minutes,
+                'MEAL': meal_minutes,
+                'REST': rest_minutes,
+                'MEETING': meeting_minutes,
+                'MOVEMENT': movement_minutes
             }
             
             # 결과 반환 (기존 execute_analysis와 호환되는 형식)
@@ -313,16 +352,31 @@ class SimpleBatchProcessor:
                     'efficiency_ratio': efficiency_ratio
                 },
                 'meal_time_analysis': {
-                    'total_meal_time': meal_count * 30,
-                    'meal_count': meal_count
+                    'total_meal_time': meal_minutes,
+                    'meal_count': meal_count,
+                    'breakfast_count': breakfast_count,
+                    'lunch_count': lunch_count,
+                    'dinner_count': dinner_count,
+                    'midnight_count': midnight_count
+                },
+                'activity_minutes': {
+                    'work_minutes': work_minutes,
+                    'meeting_minutes': meeting_minutes,
+                    'meal_minutes': meal_minutes,
+                    'movement_minutes': movement_minutes,
+                    'rest_minutes': rest_minutes,
+                    'breakfast_minutes': breakfast_count * 30,
+                    'lunch_minutes': lunch_count * 30,
+                    'dinner_minutes': dinner_count * 30,
+                    'midnight_meal_minutes': midnight_count * 30
                 },
                 'activity_summary': activity_summary,
                 'work_type': work_type,
                 'tag_count': len(emp_tag_data),
                 'attendance_hours': total_hours,  # 조직 분석에서 사용
-                'meeting_time': 0,  # 간단 버전에서는 0
-                'movement_time': 0,  # 간단 버전에서는 0
-                'rest_time': activity_summary['REST'] / 60,  # 시간 단위
+                'meeting_time': meeting_minutes / 60,  # 시간 단위
+                'movement_time': movement_minutes / 60,
+                'rest_time': rest_minutes / 60,
                 'work_estimation_rate': efficiency_ratio,
                 'data_reliability': 80 if len(emp_tag_data) > 10 else 50
             }
@@ -448,16 +502,41 @@ class SimpleBatchProcessor:
                     'updated_at': datetime.now().isoformat()
                 }
                 
-                # UPSERT 쿼리
+                # 활동별 시간 데이터 추가
+                if 'activity_minutes' in result:
+                    data.update({
+                        'work_minutes': result['activity_minutes'].get('work_minutes', 0),
+                        'meeting_minutes': result['activity_minutes'].get('meeting_minutes', 0),
+                        'meal_minutes': result['activity_minutes'].get('meal_minutes', 0),
+                        'movement_minutes': result['activity_minutes'].get('movement_minutes', 0),
+                        'rest_minutes': result['activity_minutes'].get('rest_minutes', 0),
+                        'breakfast_minutes': result['activity_minutes'].get('breakfast_minutes', 0),
+                        'lunch_minutes': result['activity_minutes'].get('lunch_minutes', 0),
+                        'dinner_minutes': result['activity_minutes'].get('dinner_minutes', 0),
+                        'midnight_meal_minutes': result['activity_minutes'].get('midnight_meal_minutes', 0)
+                    })
+                
+                # 신뢰도 추가
+                data['confidence_score'] = result.get('data_reliability', 50)
+                
+                # UPSERT 쿼리 (활동별 시간 컬럼 추가)
                 cursor.execute("""
                     INSERT OR REPLACE INTO daily_analysis_results 
                     (employee_id, analysis_date, work_start, work_end,
                      total_hours, actual_work_hours, claimed_work_hours,
-                     efficiency_ratio, meal_count, tag_count, updated_at)
+                     efficiency_ratio, meal_count, tag_count,
+                     work_minutes, meeting_minutes, meal_minutes,
+                     movement_minutes, rest_minutes,
+                     breakfast_minutes, lunch_minutes, dinner_minutes, midnight_meal_minutes,
+                     confidence_score, updated_at)
                     VALUES 
                     (:employee_id, :analysis_date, :work_start, :work_end,
                      :total_hours, :actual_work_hours, :claimed_work_hours,
-                     :efficiency_ratio, :meal_count, :tag_count, :updated_at)
+                     :efficiency_ratio, :meal_count, :tag_count,
+                     :work_minutes, :meeting_minutes, :meal_minutes,
+                     :movement_minutes, :rest_minutes,
+                     :breakfast_minutes, :lunch_minutes, :dinner_minutes, :midnight_meal_minutes,
+                     :confidence_score, :updated_at)
                 """, data)
                 
                 saved_count += 1

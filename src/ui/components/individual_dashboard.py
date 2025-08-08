@@ -3874,6 +3874,21 @@ class IndividualDashboard:
             'confidence_distribution': confidence_dist
         }
     
+    def clear_cache(self):
+        """캐시 초기화"""
+        try:
+            from ...utils.performance_cache import get_performance_cache
+            cache = get_performance_cache()
+            cache.clear_cache('all')
+            
+            # 싱글톤 인스턴스 강제 리셋
+            from ...utils.performance_cache import PerformanceCache
+            PerformanceCache._instance = None
+            
+            self.logger.info("캐시 초기화 완료")
+        except Exception as e:
+            self.logger.error(f"캐시 초기화 실패: {e}")
+    
     def render(self):
         """대시보드 렌더링"""
         st.markdown("### 👤 개인별 근무 분석")
@@ -3890,9 +3905,18 @@ class IndividualDashboard:
             st.session_state.quick_load_triggered = False
             self.execute_analysis()
         
-        # 분석 실행 버튼
-        if st.button("🔍 분석 실행", type="primary"):
-            self.execute_analysis()
+        # 분석 실행 및 캐시 관리 버튼
+        col_btn1, col_btn2 = st.columns([3, 1])
+        
+        with col_btn1:
+            if st.button("🔍 분석 실행", type="primary"):
+                self.execute_analysis()
+        
+        with col_btn2:
+            if st.button("🗑️ 캐시 초기화", help="데이터 캐시를 초기화하여 최신 데이터 로드"):
+                self.clear_cache()
+                st.success("캐시가 초기화되었습니다. 다시 분석을 실행해주세요.")
+                st.rerun()
     
     def render_controls(self):
         """컨트롤 패널 렌더링"""

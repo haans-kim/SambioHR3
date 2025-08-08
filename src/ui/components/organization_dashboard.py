@@ -350,7 +350,7 @@ class OrganizationDashboard:
                     try:
                         from src.analysis.fast_batch_processor import FastBatchProcessor
                         # 고속 배치 프로세서 초기화 (Process 기반 병렬 처리)
-                        batch_processor = FastBatchProcessor(num_workers=4)
+                        batch_processor = FastBatchProcessor(num_workers=8)
                     except ImportError:
                         st.warning("FastBatchProcessor를 찾을 수 없습니다. SimpleBatchProcessor를 사용합니다.")
                         from src.analysis.simple_batch_processor import SimpleBatchProcessor
@@ -416,7 +416,7 @@ class OrganizationDashboard:
                                 '날짜': r['analysis_date'],
                                 '사번': r['employee_id'],
                                 '근무시간': f"{r['work_time_analysis']['actual_work_hours']:.1f}h",
-                                '효율성': f"{r['work_time_analysis']['efficiency_ratio']:.1f}%",
+                                '효율성': f"{r['work_time_analysis'].get('work_efficiency', r['work_time_analysis'].get('efficiency_ratio', 0)):.1f}%",
                                 '태그수': r.get('tag_count', 0)
                             } for r in success_results[:10]])  # 처음 10개만 표시
                             
@@ -431,7 +431,7 @@ class OrganizationDashboard:
                     # 통계 계산
                     if all_results:
                         avg_work_hours = sum(r['work_time_analysis']['actual_work_hours'] for r in all_results) / len(all_results)
-                        avg_efficiency = sum(r['work_time_analysis']['efficiency_ratio'] for r in all_results) / len(all_results)
+                        avg_efficiency = sum(r['work_time_analysis'].get('work_efficiency', r['work_time_analysis'].get('efficiency_ratio', 0)) for r in all_results) / len(all_results)
                         
                         col1, col2, col3 = st.columns(3)
                         with col1:
@@ -1337,7 +1337,7 @@ class OrganizationDashboard:
                             'analysis_date': current_date,
                             'attendance_hours': work_analysis.get('claimed_work_hours', 0),
                             'actual_work_hours': work_analysis.get('actual_work_hours', 0),
-                            'work_estimation_rate': work_analysis.get('efficiency_ratio', 0),  # efficiency_ratio 사용
+                            'work_estimation_rate': work_analysis.get('work_efficiency', work_analysis.get('efficiency_ratio', 0)),  # work_efficiency 우선, efficiency_ratio 대안
                             'meeting_time': meeting_minutes / 60,  # 분을 시간으로 변환
                             'meal_time': meal_hours,  # 개인별 분석에서 계산한 값 그대로 사용
                             'movement_time': movement_minutes / 60,  # 분을 시간으로 변환
@@ -1856,7 +1856,7 @@ class OrganizationDashboard:
                             existing.dinner_time = result.get('dinner_time', 0)
                             existing.midnight_meal_time = result.get('midnight_meal_time', 0)
                             existing.cross_day_flag = result.get('cross_day_flag', False)
-                            existing.efficiency_ratio = result.get('work_efficiency', 0)
+                            existing.efficiency_ratio = result.get('work_efficiency', result.get('efficiency_ratio', 0))
                             existing.data_quality_score = result.get('data_reliability', 0)
                             saved_count += 1
                         else:
@@ -1875,7 +1875,7 @@ class OrganizationDashboard:
                                 dinner_time=result.get('dinner_time', 0),
                                 midnight_meal_time=result.get('midnight_meal_time', 0),
                                 cross_day_flag=result.get('cross_day_flag', False),
-                                efficiency_ratio=result.get('work_efficiency', 0),
+                                efficiency_ratio=result.get('work_efficiency', result.get('efficiency_ratio', 0)),
                                 data_quality_score=result.get('data_reliability', 0)
                             )
                             session.add(daily_data)

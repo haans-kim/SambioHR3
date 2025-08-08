@@ -21,6 +21,8 @@ project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
+from src.analysis.individual_analyzer import IndividualAnalyzer
+
 
 class FastBatchProcessor:
     """고속 병렬 처리를 위한 배치 프로세서"""
@@ -198,30 +200,92 @@ class FastBatchProcessor:
                     continue
                 
                 # 데이터 준비
+                work_time = result.get('work_time_analysis', {})
+                meal_time = result.get('meal_time_analysis', {})
+                
+                # timeline에서 첫 태그와 마지막 태그 시간 추출
+                timeline = result.get('timeline_analysis', {}).get('daily_timelines', [])
+                work_start = None
+                work_end = None
+                total_hours = 0
+                
+                if timeline:
+                    for daily in timeline:
+                        events = daily.get('timeline', [])
+                        if events:
+                            first_event = events[0]
+                            last_event = events[-1]
+                            if work_start is None or first_event.get('timestamp') < work_start:
+                                work_start = first_event.get('timestamp')
+                            if work_end is None or last_event.get('timestamp') > work_end:
+                                work_end = last_event.get('timestamp')
+                            
+                            # 총 체류시간 계산
+                            if work_start and work_end:
+                                start_dt = pd.to_datetime(work_start)
+                                end_dt = pd.to_datetime(work_end)
+                                total_hours = (end_dt - start_dt).total_seconds() / 3600
+                
+                # work_efficiency 값 추출 (안전하게)
+                efficiency_ratio = 0
+                if work_time and 'work_efficiency' in work_time:
+                    efficiency_ratio = work_time.get('work_efficiency', 0)
+                elif work_time and 'efficiency_ratio' in work_time:
+                    efficiency_ratio = work_time.get('efficiency_ratio', 0)
+                
                 data = {
                     'employee_id': result['employee_id'],
                     'analysis_date': result['analysis_date'],
-                    'work_start': result.get('work_start'),
-                    'work_end': result.get('work_end'),
-                    'total_hours': result['work_time_analysis']['total_hours'],
-                    'actual_work_hours': result['work_time_analysis']['actual_work_hours'],
-                    'claimed_work_hours': result['work_time_analysis']['scheduled_hours'],
-                    'efficiency_ratio': result['work_time_analysis']['efficiency_ratio'],
-                    'meal_count': result['meal_time_analysis']['meal_count'],
-                    'tag_count': result.get('tag_count', 0),
+                    'work_start': work_start,
+                    'work_end': work_end,
+                    'total_hours': total_hours,
+                    'actual_work_hours': work_time.get('actual_work_hours', 0) if work_time else 0,
+                    'claimed_work_hours': work_time.get('claimed_work_hours', 0) if work_time else 0,
+                    'efficiency_ratio': efficiency_ratio,
+                    'meal_count': (meal_time.get('lunch_count', 0) + meal_time.get('dinner_count', 0) + 
+                                  meal_time.get('breakfast_count', 0) + meal_time.get('midnight_meal_count', 0)) if meal_time else 0,
+                    'tag_count': result.get('data_quality', {}).get('total_tags', 0),
                     'updated_at': datetime.now().isoformat()
                 }
                 
-                # UPSERT 쿼리
+                # 활동별 시간 데이터 추가 (activity_analysis에서 가져옴)
+                activity = result.get('activity_analysis', {})
+                activity_summary = activity.get('activity_summary', {}) if activity else {}
+                
+                data.update({
+                    'work_minutes': activity_summary.get('WORK', 0) + activity_summary.get('WORK_CONFIRMED', 0),
+                    'meeting_minutes': activity_summary.get('MEETING', 0),
+                    'meal_minutes': (activity_summary.get('BREAKFAST', 0) + activity_summary.get('LUNCH', 0) + 
+                                   activity_summary.get('DINNER', 0) + activity_summary.get('MIDNIGHT_MEAL', 0)),
+                    'movement_minutes': activity_summary.get('TRANSIT', 0),
+                    'rest_minutes': activity_summary.get('REST', 0),
+                    'breakfast_minutes': activity_summary.get('BREAKFAST', 0),
+                    'lunch_minutes': activity_summary.get('LUNCH', 0),
+                    'dinner_minutes': activity_summary.get('DINNER', 0),
+                    'midnight_meal_minutes': activity_summary.get('MIDNIGHT_MEAL', 0)
+                })
+                
+                # 신뢰도 추가
+                data['confidence_score'] = result.get('data_quality', {}).get('data_completeness', 50)
+                
+                # UPSERT 쿼리 (활동별 시간 컬럼 추가)
                 cursor.execute("""
                     INSERT OR REPLACE INTO daily_analysis_results 
                     (employee_id, analysis_date, work_start, work_end,
                      total_hours, actual_work_hours, claimed_work_hours,
-                     efficiency_ratio, meal_count, tag_count, updated_at)
+                     efficiency_ratio, meal_count, tag_count,
+                     work_minutes, meeting_minutes, meal_minutes,
+                     movement_minutes, rest_minutes,
+                     breakfast_minutes, lunch_minutes, dinner_minutes, midnight_meal_minutes,
+                     confidence_score, updated_at)
                     VALUES 
                     (:employee_id, :analysis_date, :work_start, :work_end,
                      :total_hours, :actual_work_hours, :claimed_work_hours,
-                     :efficiency_ratio, :meal_count, :tag_count, :updated_at)
+                     :efficiency_ratio, :meal_count, :tag_count,
+                     :work_minutes, :meeting_minutes, :meal_minutes,
+                     :movement_minutes, :rest_minutes,
+                     :breakfast_minutes, :lunch_minutes, :dinner_minutes, :midnight_meal_minutes,
+                     :confidence_score, :updated_at)
                 """, data)
                 
                 saved_count += 1
@@ -246,145 +310,50 @@ class FastBatchProcessor:
 def process_employee_chunk(temp_file_path: str, employee_ids: List[str], target_date: date) -> List[Dict[str, Any]]:
     """
     워커 프로세스에서 실행될 함수
-    청크 단위로 직원들을 분석
+    IndividualAnalyzer를 사용하여 개인별 분석 수행
     """
-    # 임시 파일에서 데이터 로드
-    with open(temp_file_path, 'rb') as f:
-        data_cache = pickle.load(f)
+    # IndividualAnalyzer 인스턴스 생성
+    from src.analysis.individual_analyzer import IndividualAnalyzer
+    from src.database import DatabaseManager
+    
+    # DatabaseManager 인스턴스 생성
+    db_manager = DatabaseManager()
+    analyzer = IndividualAnalyzer(db_manager)
     
     results = []
     
     for employee_id in employee_ids:
         try:
-            # 직원 데이터 필터링
-            tag_data = data_cache['tag_data']
-            emp_tag_data = tag_data[tag_data['employee_id'].astype(str) == str(employee_id)].copy()
+            # 개인별 분석 실행 (target_date 하루만)
+            analysis_result = analyzer.analyze_individual(
+                employee_id=employee_id,
+                start_date=datetime.combine(target_date, datetime.min.time()),
+                end_date=datetime.combine(target_date, datetime.max.time())
+            )
             
-            if emp_tag_data.empty:
+            # 분석 결과를 배치 프로세서 형식으로 변환
+            if analysis_result:
+                work_time = analysis_result.get('work_time_analysis', {})
+                meal_time = analysis_result.get('meal_time_analysis', {})
+                activity = analysis_result.get('activity_analysis', {})
+                timeline = analysis_result.get('timeline_analysis', {})
+                
+                results.append({
+                    'employee_id': employee_id,
+                    'analysis_date': target_date.isoformat(),
+                    'status': 'success',
+                    'work_time_analysis': work_time,
+                    'meal_time_analysis': meal_time,
+                    'activity_analysis': activity,
+                    'timeline_analysis': timeline,
+                    'data_quality': analysis_result.get('data_quality', {})
+                })
+            else:
                 results.append({
                     'employee_id': employee_id,
                     'analysis_date': target_date.isoformat(),
                     'status': 'no_data'
                 })
-                continue
-            
-            meal_data = data_cache['meal_data']
-            emp_meal_data = meal_data[meal_data['employee_id'].astype(str) == str(employee_id)].copy()
-            
-            claim_data = data_cache['claim_data']
-            emp_claim_data = claim_data[claim_data['employee_id'].astype(str) == str(employee_id)].copy()
-            
-            # 근무 시간 계산 (2교대 근무 고려)
-            if not emp_tag_data.empty:
-                try:
-                    emp_tag_data['datetime'] = emp_tag_data.apply(
-                        lambda row: pd.to_datetime(f"{row['ENTE_DT']} {str(row['출입시각']).zfill(6)}", 
-                                                  format='%Y%m%d %H%M%S', errors='coerce'),
-                        axis=1
-                    )
-                    
-                    emp_tag_data = emp_tag_data.dropna(subset=['datetime'])
-                    
-                    if not emp_tag_data.empty:
-                        # 2교대 근무 시스템: target_date 기준으로 근무 시간 계산
-                        # 주간근무: target_date 08:00 ~ 20:00
-                        # 야간근무: target_date 20:00 ~ target_date+1 08:00
-                        
-                        target_date_str = target_date.strftime('%Y%m%d')
-                        
-                        # 해당 날짜에 속하는 태그만 필터링
-                        # 주간: target_date의 태그
-                        # 야간: target_date 20시 이후 + target_date+1 08시 이전
-                        target_start = pd.to_datetime(f"{target_date} 00:00:00")
-                        target_end = pd.to_datetime(f"{target_date} 23:59:59")
-                        
-                        # 먼저 target_date의 태그만 필터링
-                        day_tags = emp_tag_data[
-                            (emp_tag_data['datetime'] >= target_start) & 
-                            (emp_tag_data['datetime'] <= target_end)
-                        ]
-                        
-                        if not day_tags.empty:
-                            first_tag = day_tags['datetime'].min()
-                            last_tag = day_tags['datetime'].max()
-                            
-                            # 야간 근무인 경우 다음날 오전 태그도 확인
-                            if last_tag.hour >= 20:  # 야간 근무 가능성
-                                next_day_start = target_end + pd.Timedelta(seconds=1)
-                                next_day_end = next_day_start + pd.Timedelta(hours=12)  # 다음날 정오까지
-                                
-                                next_day_tags = emp_tag_data[
-                                    (emp_tag_data['datetime'] >= next_day_start) & 
-                                    (emp_tag_data['datetime'] <= next_day_end)
-                                ]
-                                
-                                if not next_day_tags.empty:
-                                    last_tag = next_day_tags['datetime'].max()
-                            
-                            total_hours = (last_tag - first_tag).total_seconds() / 3600
-                            
-                            # 최대 12시간으로 제한 (2교대 근무)
-                            total_hours = min(total_hours, 12)
-                        else:
-                            total_hours = 0
-                            first_tag = None
-                            last_tag = None
-                    else:
-                        total_hours = 0
-                        first_tag = None
-                        last_tag = None
-                except Exception as e:
-                    total_hours = 0
-                    first_tag = None
-                    last_tag = None
-            else:
-                total_hours = 0
-                first_tag = None
-                last_tag = None
-            
-            # Claim 데이터에서 예정 근무시간
-            if not emp_claim_data.empty:
-                scheduled_hours = 8  # 간단히 8시간으로 가정
-                work_type = emp_claim_data.iloc[0].get('WORKSCHDTYPNM', '일반근무')
-            else:
-                scheduled_hours = 8
-                work_type = '일반근무'
-            
-            # 식사 횟수
-            meal_count = len(emp_meal_data)
-            
-            # 실제 근무시간 추정
-            actual_work_hours = max(0, total_hours - (meal_count * 0.5))
-            
-            # 효율성 계산
-            efficiency_ratio = (actual_work_hours / scheduled_hours * 100) if scheduled_hours > 0 else 0
-            
-            # 결과 반환
-            results.append({
-                'employee_id': employee_id,
-                'analysis_date': target_date.isoformat(),
-                'status': 'success',
-                'work_start': first_tag.isoformat() if first_tag else None,
-                'work_end': last_tag.isoformat() if last_tag else None,
-                'work_time_analysis': {
-                    'total_hours': total_hours,
-                    'actual_work_hours': actual_work_hours,
-                    'scheduled_hours': scheduled_hours,
-                    'efficiency_ratio': efficiency_ratio
-                },
-                'meal_time_analysis': {
-                    'total_meal_time': meal_count * 30,
-                    'meal_count': meal_count
-                },
-                'work_type': work_type,
-                'tag_count': len(emp_tag_data),
-                'attendance_hours': total_hours,
-                'meeting_time': 0,
-                'movement_time': 0,
-                'rest_time': max(0, (total_hours - actual_work_hours - meal_count * 0.5) * 60) / 60,
-                'work_estimation_rate': efficiency_ratio,
-                'data_reliability': 80 if len(emp_tag_data) > 10 else 50
-            })
             
         except Exception as e:
             results.append({
