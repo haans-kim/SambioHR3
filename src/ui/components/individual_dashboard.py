@@ -4390,144 +4390,157 @@ class IndividualDashboard:
         self.render_detailed_records(analysis_result)
     
     def render_daily_summary(self, analysis_result: dict):
-        """일일 활동 요약 렌더링 (UI 참조자료 기반)"""
-        st.markdown("### 📈 일일 활동 요약")
+        """일일 활동 요약 렌더링 - DB 저장 값들 모두 표시 (Claim 시간 우선)"""
+        st.markdown("### 📈 일일 활동 요약 (DB 저장 값)")
         
         work_analysis = analysis_result['work_time_analysis']
         claim_data = analysis_result.get('claim_data', {})
+        activity_summary = analysis_result.get('activity_summary', {})
         
-        # 주요 지표 대시보드 - 첫 번째 줄
+        # 첫 번째 줄 - Claim 정보와 주요 시간
+        st.markdown("#### 📋 근태 정보 (Claim Data)")
         col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
+            st.metric(
+                "Claim 근무시간",
+                f"{work_analysis.get('claimed_work_hours', 0):.1f}h",
+                "기준시간"
+            )
+        
+        with col2:
+            claim_start = claim_data.get('claim_start', 'N/A')
+            claim_end = claim_data.get('claim_end', 'N/A')
+            st.metric(
+                "Claim 시간대",
+                f"{claim_start} ~ {claim_end}",
+                ""
+            )
+        
+        with col3:
             st.metric(
                 "실제 근무시간",
                 f"{work_analysis['actual_work_hours']:.1f}h",
                 f"{work_analysis['actual_work_hours'] - work_analysis['claimed_work_hours']:+.1f}h"
             )
         
-        with col2:
-            # 회의 시간 계산 - 여러 소스에서 확인
-            meeting_hours = 0
-            
-            # 1. work_breakdown에서 meeting 시간
-            meeting_hours += work_analysis.get('work_breakdown', {}).get('meeting', 0)
-            
-            # 2. activity_summary에서 G3_MEETING과 MEETING 시간 추가
-            if 'activity_summary' in analysis_result:
-                activity_summary = analysis_result['activity_summary']
-                g3_meeting_minutes = activity_summary.get('G3_MEETING', 0)
-                meeting_minutes = activity_summary.get('MEETING', 0)
-                meeting_hours += g3_meeting_minutes / 60  # 분을 시간으로 변환
-                meeting_hours += meeting_minutes / 60     # 분을 시간으로 변환
-                
-                # 디버깅 로그
-                if g3_meeting_minutes > 0 or meeting_minutes > 0:
-                    self.logger.info(f"회의 시간 집계: G3_MEETING={g3_meeting_minutes}분, MEETING={meeting_minutes}분, 총 회의시간={meeting_hours:.1f}시간")
-            
-            st.metric(
-                "회의 시간",
-                f"{meeting_hours:.1f}h",
-                ""
-            )
-        
-        with col3:
-            # 식사 시간 계산
-            meal_minutes = 0
-            if 'activity_summary' in analysis_result:
-                for meal_type in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
-                    meal_minutes += analysis_result['activity_summary'].get(meal_type, 0)
-            meal_hours = meal_minutes / 60
-            st.metric(
-                "식사 시간",
-                f"{meal_hours:.1f}h",
-                ""
-            )
-        
         with col4:
+            # 효율성 (work_efficiency 또는 efficiency_ratio)
+            efficiency = work_analysis.get('work_efficiency', work_analysis.get('efficiency_ratio', 0))
             st.metric(
                 "업무 효율성",
-                f"{work_analysis['efficiency_ratio']:.1f}%",
-                "2.3%"
+                f"{efficiency:.1f}%",
+                ""
             )
         
         with col5:
-            # 초과근무 표시
-            overtime = claim_data.get('overtime', 0)
+            # 체류 시간 (work_start ~ work_end)
+            total_hours = analysis_result.get('total_hours', 0)
             st.metric(
-                "초과근무",
-                f"{overtime:.1f}h" if overtime > 0 else "없음",
+                "총 체류시간",
+                f"{total_hours:.1f}h",
                 ""
             )
-        
-        # 두 번째 줄 - 부가 정보
+
+        # 두 번째 줄 - 활동별 세부 시간 (분 단위 -> 시간 단위로 변환)
+        st.markdown("#### 🕐 활동별 시간 분석 (분 → 시간)")
         col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
-            # 근무 형태 표시 (WORKSCHDTYPNM 필드 사용)
-            work_type = claim_data.get('claim_type', '선택근무제')
+            # 실제 작업시간 (WORK + FOCUSED_WORK 등)
+            work_minutes = (activity_summary.get('WORK', 0) + 
+                           activity_summary.get('FOCUSED_WORK', 0) + 
+                           activity_summary.get('EQUIPMENT_OPERATION', 0))
             st.metric(
-                "근무 형태",
-                work_type,
-                ""
+                "작업시간",
+                f"{work_minutes/60:.1f}h",
+                f"({work_minutes}분)"
             )
         
         with col2:
+            # 회의시간
+            meeting_minutes = (activity_summary.get('MEETING', 0) + 
+                              activity_summary.get('G3_MEETING', 0))
             st.metric(
-                "데이터 신뢰도",
-                f"{analysis_result['data_quality']['overall_quality_score']}%",
-                "1.5%"
+                "회의시간",
+                f"{meeting_minutes/60:.1f}h",
+                f"({meeting_minutes}분)"
             )
         
         with col3:
-            # 이동 시간 추가
-            movement_hours = work_analysis.get('work_breakdown', {}).get('movement', 0)
+            # 식사시간 (각 식사별 합계)
+            meal_minutes = (activity_summary.get('BREAKFAST', 0) + 
+                           activity_summary.get('LUNCH', 0) + 
+                           activity_summary.get('DINNER', 0) + 
+                           activity_summary.get('MIDNIGHT_MEAL', 0))
             st.metric(
-                "이동 시간",
-                f"{movement_hours:.1f}h",
-                ""
+                "식사시간",
+                f"{meal_minutes/60:.1f}h",
+                f"({meal_minutes}분)"
             )
         
         with col4:
-            # 휴식 시간 추가
-            rest_hours = work_analysis.get('work_breakdown', {}).get('rest', 0)
+            # 이동시간
+            movement_minutes = activity_summary.get('TRANSIT', 0)
             st.metric(
-                "휴식 시간",
-                f"{rest_hours:.1f}h",
-                ""
+                "이동시간",
+                f"{movement_minutes/60:.1f}h",
+                f"({movement_minutes}분)"
             )
         
         with col5:
-            # 집중근무 시간
-            if 'activity_summary' in analysis_result:
-                focused_minutes = analysis_result['activity_summary'].get('FOCUSED_WORK', 0)
-                focused_hours = focused_minutes / 60
-                st.metric(
-                    "집중근무",
-                    f"{focused_hours:.1f}h",
-                    ""
-                )
-            else:
-                st.metric("집중근무", "0.0h", "")
+            # 휴식시간
+            rest_minutes = activity_summary.get('REST', 0)
+            st.metric(
+                "휴식시간",
+                f"{rest_minutes/60:.1f}h",
+                f"({rest_minutes}분)"
+            )
+
+        # 세 번째 줄 - 식사별 세부 시간
+        st.markdown("#### 🍽️ 식사 세부 시간")
+        col1, col2, col3, col4, col5 = st.columns(5)
         
-        # 활동 분류별 시간 분포 (프로그레스 바 스타일)
-        st.markdown("#### 📊 활동 분류별 시간 분포")
+        with col1:
+            breakfast_minutes = activity_summary.get('BREAKFAST', 0)
+            st.metric(
+                "조식시간",
+                f"{breakfast_minutes/60:.1f}h",
+                f"({breakfast_minutes}분)"
+            )
         
-        work_breakdown = work_analysis['work_breakdown']
-        total_hours = sum(work_breakdown.values())
+        with col2:
+            lunch_minutes = activity_summary.get('LUNCH', 0)
+            st.metric(
+                "중식시간",
+                f"{lunch_minutes/60:.1f}h",
+                f"({lunch_minutes}분)"
+            )
         
-        for activity, hours in work_breakdown.items():
-            percentage = (hours / total_hours * 100) if total_hours > 0 else 0
-            col1, col2, col3 = st.columns([2, 6, 2])
-            
-            with col1:
-                st.write(f"**{activity}**")
-            
-            with col2:
-                st.progress(percentage / 100)
-            
-            with col3:
-                st.write(f"{hours:.1f}h ({percentage:.1f}%)")
+        with col3:
+            dinner_minutes = activity_summary.get('DINNER', 0)
+            st.metric(
+                "석식시간",
+                f"{dinner_minutes/60:.1f}h",
+                f"({dinner_minutes}분)"
+            )
+        
+        with col4:
+            midnight_meal_minutes = activity_summary.get('MIDNIGHT_MEAL', 0)
+            st.metric(
+                "야식시간",
+                f"{midnight_meal_minutes/60:.1f}h",
+                f"({midnight_meal_minutes}분)"
+            )
+        
+        with col5:
+            # 신뢰도 점수
+            confidence_score = analysis_result.get('data_quality', {}).get('overall_quality_score', 0)
+            st.metric(
+                "신뢰도",
+                f"{confidence_score}%",
+                ""
+            )
     
     def render_activity_timeline(self, analysis_result: dict):
         """활동 타임라인 렌더링 (UI 참조자료 기반)"""

@@ -314,9 +314,22 @@ class IndividualAnalyzer:
 
         # Claim 데이터와 비교
         if not claim_data.empty and '근무시간' in claim_data.columns:
-            # 근무시간을 숫자로 변환
-            claim_data['근무시간'] = pd.to_numeric(claim_data['근무시간'], errors='coerce').fillna(0)
-            claim_total = claim_data['근무시간'].sum()
+            # 시간 문자열을 시간(float)으로 변환
+            def parse_work_time(time_str):
+                try:
+                    if pd.isna(time_str) or time_str == '':
+                        return 0.0
+                    # "HH:MM" 형태를 시간으로 변환
+                    if ':' in str(time_str):
+                        hours, minutes = str(time_str).split(':')
+                        return float(hours) + float(minutes) / 60
+                    else:
+                        return float(time_str)
+                except:
+                    return 0.0
+                    
+            claim_data['근무시간_hours'] = claim_data['근무시간'].apply(parse_work_time)
+            claim_total = claim_data['근무시간_hours'].sum()
         else:
             claim_total = 0
         
@@ -408,7 +421,9 @@ class IndividualAnalyzer:
             'tag_data_completeness': 100 if not tag_data.empty else 0,
             'claim_data_completeness': 100 if not claim_data.empty else 0,
             'abc_data_completeness': 100 if not abc_data.empty else 0,
-            'overall_quality_score': 80.0
+            'total_tags': len(tag_data) if not tag_data.empty else 0,
+            'overall_quality_score': 80.0,
+            'data_completeness': 80.0  # 대안 필드명
         }
     
     def _save_analysis_result(self, employee_id: str, analysis_result: Dict[str, Any]):

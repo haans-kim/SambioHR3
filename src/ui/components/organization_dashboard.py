@@ -412,15 +412,43 @@ class OrganizationDashboard:
                         
                         # 결과 테이블 업데이트
                         if success_results:
+                            # 활동별 시간을 더 정확하게 계산
+                            def get_activity_time(r, activity_keys):
+                                activity_dist = r.get('activity_analysis', {}).get('activity_distribution', {})
+                                total_minutes = sum(activity_dist.get(key, 0) for key in activity_keys)
+                                return f"{total_minutes/60:.1f}h"
+                            
                             df_results = pd.DataFrame([{
                                 '날짜': r['analysis_date'],
                                 '사번': r['employee_id'],
-                                '근무시간': f"{r['work_time_analysis']['actual_work_hours']:.1f}h",
-                                '효율성': f"{r['work_time_analysis'].get('work_efficiency', r['work_time_analysis'].get('efficiency_ratio', 0)):.1f}%",
-                                '태그수': r.get('tag_count', 0)
-                            } for r in success_results[:10]])  # 처음 10개만 표시
+                                'Claim시간': f"{r.get('work_time_analysis', {}).get('claimed_work_hours', 0):.1f}h",
+                                '실제근무': f"{r.get('work_time_analysis', {}).get('actual_work_hours', 0):.1f}h",
+                                '업무시간': get_activity_time(r, ['업무', '업무(확실)']),
+                                '출입시간': get_activity_time(r, ['출입(IN)', '출입(OUT)']),
+                                '효율성': f"{r.get('work_time_analysis', {}).get('work_efficiency', r.get('work_time_analysis', {}).get('efficiency_ratio', 0)):.1f}%",
+                                '신뢰도': f"{r.get('data_quality', {}).get('overall_quality_score', 0):.0f}%",
+                                '태그수': r.get('data_quality', {}).get('total_tags', 0),
+                                '활동종류': len(r.get('activity_analysis', {}).get('activity_distribution', {}))
+                            } for r in success_results[:30]])  # 30개로 확장
                             
-                            results_table.dataframe(df_results, use_container_width=True)
+                            # 수평 스크롤 가능한 테이블로 표시
+                            st.dataframe(
+                                df_results, 
+                                use_container_width=True,
+                                height=400,  # 테이블 높이 고정
+                                column_config={
+                                    "날짜": st.column_config.TextColumn("날짜", width="small"),
+                                    "사번": st.column_config.TextColumn("사번", width="medium"), 
+                                    "Claim시간": st.column_config.TextColumn("Claim시간", width="small"),
+                                    "실제근무": st.column_config.TextColumn("실제근무", width="small"),
+                                    "업무시간": st.column_config.TextColumn("업무시간", width="small"),
+                                    "출입시간": st.column_config.TextColumn("출입시간", width="small"),
+                                    "효율성": st.column_config.TextColumn("효율성", width="small"),
+                                    "신뢰도": st.column_config.TextColumn("신뢰도", width="small"),
+                                    "태그수": st.column_config.NumberColumn("태그수", width="small"),
+                                    "활동종류": st.column_config.NumberColumn("활동종류", width="small")
+                                }
+                            )
                         
                         # 다음 날짜로
                         current_date += timedelta(days=1)
