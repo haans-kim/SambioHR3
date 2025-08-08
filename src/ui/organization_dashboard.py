@@ -83,7 +83,7 @@ class OrganizationDashboard:
             st.markdown("### 전체 현황")
             center_data = self.get_center_summary(selected_date)
             
-            if center_data:
+            if center_data is not None and not center_data.empty:
                 # 직급별 그리드 표시
                 self.render_grade_grid(center_data, "center")
             else:
@@ -143,7 +143,7 @@ class OrganizationDashboard:
             st.markdown(f"### {selected_center} 팀별 현황")
             team_data = self.get_team_summary(selected_date, selected_center)
             
-            if team_data:
+            if team_data is not None and not team_data.empty:
                 self.render_team_cards(team_data)
             else:
                 st.info("팀별 데이터가 없습니다.")
@@ -211,7 +211,7 @@ class OrganizationDashboard:
                 st.markdown(f"### {selected_center} 현황")
                 group_data = self.get_group_summary(selected_date, selected_center)
                 
-                if group_data:
+                if group_data is not None and not group_data.empty:
                     self.render_group_cards(group_data)
                 else:
                     st.info("선택한 센터의 데이터가 없습니다.")

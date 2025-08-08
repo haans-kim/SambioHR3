@@ -71,9 +71,10 @@ class IndividualAnalyzer:
             tag_data = self._get_data('tag_logs', employee_id, start_date, end_date)
             claim_data = self._get_data('claim_data', employee_id, start_date, end_date)
             abc_data = self._get_data('abc_activity_data', employee_id, start_date, end_date)
+            meal_data = self._get_data('meal_data', employee_id, start_date, end_date)  # 식사 데이터 추가
             
-            # 태그 기반 분석 (정교한 분류기 사용)
-            tag_analysis_results = self._apply_tag_based_analysis(tag_data)
+            # 태그 기반 분석 (정교한 분류기 사용) - 식사 데이터 포함
+            tag_analysis_results = self._apply_tag_based_analysis(tag_data, meal_data)
             
             # 분석 결과 통합
             analysis_result = {
@@ -85,7 +86,7 @@ class IndividualAnalyzer:
                 },
                 'work_time_analysis': self._analyze_work_time(tag_analysis_results, claim_data),
                 'shift_analysis': self._analyze_shift_patterns(tag_analysis_results, tag_data),
-                'meal_time_analysis': self._analyze_meal_times(tag_analysis_results, tag_data),
+                'meal_time_analysis': self._analyze_meal_times(tag_analysis_results, meal_data),
                 'activity_analysis': self._analyze_activities(tag_analysis_results, abc_data),
                 'efficiency_analysis': self._analyze_efficiency(tag_analysis_results, claim_data),
                 'timeline_analysis': self._analyze_daily_timelines(tag_analysis_results, tag_data),
@@ -174,6 +175,27 @@ class IndividualAnalyzer:
                     self.logger.warning(f"Error loading {table_name}: {e}")
                     return pd.DataFrame()
             
+            elif table_name == 'meal_data':
+                try:
+                    meal_df = self.pickle_manager.load_dataframe('meal_data')
+                    if meal_df is not None and not meal_df.empty:
+                        # 직원 ID와 날짜로 필터링
+                        if '사번' in meal_df.columns:
+                            # 문자열로 비교 (meal_data의 사번은 문자열)
+                            meal_df = meal_df[meal_df['사번'] == str(employee_id)]
+                        if '정산일' in meal_df.columns:
+                            # 날짜 형식 맞추기 (YYYY-MM-DD 형식)
+                            date_str = start_date.strftime('%Y-%m-%d')
+                            meal_df = meal_df[meal_df['정산일'] == date_str]
+                        return meal_df
+                    return pd.DataFrame()
+                except FileNotFoundError:
+                    self.logger.debug(f"Pickle file not found for {table_name}")
+                    return pd.DataFrame()
+                except Exception as e:
+                    self.logger.warning(f"Error loading {table_name}: {e}")
+                    return pd.DataFrame()
+            
             # 기타 테이블은 빈 DataFrame 반환
             return pd.DataFrame()
         except Exception as e:
@@ -181,10 +203,10 @@ class IndividualAnalyzer:
             return pd.DataFrame()
 
     
-    def _apply_tag_based_analysis(self, tag_data: pd.DataFrame) -> Dict[str, Any]:
+    def _apply_tag_based_analysis(self, tag_data: pd.DataFrame, meal_data: pd.DataFrame = None) -> Dict[str, Any]:
         """
         정교한 분류기를 사용한 태그 기반 분석.
-        꼬리물기 등 특수 패턴을 후처리로 보정.
+        태그 사이의 시간을 적절한 활동으로 채우고 식사 데이터 통합.
         """
         if tag_data.empty:
             return {'timeline': [], 'summary': {}}
@@ -204,8 +226,8 @@ class IndividualAnalyzer:
             dr_nm = row.get('DR_NM', '')
             tag_code = self._extract_tag_code(dr_nm)
             
-            # O 태그 여부 확인
-            has_o_tag = 'O' in dr_nm or '사무실' in dr_nm or 'Office' in dr_nm
+            # O 태그 여부 확인 (사무실 태그)
+            has_o_tag = 'O' in dr_nm or '사무실' in dr_nm or 'Office' in dr_nm or 'OFFICE' in dr_nm
             
             tag_sequence.append({
                 'timestamp': timestamp,
@@ -221,22 +243,29 @@ class IndividualAnalyzer:
         
         # 2. TagStateClassifier를 사용하여 분류 수행
         classified_sequence = self.state_classifier.classify_sequence(tag_sequence)
-
-        # 2. 꼬리물기 패턴 후처리
-        self._handle_tailgating(classified_sequence)
+        
+        # 3. 태그 사이의 시간 채우기 및 보정
+        filled_sequence = self._fill_tag_gaps(classified_sequence)
+        
+        # 4. 식사 데이터 통합
+        if meal_data is not None and not meal_data.empty:
+            filled_sequence = self._integrate_meal_data(filled_sequence, meal_data)
+        
+        # 5. 꼬리물기 패턴 후처리
+        self._handle_tailgating(filled_sequence)
 
         # 요약 생성
         summary = {}
-        for entry in classified_sequence:
+        for entry in filled_sequence:
             state = entry['state']
             if state not in summary:
                 summary[state] = 0
             
-            # duration_minutes이 None이 아닌 경우만 합산
+            # duration_minutes 합산
             duration = entry.get('duration_minutes', 0) or 0
             summary[state] += duration
 
-        return {'timeline': classified_sequence, 'summary': summary}
+        return {'timeline': filled_sequence, 'summary': summary}
 
     def _extract_tag_code(self, dr_nm: str) -> str:
         """DR_NM에서 태그 코드 추출"""
@@ -267,19 +296,188 @@ class IndividualAnalyzer:
         else:
             return 'T1'  # 기본값: 경유
     
+    def _fill_tag_gaps(self, sequence: List[Dict]) -> List[Dict]:
+        """
+        태그 사이의 시간 간격을 적절한 활동으로 채움.
+        O 태그(사무실)가 있으면 전후 시간을 업무로 분류.
+        """
+        if not sequence:
+            return sequence
+        
+        filled_sequence = []
+        
+        for i in range(len(sequence)):
+            current = sequence[i]
+            
+            # 현재 항목의 지속 시간 재계산 (다음 태그까지의 시간)
+            if i < len(sequence) - 1:
+                next_timestamp = sequence[i + 1]['timestamp']
+                if current['timestamp'] and next_timestamp:
+                    duration = (next_timestamp - current['timestamp']).total_seconds() / 60
+                    current['duration_minutes'] = duration
+            
+            # O 태그 전후 처리
+            if current.get('has_o_tag') or current['tag_code'] == 'O':
+                # O 태그는 확실한 업무
+                current['state'] = '업무(확실)'
+                current['confidence'] = 0.98
+            elif i > 0 and (sequence[i-1].get('has_o_tag') or sequence[i-1]['tag_code'] == 'O'):
+                # O 태그 다음은 업무로 처리 (출문 제외)
+                if current['tag_code'] not in ['T3', 'T2']:
+                    current['state'] = '업무'
+                    current['confidence'] = 0.85
+            elif i < len(sequence) - 1 and (sequence[i+1].get('has_o_tag') or sequence[i+1]['tag_code'] == 'O'):
+                # O 태그 이전도 업무로 처리 (입문 후)
+                if current['tag_code'] not in ['T3', 'T2']:
+                    current['state'] = '업무'
+                    current['confidence'] = 0.85
+            
+            # 생산 구역(G1) 태그는 업무로 처리
+            if current['tag_code'] == 'G1':
+                current['state'] = '업무'
+                current['confidence'] = 0.90
+            
+            # 회의실(G3) 태그는 회의로 처리
+            elif current['tag_code'] == 'G3':
+                current['state'] = '회의'
+                current['confidence'] = 0.90
+            
+            # 교육장(G4) 태그는 교육으로 처리
+            elif current['tag_code'] == 'G4':
+                current['state'] = '교육'
+                current['confidence'] = 0.90
+            
+            # 식당(M1) 태그는 식사로 처리
+            elif current['tag_code'] == 'M1':
+                current['state'] = '식사'
+                current['confidence'] = 1.0
+                # 식사 시간대에 따라 세분화
+                if current['timestamp']:
+                    hour = current['timestamp'].hour
+                    if 6 <= hour < 9:
+                        current['meal_type'] = '아침'
+                    elif 11 <= hour < 14:
+                        current['meal_type'] = '점심'
+                    elif 17 <= hour < 20:
+                        current['meal_type'] = '저녁'
+                    else:
+                        current['meal_type'] = '야식'
+            
+            # 휴게실(N1, N2) 태그는 휴게로 처리
+            elif current['tag_code'] in ['N1', 'N2']:
+                current['state'] = '휴게'
+                current['confidence'] = 0.85
+            
+            filled_sequence.append(current)
+        
+        return filled_sequence
+    
+    def _integrate_meal_data(self, sequence: List[Dict], meal_data: pd.DataFrame) -> List[Dict]:
+        """
+        실제 식사 데이터를 timeline에 통합.
+        식당에서의 식사는 30분, 테이크아웃은 10분으로 계산.
+        """
+        if meal_data.empty:
+            return sequence
+        
+        # 식사 데이터를 시간순으로 정렬
+        meal_data = meal_data.sort_values('취식일시')
+        
+        for _, meal in meal_data.iterrows():
+            try:
+                # 식사 시간 파싱
+                meal_time = pd.to_datetime(meal['취식일시'])
+                
+                # 식사 종류 판단
+                meal_type = meal.get('식사구분명', '')
+                if '조식' in meal_type:
+                    meal_state = '식사'
+                    meal_category = '아침'
+                elif '중식' in meal_type:
+                    meal_state = '식사'
+                    meal_category = '점심'
+                elif '석식' in meal_type:
+                    meal_state = '식사'
+                    meal_category = '저녁'
+                elif '야식' in meal_type:
+                    meal_state = '식사'
+                    meal_category = '야식'
+                else:
+                    meal_state = '식사'
+                    meal_category = '기타'
+                
+                # 테이크아웃 여부 판단
+                배식구 = meal.get('배식구', '')
+                is_takeout = '테이크아웃' in str(배식구).lower() or 'takeout' in str(배식구).lower()
+                meal_duration = 10 if is_takeout else 30
+                
+                # timeline에서 해당 시간대 찾기
+                meal_inserted = False
+                for i, entry in enumerate(sequence):
+                    if entry['timestamp'] and meal_time:
+                        # 식사 시간이 현재 엔트리의 시간 범위 내에 있으면
+                        entry_end_time = entry['timestamp']
+                        if i < len(sequence) - 1:
+                            entry_end_time = sequence[i + 1]['timestamp']
+                        
+                        if entry['timestamp'] <= meal_time < entry_end_time:
+                            # 기존 엔트리를 식사로 변경
+                            entry['state'] = meal_state
+                            entry['meal_type'] = meal_category
+                            entry['is_takeout'] = is_takeout
+                            entry['duration_minutes'] = meal_duration
+                            entry['confidence'] = 1.0
+                            entry['meal_data'] = True
+                            meal_inserted = True
+                            break
+                
+                # 적절한 위치를 찾지 못했으면 새로운 엔트리 추가
+                if not meal_inserted:
+                    new_entry = {
+                        'timestamp': meal_time,
+                        'state': meal_state,
+                        'meal_type': meal_category,
+                        'is_takeout': is_takeout,
+                        'duration_minutes': meal_duration,
+                        'confidence': 1.0,
+                        'tag_code': 'M1',
+                        'meal_data': True
+                    }
+                    
+                    # 시간 순서에 맞는 위치에 삽입
+                    inserted = False
+                    for i, entry in enumerate(sequence):
+                        if entry['timestamp'] and meal_time < entry['timestamp']:
+                            sequence.insert(i, new_entry)
+                            inserted = True
+                            break
+                    
+                    if not inserted:
+                        sequence.append(new_entry)
+                
+            except Exception as e:
+                self.logger.warning(f"식사 데이터 통합 중 오류: {e}")
+        
+        # 시간순 재정렬
+        sequence = sorted(sequence, key=lambda x: x['timestamp'] if x['timestamp'] else pd.Timestamp.min)
+        
+        return sequence
+    
     def _handle_tailgating(self, sequence: List[Dict]):
         """
         T1(경유)이 장시간 지속되는 '꼬리물기' 패턴을 감지하고 '업무'로 상태를 보정.
         """
         for i, entry in enumerate(sequence):
-            # 'anomaly' 필드에 'tailgating'이 설정된 경우
-            if entry.get('anomaly') == 'tailgating':
+            # 경유 태그가 30분 이상 지속되면 업무로 변경
+            if (entry.get('state') == '경유' and 
+                entry.get('duration_minutes', 0) > 30):
                 self.logger.debug(f"꼬리물기 패턴 감지: {entry['timestamp']} 에서 {entry.get('duration_minutes', 0):.1f}분 지속")
                 
-                # 상태를 '업무'로 변경하고 신뢰도 조정
-                entry['state'] = ActivityState.WORK.value
-                entry['confidence'] = entry.get('anomaly_confidence', 0.7) # anomaly_confidence 값 사용
-                entry['original_state'] = ActivityState.TRANSIT.value # 원래 상태 기록
+                # 상태를 '업무'로 변경
+                entry['state'] = '업무'
+                entry['confidence'] = 0.75
+                entry['original_state'] = '경유'
+                entry['anomaly'] = 'tailgating'
     
     def _analyze_work_time(self, analysis_results: Dict[str, Any], 
                           claim_data: pd.DataFrame) -> Dict[str, Any]:
@@ -352,14 +550,49 @@ class IndividualAnalyzer:
         }
     
     def _analyze_meal_times(self, analysis_results: Dict[str, Any], 
-                          tag_data: pd.DataFrame) -> Dict[str, Any]:
+                          meal_data: pd.DataFrame) -> Dict[str, Any]:
         """식사 시간 분석"""
+        timeline = analysis_results.get('timeline', [])
+        
+        # 식사별 카운트와 시간 계산
+        meal_summary = {
+            '아침': {'count': 0, 'minutes': 0},
+            '점심': {'count': 0, 'minutes': 0},
+            '저녁': {'count': 0, 'minutes': 0},
+            '야식': {'count': 0, 'minutes': 0}
+        }
+        
+        for entry in timeline:
+            if entry.get('state') == '식사':
+                meal_type = entry.get('meal_type', '')
+                duration = entry.get('duration_minutes', 0) or 0
+                if meal_type in meal_summary:
+                    meal_summary[meal_type]['count'] += 1
+                    meal_summary[meal_type]['minutes'] += duration
+        
+        # 실제 식사 데이터가 있으면 더 정확한 카운트 사용
+        if meal_data is not None and not meal_data.empty:
+            for _, meal in meal_data.iterrows():
+                meal_type = meal.get('식사구분명', '')
+                if '조식' in meal_type:
+                    meal_summary['아침']['count'] = max(meal_summary['아침']['count'], 1)
+                elif '중식' in meal_type:
+                    meal_summary['점심']['count'] = max(meal_summary['점심']['count'], 1)
+                elif '석식' in meal_type:
+                    meal_summary['저녁']['count'] = max(meal_summary['저녁']['count'], 1)
+                elif '야식' in meal_type:
+                    meal_summary['야식']['count'] = max(meal_summary['야식']['count'], 1)
+        
+        total_meal_minutes = sum(m['minutes'] for m in meal_summary.values())
+        meal_count = sum(m['count'] for m in meal_summary.values())
+        
         return {
-            'breakfast_count': 0,
-            'lunch_count': 0,
-            'dinner_count': 0,
-            'midnight_meal_count': 0,
-            'avg_meal_duration': 30
+            'breakfast_count': meal_summary['아침']['count'],
+            'lunch_count': meal_summary['점심']['count'],
+            'dinner_count': meal_summary['저녁']['count'],
+            'midnight_meal_count': meal_summary['야식']['count'],
+            'total_meal_minutes': total_meal_minutes,
+            'avg_meal_duration': total_meal_minutes / meal_count if meal_count > 0 else 0
         }
     
     def _analyze_activities(self, analysis_results: Dict[str, Any], 
@@ -409,6 +642,7 @@ class IndividualAnalyzer:
         timeline = analysis_results.get('timeline', [])
         
         return {
+            'timeline': timeline,  # timeline 데이터 포함
             'timeline_entries': len(timeline),
             'avg_activity_duration': round(sum(entry.get('duration_minutes', 0) or 0 for entry in timeline) / len(timeline), 2) if timeline else 0,
             'state_transitions': len(timeline) - 1 if len(timeline) > 1 else 0

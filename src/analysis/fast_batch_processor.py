@@ -250,19 +250,19 @@ class FastBatchProcessor:
                 
                 # 활동별 시간 데이터 추가 (activity_analysis에서 가져옴)
                 activity = result.get('activity_analysis', {})
-                activity_summary = activity.get('activity_summary', {}) if activity else {}
+                # activity_distribution을 사용하고 한글 키로 접근
+                activity_dist = activity.get('activity_distribution', {}) if activity else {}
                 
                 data.update({
-                    'work_minutes': activity_summary.get('WORK', 0) + activity_summary.get('WORK_CONFIRMED', 0),
-                    'meeting_minutes': activity_summary.get('MEETING', 0),
-                    'meal_minutes': (activity_summary.get('BREAKFAST', 0) + activity_summary.get('LUNCH', 0) + 
-                                   activity_summary.get('DINNER', 0) + activity_summary.get('MIDNIGHT_MEAL', 0)),
-                    'movement_minutes': activity_summary.get('TRANSIT', 0),
-                    'rest_minutes': activity_summary.get('REST', 0),
-                    'breakfast_minutes': activity_summary.get('BREAKFAST', 0),
-                    'lunch_minutes': activity_summary.get('LUNCH', 0),
-                    'dinner_minutes': activity_summary.get('DINNER', 0),
-                    'midnight_meal_minutes': activity_summary.get('MIDNIGHT_MEAL', 0)
+                    'work_minutes': activity_dist.get('업무', 0) + activity_dist.get('업무(확실)', 0),
+                    'meeting_minutes': activity_dist.get('회의', 0) + activity_dist.get('교육', 0),
+                    'meal_minutes': activity_dist.get('식사', 0),
+                    'movement_minutes': activity_dist.get('경유', 0) + activity_dist.get('이동', 0),
+                    'rest_minutes': activity_dist.get('휴게', 0),
+                    'breakfast_minutes': 0,  # 세부 식사 시간은 현재 구분되지 않음
+                    'lunch_minutes': 0,
+                    'dinner_minutes': 0,
+                    'midnight_meal_minutes': 0
                 })
                 
                 # 신뢰도 추가

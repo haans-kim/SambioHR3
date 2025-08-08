@@ -420,11 +420,28 @@ class OrganizationDashboard:
                         stat_metric3.metric("처리 속도", f"{len(valid_employees_for_date)/date_elapsed:.1f}명/초" if date_elapsed > 0 else "-")
                         stat_metric4.metric("총 소요시간", f"{total_elapsed:.1f}초")
                         
-                        # 결과 테이블 업데이트 - 전체 누적 결과로 단일 테이블 표시
+                        # 결과 테이블 업데이트 - 전체 누적 결과로 단일 테이블 표시 (Claim시간 0 제외)
                         if all_results:
+                            # Claim시간이 0인 결과 제외
+                            filtered_results = [r for r in all_results 
+                                              if r.get('work_time_analysis', {}).get('claimed_work_hours', 0) > 0]
+                            
+                            self.logger.info(f"전체 결과: {len(all_results)}건, Claim>0 결과: {len(filtered_results)}건")
+                            
+                            if not filtered_results:
+                                # 유효한 결과가 없으면 테이블 숨김
+                                results_table.empty()
+                                current_date += timedelta(days=1)
+                                continue
                             # 활동별 시간을 더 정확하게 계산
                             def get_activity_time(r, activity_keys):
                                 activity_dist = r.get('activity_analysis', {}).get('activity_distribution', {})
+                                
+                                # 디버깅: 첫 번째 결과의 activity_distribution 확인
+                                if display_results.index(r) == 0:
+                                    self.logger.info(f"첫 번째 결과의 activity_distribution: {activity_dist}")
+                                    self.logger.info(f"찾고 있는 키: {activity_keys}")
+                                
                                 total_minutes = sum(activity_dist.get(key, 0) for key in activity_keys)
                                 return f"{total_minutes/60:.1f}h"
                             
@@ -459,38 +476,92 @@ class OrganizationDashboard:
                                     total_minutes = sum(activity_dist.values())
                                     return f"{total_minutes/60:.1f}h"
                             
-                            # 최대 50개의 최신 결과만 표시
-                            display_results = all_results[-50:] if len(all_results) > 50 else all_results
+                            # 최대 50개의 최신 결과만 표시 (Claim>0 결과만)
+                            display_results = filtered_results[-50:] if len(filtered_results) > 50 else filtered_results
+                            
+                            # 출근/퇴근 시간 추출 함수
+                            def get_entry_exit_times(r):
+                                timeline = r.get('timeline_analysis', {}).get('timeline', [])
+                                
+                                # 디버깅: timeline 데이터 확인
+                                if display_results.index(r) == 0:
+                                    self.logger.info(f"첫 번째 결과의 timeline_analysis keys: {r.get('timeline_analysis', {}).keys()}")
+                                    self.logger.info(f"timeline 길이: {len(timeline) if timeline else 0}")
+                                    if timeline and len(timeline) > 0:
+                                        self.logger.info(f"첫 번째 timeline entry: {timeline[0]}")
+                                
+                                if not timeline:
+                                    return '미확인', '미확인'
+                                
+                                # 첫 번째와 마지막 타임스탬프 찾기
+                                first_time = None
+                                last_time = None
+                                
+                                for entry in timeline:
+                                    if entry.get('timestamp'):
+                                        try:
+                                            ts = pd.to_datetime(entry['timestamp'])
+                                            if first_time is None or ts < first_time:
+                                                first_time = ts
+                                            if last_time is None or ts > last_time:
+                                                last_time = ts
+                                        except:
+                                            continue
+                                
+                                entry_time = first_time.strftime('%H:%M') if first_time else '미확인'
+                                exit_time = last_time.strftime('%H:%M') if last_time else '미확인'
+                                return entry_time, exit_time
                             
                             df_results = pd.DataFrame([{
                                 '날짜': r['analysis_date'],
                                 '사번': r['employee_id'],
+                                '출근시간': get_entry_exit_times(r)[0],
+                                '퇴근시간': get_entry_exit_times(r)[1],
                                 'Claim시간': f"{r.get('work_time_analysis', {}).get('claimed_work_hours', 0):.1f}h",
                                 '실제근무': f"{r.get('work_time_analysis', {}).get('actual_work_hours', 0):.1f}h",
                                 '체류시간': get_total_stay_time(r),
+                                '업무시간': get_activity_time(r, ['업무', '업무(확실)']),
+                                '회의시간': get_activity_time(r, ['회의', '교육']),
+                                '식사시간': get_activity_time(r, ['식사']),
+                                '휴게시간': get_activity_time(r, ['휴게']),
+                                '이동시간': get_activity_time(r, ['경유']),
+                                '준비시간': get_activity_time(r, ['준비']),
                                 '출입시간': get_activity_time(r, ['출입(IN)', '출입(OUT)']),
+                                '비업무시간': get_activity_time(r, ['비업무']),
                                 '효율성': f"{r.get('work_time_analysis', {}).get('work_efficiency', r.get('work_time_analysis', {}).get('efficiency_ratio', 0)):.1f}%",
                                 '신뢰도': f"{r.get('data_quality', {}).get('overall_quality_score', 0):.0f}%",
                                 '태그수': r.get('data_quality', {}).get('total_tags', 0),
                                 '활동종류': len(r.get('activity_analysis', {}).get('activity_distribution', {}))
                             } for r in display_results])
                             
-                            # 단일 테이블로 업데이트 (results_table 사용)
-                            results_table.dataframe(
+                            # 단일 테이블로 업데이트 - data_editor를 읽기 전용으로 사용하여 스크롤 개선
+                            results_table.data_editor(
                                 df_results, 
-                                use_container_width=True,
-                                height=400,  # 테이블 높이 고정
+                                use_container_width=False,  # 컨테이너 폭에 맞추지 않음
+                                height=450,  # 테이블 높이
+                                hide_index=True,  # 인덱스 숨김
+                                disabled=True,  # 읽기 전용 (편집 불가)
+                                num_rows="fixed",  # 행 추가/삭제 불가
                                 column_config={
-                                    "날짜": st.column_config.TextColumn("날짜", width="small"),
-                                    "사번": st.column_config.TextColumn("사번", width="medium"), 
-                                    "Claim시간": st.column_config.TextColumn("Claim시간", width="small"),
-                                    "실제근무": st.column_config.TextColumn("실제근무", width="small"),
-                                    "체류시간": st.column_config.TextColumn("체류시간", width="small"),
-                                    "출입시간": st.column_config.TextColumn("출입시간", width="small"),
-                                    "효율성": st.column_config.TextColumn("효율성", width="small"),
-                                    "신뢰도": st.column_config.TextColumn("신뢰도", width="small"),
-                                    "태그수": st.column_config.NumberColumn("태그수", width="small"),
-                                    "활동종류": st.column_config.NumberColumn("활동종류", width="small")
+                                    "날짜": st.column_config.TextColumn("날짜", disabled=True),
+                                    "사번": st.column_config.TextColumn("사번", disabled=True),
+                                    "출근시간": st.column_config.TextColumn("출근시간", disabled=True),
+                                    "퇴근시간": st.column_config.TextColumn("퇴근시간", disabled=True),
+                                    "Claim시간": st.column_config.TextColumn("Claim시간", disabled=True),
+                                    "실제근무": st.column_config.TextColumn("실제근무", disabled=True),
+                                    "체류시간": st.column_config.TextColumn("체류시간", disabled=True),
+                                    "업무시간": st.column_config.TextColumn("업무시간", disabled=True),
+                                    "회의시간": st.column_config.TextColumn("회의시간", disabled=True),
+                                    "식사시간": st.column_config.TextColumn("식사시간", disabled=True),
+                                    "휴게시간": st.column_config.TextColumn("휴게시간", disabled=True),
+                                    "이동시간": st.column_config.TextColumn("이동시간", disabled=True),
+                                    "준비시간": st.column_config.TextColumn("준비시간", disabled=True),
+                                    "출입시간": st.column_config.TextColumn("출입시간", disabled=True),
+                                    "비업무시간": st.column_config.TextColumn("비업무시간", disabled=True),
+                                    "효율성": st.column_config.TextColumn("효율성", disabled=True),
+                                    "신뢰도": st.column_config.TextColumn("신뢰도", disabled=True),
+                                    "태그수": st.column_config.NumberColumn("태그수", disabled=True),
+                                    "활동종류": st.column_config.NumberColumn("활동종류", disabled=True)
                                 }
                             )
                         
@@ -878,21 +949,33 @@ class OrganizationDashboard:
             if '사번' in claim_df.columns:
                 claim_df['사번'] = claim_df['사번'].astype(str)
                 
-                # 근무시간 파싱 함수
+                # 근무시간 파싱 함수 (더 엄격하게)
                 def parse_work_time(time_str):
                     try:
-                        if pd.isna(time_str) or time_str == '' or time_str == '0':
+                        if pd.isna(time_str) or time_str == '' or str(time_str).strip() == '':
                             return 0.0
+                        
+                        time_str = str(time_str).strip()
+                        
+                        # 0 관련 케이스들 체크
+                        if time_str in ['0', '0.0', '00:00', '0:00', '00', '0:0']:
+                            return 0.0
+                        
                         # "HH:MM" 형태를 시간으로 변환
-                        if ':' in str(time_str):
-                            parts = str(time_str).split(':')
+                        if ':' in time_str:
+                            parts = time_str.split(':')
                             if len(parts) >= 2:
-                                return float(parts[0]) + float(parts[1]) / 60
+                                hours = float(parts[0])
+                                minutes = float(parts[1])
+                                total_hours = hours + minutes / 60
+                                return total_hours
                             else:
                                 return float(parts[0])
                         else:
-                            return float(time_str)
-                    except:
+                            parsed_value = float(time_str)
+                            return parsed_value
+                    except Exception as e:
+                        self.logger.debug(f"근무시간 파싱 실패: '{time_str}' -> 0.0 (오류: {e})")
                         return 0.0
                 
                 # 근무시간 파싱 및 필터링
@@ -905,21 +988,41 @@ class OrganizationDashboard:
                         row = claim_df.iloc[i]
                         self.logger.info(f"  사번: {row.get('사번', 'N/A')}, 근무시간: {row.get('근무시간', 'N/A')}, 파싱됨: {row.get('근무시간_parsed', 'N/A')}")
                     
-                    # 근무시간이 0보다 큰 직원들
-                    valid_employees = claim_df[claim_df['근무시간_parsed'] > 0]['사번'].unique().tolist()
+                    # 근무시간이 0보다 큰 직원들을 더 엄격하게 필터링
+                    valid_condition = (claim_df['근무시간_parsed'] > 0.0) & (claim_df['근무시간_parsed'].notna())
+                    valid_claim_df = claim_df[valid_condition]
+                    valid_employees = valid_claim_df['사번'].unique().tolist()
                     valid_employees = [str(emp) for emp in valid_employees]
+                    
+                    # 0 근무시간 직원들도 확인
+                    zero_condition = (claim_df['근무시간_parsed'] <= 0.0) | (claim_df['근무시간_parsed'].isna())
+                    zero_claim_df = claim_df[zero_condition]
+                    zero_employees = zero_claim_df['사번'].unique().tolist()
+                    
+                    self.logger.info(f"Claim 데이터 분석:")
+                    self.logger.info(f"  - 전체 Claim 레코드: {len(claim_df)}행")
+                    self.logger.info(f"  - 유효한(>0) 근무시간 레코드: {len(valid_claim_df)}행")
+                    self.logger.info(f"  - 0 근무시간 레코드: {len(zero_claim_df)}행")
+                    self.logger.info(f"  - 유효한 근무시간 직원: {len(valid_employees)}명")
+                    self.logger.info(f"  - 0 근무시간 직원: {len(zero_employees)}명")
                     
                     # 원래 직원 목록에서 유효한 직원만 필터링
                     filtered = [emp for emp in employee_list if emp in valid_employees]
                     
-                    self.logger.info(f"전체 Claim 데이터 중 유효한(>0) 근무시간 직원: {len(valid_employees)}명")
                     self.logger.info(f"조직 내 원래 직원: {len(employee_list)}명")
                     self.logger.info(f"조직 내 유효한 근무시간 직원: {len(filtered)}명")
                     
                     # 실제로 필터링되었는지 확인
                     if len(filtered) < len(employee_list):
                         excluded = [emp for emp in employee_list if emp not in valid_employees]
-                        self.logger.info(f"제외된 직원 (처음 5명): {excluded[:5]}")
+                        self.logger.info(f"제외된 직원 (처음 10명): {excluded[:10]}")
+                        
+                        # 제외된 직원들의 Claim 데이터 확인
+                        for emp in excluded[:5]:
+                            emp_data = claim_df[claim_df['사번'] == emp]
+                            if not emp_data.empty:
+                                for _, row in emp_data.iterrows():
+                                    self.logger.info(f"  제외된 직원 {emp}: 근무시간='{row['근무시간']}', 파싱됨={row['근무시간_parsed']}")
                     
                     return filtered
                 else:
