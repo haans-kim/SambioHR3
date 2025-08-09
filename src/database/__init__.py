@@ -5,20 +5,20 @@
 2교대 근무 시스템과 4번 식사시간을 반영한 데이터베이스 구조를 포함합니다.
 """
 
-from .schema import (
+from src.database.schema import (
     Base, DatabaseSchema,
     DailyWorkData, ShiftWorkData, OrganizationSummary, TagLogs,
     AbcActivityData, ClaimData, AttendanceData, NonWorkTimeData,
     EmployeeInfo, TagLocationMaster, OrganizationMapping,
     HmmModelConfig, ProcessingLog
 )
-from .db_manager import DatabaseManager
-from .models import (
+from src.database.db_manager import DatabaseManager
+from src.database.models import (
     Employee, DailyWorkSummary, OrgSummary,
     ProcessedTagData, HMMModel, InteractionNetwork,
     MovementNetwork, DailyActivity, ACTIVITY_STATES, TIME_WINDOWS
 )
-from .singleton_manager import (
+from src.database.singleton_manager import (
     SingletonDatabaseManager, 
     SingletonPickleManager,
     get_database_manager,

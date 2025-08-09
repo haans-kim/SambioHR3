@@ -14,8 +14,8 @@ from datetime import datetime
 import json
 import time
 
-from .schema import Base, DatabaseSchema
-from ..data_processing import PickleManager
+from src.database.schema import Base, DatabaseSchema
+from src.data_processing import PickleManager
 from pathlib import Path
 
 class DatabaseManager:

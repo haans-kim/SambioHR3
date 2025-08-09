@@ -10,8 +10,8 @@ from typing import Dict, List, Optional, Tuple
 import json
 import logging
 
-from ..database import get_database_manager
-from ..utils.work_order_utils import WorkOrderManager
+from src.database import get_database_manager
+from src.utils.work_order_utils import WorkOrderManager
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,7 @@ class WorkOrderManagementUI:
                         <span style="color: #666;">
                             담당자: {order.get('assignee_count', 0)}명 | 
                             항목: {order.get('item_count', 0)}개 | 
-                            진행률: {order.get('completion_rate', 0):.0f}%
+                            진행률: {(order.get('completion_rate') or 0):.0f}%
                         </span>
                         <div>
                             <button style="
@@ -420,7 +420,10 @@ class WorkOrderManagementUI:
             with col2:
                 st.metric("기한", order['due_date'] or "미정")
             with col3:
-                st.metric("진행률", f"{order.get('completion_rate', 0):.0f}%")
+                completion_rate = order.get('completion_rate', 0)
+                if completion_rate is None:
+                    completion_rate = 0
+                st.metric("진행률", f"{completion_rate:.0f}%")
             
             # 설명
             st.markdown("**설명:**")
@@ -467,13 +470,16 @@ class WorkOrderManagementUI:
         if stats:
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("전체 작업지시", stats['total_orders'])
+                st.metric("전체 작업지시", stats.get('total_orders', 0))
             with col2:
-                st.metric("진행중", stats['in_progress_orders'])
+                st.metric("진행중", stats.get('in_progress_orders', 0))
             with col3:
-                st.metric("완료", stats['completed_orders'])
+                st.metric("완료", stats.get('completed_orders', 0))
             with col4:
-                st.metric("평균 진행률", f"{stats['avg_completion_rate']:.0f}%")
+                avg_rate = stats.get('avg_completion_rate', 0)
+                if avg_rate is None:
+                    avg_rate = 0
+                st.metric("평균 진행률", f"{avg_rate:.0f}%")
         
         # 조직별 현황
         st.markdown("### 조직별 현황")
@@ -543,7 +549,7 @@ class WorkOrderManagementUI:
     
     def load_organization_data(self):
         """조직 데이터 로드"""
-        from ..database import get_pickle_manager
+        from src.database import get_pickle_manager
         pickle_manager = get_pickle_manager()
         return pickle_manager.load_dataframe(name='organization_data')
     

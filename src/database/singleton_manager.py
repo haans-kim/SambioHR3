@@ -5,8 +5,8 @@
 
 import threading
 from typing import Optional
-from .db_manager import DatabaseManager
-from ..data_processing import PickleManager
+from src.database.db_manager import DatabaseManager
+from src.data_processing import PickleManager
 import logging
 
 logger = logging.getLogger(__name__)

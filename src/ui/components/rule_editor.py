@@ -475,6 +475,7 @@ class RuleEditorComponent:
         # 편집 가능한 데이터프레임
         edited_df = st.data_editor(
             priority_df,
+            key="priority_rules_editor",
             column_config={
                 "우선순위": st.column_config.NumberColumn(
                     "우선순위",
@@ -552,6 +553,7 @@ class RuleEditorComponent:
         
         edited_locations = st.data_editor(
             location_rules,
+            key="location_rules_editor",
             column_config={
                 "확률": st.column_config.NumberColumn(
                     "확률",
@@ -639,6 +641,7 @@ class RuleEditorComponent:
         
         edited_conf = st.data_editor(
             conf_df,
+            key="confidence_rules_editor",
             column_config={
                 "기본 신뢰도": st.column_config.NumberColumn(
                     "기본 신뢰도 (%)",

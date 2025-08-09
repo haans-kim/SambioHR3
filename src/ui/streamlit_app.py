@@ -583,7 +583,14 @@ class SambioHumanApp:
     
     def render_work_order_management(self):
         """작업지시 관리 페이지 렌더링"""
-        from .work_order_management import WorkOrderManagementUI
+        try:
+            from .work_order_management import WorkOrderManagementUI
+        except ImportError:
+            # Fallback to absolute import when running directly
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from work_order_management import WorkOrderManagementUI
         
         # 세련된 비즈니스 스타일 헤더
         st.markdown("""
