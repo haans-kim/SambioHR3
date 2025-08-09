@@ -319,7 +319,7 @@ class OrganizationDashboard:
             use_singleton: 싱글톤 모드 사용 여부
         """
         
-        # 모드에 따른 메시지 표시
+        # 싱글톤 모드 여부에 따라 메시지 표시
         if use_singleton:
             st.info("🔵 싱글톤 모드로 실행합니다. (데이터 정확성 우선)")
         else:
@@ -363,14 +363,13 @@ class OrganizationDashboard:
                 # 싱글톤 모드 여부에 따라 배치 프로세서 선택
                 if use_singleton:
                     # 싱글톤 배치 프로세서 사용
+                    st.success("🔵 싱글톤 모드로 실행합니다.")
                     from src.analysis.singleton_batch_processor import SingletonBatchProcessor
                     batch_processor = SingletonBatchProcessor()
-                    # employees는 문자열 리스트이므로 올바르게 필터링
-                    batch_processor.org_data = batch_processor.org_data[
-                        batch_processor.org_data['사번'].astype(str).isin(employees)
-                    ]
                 else:
                     # 멀티프로세싱 배치 프로세서 사용
+                    st.success("🚀 고속 배치 처리 모드로 실행합니다.")
+                    
                     try:
                         from src.analysis.fast_batch_processor import FastBatchProcessor
                         # 고속 배치 프로세서 초기화 (Process 기반 병렬 처리)
@@ -392,7 +391,7 @@ class OrganizationDashboard:
                     stat_metric2 = stat_col2.empty()
                     stat_metric3 = stat_col3.empty()
                     stat_metric4 = stat_col4.empty()
-                    
+                
                 # 실시간 분석 결과 테이블
                 st.markdown("### 📊 실시간 분석 결과")
                 results_table = st.empty()
@@ -406,114 +405,90 @@ class OrganizationDashboard:
                 total_start_time = time.time()
                 
                 while current_date <= end_dt:
-                        date_start_time = time.time()
+                    date_start_time = time.time()
+                    
+                    # 해당 날짜에 유효한 Claim시간을 가진 직원만 필터링
+                    valid_employees_for_date = self._filter_employees_with_valid_claim(employees, current_date)
+                    
+                    status_text.text(f"📅 {current_date} 분석 중... (전체: {len(employees)}명, 유효: {len(valid_employees_for_date)}명)")
+                    
+                    # 유효한 직원이 없으면 다음 날짜로
+                    if not valid_employees_for_date:
+                        self.logger.info(f"{current_date}: 유효한 Claim 데이터를 가진 직원이 없어 건너뜀")
+                        current_date += timedelta(days=1)
+                        continue
+                    
+                    # 배치 분석 실행 (유효한 직원만)
+                    if use_singleton:
+                        # 싱글톤 모드: 직원별로 순차 처리
+                        batch_results = []
+                        for emp_info in valid_employees_for_date:
+                            emp_id = emp_info['employee_id']
+                            emp_name = emp_info['employee_name']
+                            try:
+                                result = batch_processor._analyze_single_employee_date(
+                                    emp_id, emp_name, current_date, save_to_db=False
+                                )
+                                if result:
+                                    batch_results.append({
+                                        'employee_id': emp_id,
+                                        'employee_name': emp_name,
+                                        'analysis_date': current_date,
+                                        'status': 'success',
+                                        **result
+                                    })
+                            except Exception as e:
+                                self.logger.error(f"싱글톤 분석 오류 {emp_id}: {e}")
+                                batch_results.append({
+                                    'employee_id': emp_id,
+                                    'employee_name': emp_name,
+                                    'analysis_date': current_date,
+                                    'status': 'failed',
+                                    'error': str(e)
+                                })
+                    else:
+                        # 멀티프로세싱 모드: 병렬 처리
+                        batch_results = batch_processor.batch_analyze_employees(valid_employees_for_date, current_date)
                         
-                        # 해당 날짜에 유효한 Claim시간을 가진 직원만 필터링
-                        valid_employees_for_date = self._filter_employees_with_valid_claim(employees, current_date)
-                        
-                        status_text.text(f"📅 {current_date} 분석 중... (전체: {len(employees)}명, 유효: {len(valid_employees_for_date)}명)")
-                        
-                        # 유효한 직원이 없으면 다음 날짜로
-                        if not valid_employees_for_date:
-                            self.logger.info(f"{current_date}: 유효한 Claim 데이터를 가진 직원이 없어 건너뜀")
-                            current_date += timedelta(days=1)
-                            continue
-                        
-                        # 배치 분석 실행 (유효한 직원만)
-                        if use_singleton:
-                            # 싱글톤 모드: 순차 처리
-                            batch_results = []
-                            for emp_id in valid_employees_for_date:
+                    # 결과 저장
+                    if use_singleton:
+                        # 싱글톤 모드: 각 결과를 개별 저장
+                        saved_count = 0
+                        for result in batch_results:
+                            if result.get('status') == 'success':
                                 try:
-                                    # 직원 이름 가져오기
-                                    emp_name = ""
-                                    org_data = batch_processor.org_data
-                                    emp_row = org_data[org_data['사번'].astype(str) == str(emp_id)]
-                                    if not emp_row.empty:
-                                        emp_name = emp_row.iloc[0]['성명']
-                                    
-                                    result = batch_processor._analyze_single_employee_date(
-                                        str(emp_id), 
-                                        emp_name, 
-                                        current_date, 
-                                        save_to_db=False
-                                    )
-                                    if result:
-                                        result['status'] = 'success'
-                                        # 디버깅: 싱글톤 결과 확인
-                                        if len(batch_results) == 0:  # 첫 번째 결과만
-                                            self.logger.info(f"[싱글톤 디버깅] result keys: {list(result.keys())}")
-                                            if 'activity_analysis' in result:
-                                                self.logger.info(f"[싱글톤 디버깅] activity_analysis: {result['activity_analysis']}")
-                                            else:
-                                                self.logger.warning("[싱글톤 디버깅] activity_analysis가 없습니다!")
-                                        batch_results.append(result)
+                                    batch_processor.result_saver.save_analysis_result(result)
+                                    saved_count += 1
                                 except Exception as e:
-                                    import traceback
-                                    self.logger.error(f"싱글톤 분석 오류 {emp_id}: {e}")
-                                    self.logger.error(traceback.format_exc())
-                        else:
-                            # 멀티프로세싱 모드
-                            # 진행 상황 표시
-                            mp_status = st.empty()
-                            mp_status.info(f"🚀 멀티프로세싱 모드로 {current_date} 분석 중... (직원: {len(valid_employees_for_date)}명, 워커: 4개)")
-                            
-                            # 진행 상황 콜백 정의 (현재는 사용하지 않음)
-                            # def update_progress(completed, total, message):
-                            #     mp_status.info(f"🚀 {current_date}: {message}")
-                            
-                            batch_results = batch_processor.batch_analyze_employees(
-                                valid_employees_for_date, 
-                                current_date
-                                # progress_callback=update_progress  # 임시로 비활성화
-                            )
-                            
-                            # 분석 완료 메시지
-                            success_count = sum(1 for r in batch_results if r.get('status') == 'success')
-                            if success_count > 0:
-                                mp_status.success(f"✅ {current_date}: {success_count}/{len(valid_employees_for_date)}명 분석 완료")
-                            else:
-                                mp_status.warning(f"⚠️ {current_date}: 분석 성공 0명")
+                                    self.logger.error(f"결과 저장 오류: {e}")
+                    else:
+                        # 멀티프로세싱 모드: 배치 저장
+                        saved_count = batch_processor.save_results_to_db(batch_results)
                         
-                        # 결과 저장
-                        if use_singleton:
-                            # 싱글톤 모드: 개별 저장
-                            saved_count = 0
-                            for result in batch_results:
-                                if result.get('status') == 'success':
-                                    try:
-                                        batch_processor.result_saver.save_individual_analysis(result)
-                                        saved_count += 1
-                                    except Exception as e:
-                                        self.logger.error(f"결과 저장 오류: {e}")
-                        else:
-                            # 멀티프로세싱 모드: 배치 저장
-                            saved_count = batch_processor.save_results_to_db(batch_results)
-                        
-                        # 소요 시간 계산
-                        date_elapsed = time.time() - date_start_time
-                        total_elapsed = time.time() - total_start_time
-                        
-                        # 진행률 업데이트
-                        progress = (current_date - (start_date if not isinstance(start_date, tuple) else start_date[0])).days + 1
-                        total_days = (end_dt - (start_date if not isinstance(start_date, tuple) else start_date[0])).days + 1
-                        progress_bar.progress(progress / total_days)
-                        
-                        # 결과 요약
-                        success_results = [r for r in batch_results if r.get('status') == 'success']
-                        all_results.extend(success_results)
-                        
-                        # 실시간 통계 업데이트
-                        stat_metric1.metric("분석 완료", f"{len(all_results)}명")
-                        stat_metric2.metric("현재 날짜", f"{current_date}")
-                        stat_metric3.metric("처리 속도", f"{len(valid_employees_for_date)/date_elapsed:.1f}명/초" if date_elapsed > 0 else "-")
-                        stat_metric4.metric("총 소요시간", f"{total_elapsed:.1f}초")
-                        
-                        # 결과 테이블 업데이트 - 전체 누적 결과로 단일 테이블 표시 (Claim시간 0 제외)
-                        if all_results:
-                            # Claim시간이 0인 결과 제외
-                            filtered_results = [r for r in all_results 
-                                              if r.get('work_time_analysis', {}).get('claimed_work_hours', 0) > 0]
+                    # 소요 시간 계산
+                    date_elapsed = time.time() - date_start_time
+                    total_elapsed = time.time() - total_start_time
+                    
+                    # 진행률 업데이트
+                    progress = (current_date - (start_date if not isinstance(start_date, tuple) else start_date[0])).days + 1
+                    total_days = (end_dt - (start_date if not isinstance(start_date, tuple) else start_date[0])).days + 1
+                    progress_bar.progress(progress / total_days)
+                    
+                    # 결과 요약
+                    success_results = [r for r in batch_results if r.get('status') == 'success']
+                    all_results.extend(success_results)
+                    
+                    # 실시간 통계 업데이트
+                    stat_metric1.metric("분석 완료", f"{len(all_results)}명")
+                    stat_metric2.metric("현재 날짜", f"{current_date}")
+                    stat_metric3.metric("처리 속도", f"{len(valid_employees_for_date)/date_elapsed:.1f}명/초" if date_elapsed > 0 else "-")
+                    stat_metric4.metric("총 소요시간", f"{total_elapsed:.1f}초")
+                    
+                    # 결과 테이블 업데이트 - 전체 누적 결과로 단일 테이블 표시 (Claim시간 0 제외)
+                    if all_results:
+                        # Claim시간이 0인 결과 제외
+                        filtered_results = [r for r in all_results 
+                                          if r.get('work_time_analysis', {}).get('claimed_work_hours', 0) > 0]
                             
                             self.logger.info(f"전체 결과: {len(all_results)}건, Claim>0 결과: {len(filtered_results)}건")
                             
@@ -657,21 +632,21 @@ class OrganizationDashboard:
                         # 다음 날짜로
                         current_date += timedelta(days=1)
                     
-                # 최종 결과 요약
-                status_text.text("✅ 배치 분석 완료!")
-                
-                # 통계 계산
-                if all_results:
-                    avg_work_hours = sum(r['work_time_analysis']['actual_work_hours'] for r in all_results) / len(all_results)
-                    avg_efficiency = sum(r['work_time_analysis'].get('work_efficiency', r['work_time_analysis'].get('efficiency_ratio', 0)) for r in all_results) / len(all_results)
+                    # 최종 결과 요약
+                    status_text.text("✅ 배치 분석 완료!")
                     
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("유효 분석 완료", f"{len(all_results)}건")
-                    with col2:
-                        st.metric("평균 근무시간", f"{avg_work_hours:.1f}시간")
-                    with col3:
-                        st.metric("평균 효율성", f"{avg_efficiency:.1f}%")
+                    # 통계 계산
+                    if all_results:
+                        avg_work_hours = sum(r['work_time_analysis']['actual_work_hours'] for r in all_results) / len(all_results)
+                        avg_efficiency = sum(r['work_time_analysis'].get('work_efficiency', r['work_time_analysis'].get('efficiency_ratio', 0)) for r in all_results) / len(all_results)
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("유효 분석 완료", f"{len(all_results)}건")
+                        with col2:
+                            st.metric("평균 근무시간", f"{avg_work_hours:.1f}시간")
+                        with col3:
+                            st.metric("평균 효율성", f"{avg_efficiency:.1f}%")
                     
                     return  # 배치 처리 완료 후 종료
                 

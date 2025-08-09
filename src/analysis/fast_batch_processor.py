@@ -113,9 +113,15 @@ class FastBatchProcessor:
         
         return temp_file.name
     
-    def batch_analyze_employees(self, employee_ids: List[str], target_date: date) -> List[Dict[str, Any]]:
+    def batch_analyze_employees(self, employee_ids: List[str], target_date: date, 
+                              progress_callback=None) -> List[Dict[str, Any]]:
         """
         여러 직원을 실제 병렬로 분석
+        
+        Args:
+            employee_ids: 분석할 직원 ID 목록
+            target_date: 분석 대상 날짜
+            progress_callback: 진행 상황 콜백 함수 (completed_count, total_count, message)
         """
         self.logger.info(f"🚀 고속 배치 분석 시작: {len(employee_ids)}명, {self.num_workers}개 워커")
         start_time = time.time()
@@ -154,8 +160,12 @@ class FastBatchProcessor:
                             elapsed = time.time() - start_time
                             rate = completed_count / elapsed if elapsed > 0 else 0
                             remaining = (len(employee_ids) - completed_count) / rate if rate > 0 else 0
-                            self.logger.info(f"  진행: {completed_count}/{len(employee_ids)} "
-                                           f"({rate:.1f}명/초, 남은시간: {remaining/60:.1f}분)")
+                            progress_msg = f"진행: {completed_count}/{len(employee_ids)} ({rate:.1f}명/초)"
+                            self.logger.info(f"  {progress_msg}, 남은시간: {remaining/60:.1f}분")
+                            
+                            # 콜백 호출
+                            if progress_callback:
+                                progress_callback(completed_count, len(employee_ids), progress_msg)
                     except Exception as e:
                         self.logger.error(f"청크 처리 실패: {e}")
                         # 실패한 청크의 직원들에 대해 에러 결과 추가
@@ -253,6 +263,12 @@ class FastBatchProcessor:
                 # activity_distribution을 사용하고 한글 키로 접근
                 activity_dist = activity.get('activity_distribution', {}) if activity else {}
                 
+                # 디버깅
+                if saved_count == 0:  # 첫 번째 결과만 로그
+                    self.logger.info(f"[DEBUG] result keys: {list(result.keys())}")
+                    self.logger.info(f"[DEBUG] activity_analysis: {activity}")
+                    self.logger.info(f"[DEBUG] activity_distribution: {activity_dist}")
+                
                 data.update({
                     'work_minutes': activity_dist.get('업무', 0) + activity_dist.get('업무(확실)', 0),
                     'meeting_minutes': activity_dist.get('회의', 0) + activity_dist.get('교육', 0),
@@ -310,49 +326,131 @@ class FastBatchProcessor:
 def process_employee_chunk(temp_file_path: str, employee_ids: List[str], target_date: date) -> List[Dict[str, Any]]:
     """
     워커 프로세스에서 실행될 함수
-    IndividualAnalyzer를 사용하여 개인별 분석 수행
+    싱글톤과 동일하게 IndividualDashboard를 사용하여 개인별 분석 수행
     """
-    # IndividualAnalyzer 인스턴스 생성
+    # IndividualAnalyzer와 IndividualDashboard 인스턴스 생성
     from src.analysis.individual_analyzer import IndividualAnalyzer
     from src.database import DatabaseManager
+    from src.ui.components.individual_dashboard import IndividualDashboard
     
     # DatabaseManager 인스턴스 생성
     db_manager = DatabaseManager()
     analyzer = IndividualAnalyzer(db_manager)
+    dashboard = IndividualDashboard(individual_analyzer=analyzer)
     
     results = []
     
     for employee_id in employee_ids:
         try:
-            # 개인별 분석 실행 (target_date 하루만)
-            analysis_result = analyzer.analyze_individual(
-                employee_id=employee_id,
-                start_date=datetime.combine(target_date, datetime.min.time()),
-                end_date=datetime.combine(target_date, datetime.max.time())
-            )
+            # 싱글톤과 동일한 방식으로 분석
+            # 1. 데이터 로드
+            daily_data = dashboard.get_daily_tag_data(employee_id, target_date)
             
-            # 분석 결과를 배치 프로세서 형식으로 변환
-            if analysis_result:
-                work_time = analysis_result.get('work_time_analysis', {})
-                meal_time = analysis_result.get('meal_time_analysis', {})
-                activity = analysis_result.get('activity_analysis', {})
-                timeline = analysis_result.get('timeline_analysis', {})
-                
-                results.append({
-                    'employee_id': employee_id,
-                    'analysis_date': target_date.isoformat(),
-                    'status': 'success',
-                    'work_time_analysis': work_time,
-                    'meal_time_analysis': meal_time,
-                    'activity_analysis': activity,
-                    'timeline_analysis': timeline,
-                    'data_quality': analysis_result.get('data_quality', {})
-                })
-            else:
+            if daily_data is None or daily_data.empty:
                 results.append({
                     'employee_id': employee_id,
                     'analysis_date': target_date.isoformat(),
                     'status': 'no_data'
+                })
+                continue
+            
+            # 2. 활동 분류
+            classified_data = dashboard.classify_activities(daily_data)
+            
+            if classified_data is None or classified_data.empty:
+                results.append({
+                    'employee_id': employee_id,
+                    'analysis_date': target_date.isoformat(),
+                    'status': 'no_classified_data'
+                })
+                continue
+            
+            # 3. 일일 분석
+            analysis_result = dashboard.analyze_daily_data(
+                employee_id, 
+                target_date, 
+                classified_data
+            )
+            
+            # 분석 결과를 배치 프로세서 형식으로 변환
+            if analysis_result:
+                # 디버깅: analysis_result 내용 확인
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"[DEBUG] analysis_result keys: {list(analysis_result.keys())}")
+                logger.info(f"[DEBUG] activity_summary: {analysis_result.get('activity_summary', {})}")
+                
+                # activity_summary를 activity_analysis 형식으로 변환
+                activity_summary = analysis_result.get('activity_summary', {})
+                
+                # 영문 activity_code를 한글로 매핑
+                activity_mapping = {
+                    'WORK': '업무',
+                    'FOCUSED_WORK': '업무(확실)',
+                    'EQUIPMENT_OPERATION': '업무',
+                    'WORK_PREPARATION': '준비',
+                    'WORKING': '업무',
+                    'MEETING': '회의',
+                    'TRAINING': '교육',
+                    'EDUCATION': '교육',
+                    'BREAKFAST': '식사',
+                    'LUNCH': '식사',
+                    'DINNER': '식사',
+                    'MIDNIGHT_MEAL': '식사',
+                    'REST': '휴게',
+                    'FITNESS': '휴게',
+                    'LEAVE': '휴게',
+                    'IDLE': '휴게',
+                    'MOVEMENT': '이동',
+                    'TRANSIT': '경유',
+                    'COMMUTE_IN': '출입(IN)',
+                    'COMMUTE_OUT': '출입(OUT)',
+                    'NON_WORK': '비업무',
+                    'UNKNOWN': '비업무'
+                }
+                
+                # 한글 키로 변환된 activity_distribution 생성
+                activity_distribution = {}
+                for code, minutes in activity_summary.items():
+                    korean_key = activity_mapping.get(code, code)
+                    if korean_key in activity_distribution:
+                        activity_distribution[korean_key] += minutes
+                    else:
+                        activity_distribution[korean_key] = minutes
+                
+                # 디버깅: 변환 결과 확인
+                if employee_id in ['20120203', '20150276']:  # 처음 두 직원만
+                    logger.info(f"[DEBUG] {employee_id} - activity_summary: {activity_summary}")
+                    logger.info(f"[DEBUG] {employee_id} - activity_distribution (한글): {activity_distribution}")
+                
+                # activity_analysis 구조 생성
+                activity_analysis = {
+                    'activity_distribution': activity_distribution,
+                    'primary_activity': max(activity_distribution.items(), key=lambda x: x[1])[0] if activity_distribution else 'UNKNOWN',
+                    'activity_diversity': len(activity_distribution)
+                }
+                
+                # work_time_analysis와 기타 데이터 추가
+                result_dict = {
+                    'employee_id': employee_id,
+                    'analysis_date': target_date.isoformat(),
+                    'status': 'success',
+                    'activity_analysis': activity_analysis,
+                    'work_time_analysis': analysis_result.get('work_time_analysis', {}),
+                    'data_quality': analysis_result.get('data_quality', {}),
+                    'timeline_analysis': {
+                        'timeline': analysis_result.get('activity_segments', []),
+                        'daily_timelines': []  # 호환성을 위해
+                    },
+                    'meal_time_analysis': analysis_result.get('meal_time_analysis', {})
+                }
+                
+                results.append(result_dict)
+            else:
+                results.append({
+                    'employee_id': employee_id,
+                    'analysis_date': target_date.isoformat(),
+                    'status': 'no_analysis_result'
                 })
             
         except Exception as e:
