@@ -50,7 +50,7 @@ class AnalysisResultSaver:
     def _get_employee_info(self, employee_id: str) -> Dict[str, Any]:
         """직원의 조직 정보 조회"""
         try:
-            # 조직 마스터 데이터에서 직원 정보 조회
+            # employees 테이블에서 직원 정보 조회 (이미 조직명이 포함되어 있음)
             query = """
             SELECT 
                 e.employee_id,
@@ -58,12 +58,11 @@ class AnalysisResultSaver:
                 e.center_id,
                 e.group_id,
                 e.team_id,
-                om.center_name,
-                om.group_name,
-                om.team_name,
+                e.center_name,
+                e.group_name,
+                e.team_name,
                 e.job_grade
             FROM employees e
-            LEFT JOIN organization_master om ON e.team_id = om.team_id
             WHERE e.employee_id = :employee_id
             """
             
