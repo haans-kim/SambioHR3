@@ -613,7 +613,7 @@ class OrganizationDashboard:
                                 '회의시간': get_activity_time(r, ['회의', '교육']),
                                 '식사시간': get_activity_time(r, ['식사']),
                                 '휴게시간': get_activity_time(r, ['휴게']),
-                                '이동시간': get_activity_time(r, ['경유']),
+                                '이동시간': get_activity_time(r, ['이동', '경유']),  # 이동과 경유 모두 포함
                                 '준비시간': get_activity_time(r, ['준비']),
                                 '출입시간': get_activity_time(r, ['출입(IN)', '출입(OUT)']),
                                 '비업무시간': get_activity_time(r, ['비업무']),
@@ -2131,29 +2131,31 @@ class OrganizationDashboard:
                         # 활동별 시간 집계
                         commute_minutes = 0  # 출입시간 별도 집계
                         for code, minutes in activity_summary.items():
-                            korean_key = activity_mapping.get(code, code)
-                            if korean_key in ['업무', '업무(확실)']:
+                            # 영문 코드 직접 처리 (매핑 전)
+                            if code in ['WORK', 'FOCUSED_WORK', 'EQUIPMENT_OPERATION', 'WORK_PREPARATION', 'WORKING']:
                                 work_minutes += minutes
-                            elif korean_key in ['회의', '교육']:
+                            elif code in ['MEETING', 'TRAINING', 'EDUCATION']:
                                 meeting_minutes += minutes
-                            elif korean_key == '식사':
+                            elif code in ['BREAKFAST', 'LUNCH', 'DINNER', 'MIDNIGHT_MEAL']:
                                 meal_minutes += minutes
-                            elif korean_key == '휴게':
+                            elif code in ['REST', 'FITNESS', 'LEAVE', 'IDLE']:
                                 rest_minutes += minutes
-                            elif korean_key in ['이동', '경유']:
+                            elif code in ['MOVEMENT', 'TRANSIT']:
                                 movement_minutes += minutes
-                            elif korean_key in ['출입(IN)', '출입(OUT)']:
+                            elif code in ['COMMUTE_IN', 'COMMUTE_OUT']:
                                 commute_minutes += minutes
-                            
-                            # 원본 영문 코드로도 체크 (매핑 누락 대비)
-                            if code in ['MOVEMENT', 'TRANSIT'] and movement_minutes == 0:
-                                movement_minutes += minutes
-                            elif code in ['REST', 'FITNESS', 'LEAVE', 'IDLE'] and rest_minutes == 0:
-                                rest_minutes += minutes
+                            else:
+                                # 매핑되지 않은 코드는 업무로 간주
+                                work_minutes += minutes
                         
                         # 디버깅
                         self.logger.info(f"[DEBUG] {employee_id} - activity_summary: {activity_summary}")
                         self.logger.info(f"[DEBUG] {employee_id} - 집계 결과: 업무={work_minutes}분, 회의={meeting_minutes}분, 식사={meal_minutes}분, 휴게={rest_minutes}분, 이동={movement_minutes}분")
+                        
+                        # 추가 디버깅: 각 코드별 처리 확인
+                        for code, minutes in activity_summary.items():
+                            if code == 'MOVEMENT':
+                                self.logger.info(f"[DEBUG] MOVEMENT 발견: {minutes}분 → movement_minutes에 추가됨")
             
             # 시간을 시간 단위로 변환
             actual_work_hours = work_minutes / 60
