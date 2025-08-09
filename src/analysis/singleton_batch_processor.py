@@ -173,6 +173,14 @@ class SingletonBatchProcessor:
             if daily_data is None or daily_data.empty:
                 return None
             
+            # 식사 데이터도 별도로 로드
+            meal_data = dashboard.get_meal_data(employee_id, analysis_date)
+            if meal_data is not None and not meal_data.empty:
+                self.logger.info(f"[DEBUG] {employee_id} - 식사 데이터 {len(meal_data)}건 로드됨")
+                self.logger.info(f"[DEBUG] 식사 데이터 샘플: {meal_data.head(1).to_dict()}")
+            else:
+                self.logger.info(f"[DEBUG] {employee_id} - 식사 데이터 없음")
+            
             # 활동 분류
             classified_data = dashboard.classify_activities(daily_data)
             
@@ -189,6 +197,32 @@ class SingletonBatchProcessor:
             if analysis_result:
                 # activity_summary를 activity_analysis 형식으로 변환 (FastBatchProcessor와 동일)
                 activity_summary = analysis_result.get('activity_summary', {})
+                
+                # 식사 데이터가 있으면 activity_summary에 추가
+                if meal_data is not None and not meal_data.empty:
+                    # 식사 종류별로 집계
+                    for _, meal in meal_data.iterrows():
+                        meal_category = meal.get('식사대분류', meal.get('meal_category', ''))
+                        meal_code_map = {
+                            '조식': 'BREAKFAST',
+                            '중식': 'LUNCH',
+                            '석식': 'DINNER',
+                            '야식': 'MIDNIGHT_MEAL'
+                        }
+                        activity_code = meal_code_map.get(meal_category, 'LUNCH')
+                        
+                        # 테이크아웃 여부에 따라 duration 설정
+                        restaurant_info = meal.get('배식구', meal.get('service_point', ''))
+                        is_takeout = '테이크아웃' in str(restaurant_info)
+                        duration = 10 if is_takeout else 30
+                        
+                        # activity_summary에 추가
+                        if activity_code in activity_summary:
+                            activity_summary[activity_code] += duration
+                        else:
+                            activity_summary[activity_code] = duration
+                    
+                    self.logger.info(f"[DEBUG] {employee_id} - 식사 데이터 추가 후 activity_summary: {activity_summary}")
                 
                 # 영문 activity_code를 한글로 매핑
                 activity_mapping = {

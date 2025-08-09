@@ -326,17 +326,16 @@ class FastBatchProcessor:
 def process_employee_chunk(temp_file_path: str, employee_ids: List[str], target_date: date) -> List[Dict[str, Any]]:
     """
     워커 프로세스에서 실행될 함수
-    싱글톤과 동일하게 IndividualDashboard를 사용하여 개인별 분석 수행
+    IndividualAnalyzer.analyze_individual()을 사용하여 완전한 분석 수행
     """
-    # IndividualAnalyzer와 IndividualDashboard 인스턴스 생성
+    # IndividualAnalyzer 인스턴스 생성
     from src.analysis.individual_analyzer import IndividualAnalyzer
     from src.database import DatabaseManager
-    from src.ui.components.individual_dashboard import IndividualDashboard
+    from datetime import datetime, time
     
     # DatabaseManager 인스턴스 생성
     db_manager = DatabaseManager()
     analyzer = IndividualAnalyzer(db_manager)
-    dashboard = IndividualDashboard(individual_analyzer=analyzer)
     
     results = []
     
@@ -353,6 +352,9 @@ def process_employee_chunk(temp_file_path: str, employee_ids: List[str], target_
                     'status': 'no_data'
                 })
                 continue
+            
+            # 1-2. 식사 데이터도 별도로 로드
+            meal_data = dashboard.get_meal_data(employee_id, target_date)
             
             # 2. 활동 분류
             classified_data = dashboard.classify_activities(daily_data)
@@ -382,6 +384,32 @@ def process_employee_chunk(temp_file_path: str, employee_ids: List[str], target_
                 
                 # activity_summary를 activity_analysis 형식으로 변환
                 activity_summary = analysis_result.get('activity_summary', {})
+                
+                # 식사 데이터가 있으면 activity_summary에 추가
+                if meal_data is not None and not meal_data.empty:
+                    # 식사 종류별로 집계
+                    for _, meal in meal_data.iterrows():
+                        meal_category = meal.get('식사대분류', meal.get('meal_category', ''))
+                        meal_code_map = {
+                            '조식': 'BREAKFAST',
+                            '중식': 'LUNCH',
+                            '석식': 'DINNER',
+                            '야식': 'MIDNIGHT_MEAL'
+                        }
+                        activity_code = meal_code_map.get(meal_category, 'LUNCH')
+                        
+                        # 테이크아웃 여부에 따라 duration 설정
+                        restaurant_info = meal.get('배식구', meal.get('service_point', ''))
+                        is_takeout = '테이크아웃' in str(restaurant_info)
+                        duration = 10 if is_takeout else 30
+                        
+                        # activity_summary에 추가
+                        if activity_code in activity_summary:
+                            activity_summary[activity_code] += duration
+                        else:
+                            activity_summary[activity_code] = duration
+                    
+                    logger.info(f"[DEBUG] {employee_id} - 식사 데이터 추가 후 activity_summary: {activity_summary}")
                 
                 # 영문 activity_code를 한글로 매핑
                 activity_mapping = {
