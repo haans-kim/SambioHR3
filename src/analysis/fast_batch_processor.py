@@ -331,11 +331,15 @@ def process_employee_chunk(temp_file_path: str, employee_ids: List[str], target_
     # IndividualAnalyzer 인스턴스 생성
     from src.analysis.individual_analyzer import IndividualAnalyzer
     from src.database import DatabaseManager
+    from src.ui.components.individual_dashboard import IndividualDashboard
     from datetime import datetime, time
     
     # DatabaseManager 인스턴스 생성
     db_manager = DatabaseManager()
     analyzer = IndividualAnalyzer(db_manager)
+    
+    # IndividualDashboard 인스턴스 생성 (싱글톤과 동일하게)
+    dashboard = IndividualDashboard(individual_analyzer=analyzer)
     
     results = []
     

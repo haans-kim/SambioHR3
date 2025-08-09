@@ -2054,53 +2054,106 @@ class OrganizationDashboard:
                             except:
                                 continue
             
-            # 활동별 시간 집계 (태그 기반)
+            # 활동별 시간 집계 - IndividualDashboard의 분석 결과 사용
             work_minutes = 0
             meal_minutes = 0
             rest_minutes = 0
             movement_minutes = 0
             meeting_minutes = 0
             
-            if not tag_data.empty:
-                # 시간 간격 계산
-                sorted_tags = tag_data.sort_values('datetime').copy()
-                sorted_tags['datetime'] = pd.to_datetime(sorted_tags['datetime'])
-                sorted_tags['next_datetime'] = sorted_tags['datetime'].shift(-1)
-                sorted_tags['duration_minutes'] = (
-                    (sorted_tags['next_datetime'] - sorted_tags['datetime']).dt.total_seconds() / 60
-                ).fillna(0)
+            # IndividualDashboard로 분석하여 activity_distribution 가져오기
+            from src.ui.components.individual_dashboard import IndividualDashboard
+            dashboard = IndividualDashboard(individual_analyzer=self.individual_analyzer)
+            
+            # 데이터 로드 및 분석
+            daily_data = dashboard.get_daily_tag_data(employee_id, work_date)
+            if daily_data is not None and not daily_data.empty:
+                # 활동 분류
+                classified_data = dashboard.classify_activities(daily_data)
                 
-                # 위치별 시간 집계
-                for idx, row in sorted_tags.iterrows():
-                    duration = row['duration_minutes']
-                    location = str(row.get('DR_NM', ''))
-                    inout = str(row.get('INOUT_GB', ''))
+                if classified_data is not None and not classified_data.empty:
+                    # 일일 분석 실행
+                    analysis_result = dashboard.analyze_daily_data(
+                        employee_id, 
+                        work_date, 
+                        classified_data
+                    )
                     
-                    # 식사 판별 (CAFETERIA 또는 식당)
-                    if 'CAFETERIA' in location.upper() or '식당' in location:
-                        meal_minutes += duration
-                    # 회의실 판별
-                    elif '회의' in location or 'MEETING' in location.upper():
-                        meeting_minutes += duration
-                    # 휴게 판별
-                    elif '휴게' in location or '화장실' in location or 'REST' in location.upper():
-                        rest_minutes += duration
-                    # 이동 판별 (짧은 출문)
-                    elif inout == '출문' and duration < 15:
-                        movement_minutes += duration
-                    # 나머지는 작업
-                    else:
-                        work_minutes += duration
-                
-                # 최대값 제한 (체류시간 기준)
-                total_minutes = total_hours * 60
-                if total_minutes > 0:
-                    # 각 활동 시간이 체류시간을 초과하지 않도록 조정
-                    work_minutes = min(work_minutes, total_minutes * 0.8)  # 최대 80%
-                    meal_minutes = min(meal_minutes, 120)  # 최대 2시간
-                    rest_minutes = min(rest_minutes, 60)  # 최대 1시간
-                    movement_minutes = min(movement_minutes, 60)  # 최대 1시간
-                    meeting_minutes = min(meeting_minutes, 240)  # 최대 4시간
+                    if analysis_result and 'activity_summary' in analysis_result:
+                        activity_summary = analysis_result.get('activity_summary', {})
+                        
+                        # 식사 데이터 추가 (별도 로드)
+                        meal_data_dashboard = dashboard.get_meal_data(employee_id, work_date)
+                        if meal_data_dashboard is not None and not meal_data_dashboard.empty:
+                            for _, meal in meal_data_dashboard.iterrows():
+                                meal_category = meal.get('식사대분류', meal.get('meal_category', ''))
+                                meal_code_map = {
+                                    '조식': 'BREAKFAST',
+                                    '중식': 'LUNCH', 
+                                    '석식': 'DINNER',
+                                    '야식': 'MIDNIGHT_MEAL'
+                                }
+                                activity_code = meal_code_map.get(meal_category, 'LUNCH')
+                                
+                                restaurant_info = meal.get('배식구', meal.get('service_point', ''))
+                                is_takeout = '테이크아웃' in str(restaurant_info)
+                                duration = 10 if is_takeout else 30
+                                
+                                if activity_code in activity_summary:
+                                    activity_summary[activity_code] += duration
+                                else:
+                                    activity_summary[activity_code] = duration
+                        
+                        # 영문을 한글로 매핑하여 집계
+                        activity_mapping = {
+                            'WORK': '업무',
+                            'FOCUSED_WORK': '업무(확실)',
+                            'EQUIPMENT_OPERATION': '업무',
+                            'WORK_PREPARATION': '준비',
+                            'WORKING': '업무',
+                            'MEETING': '회의',
+                            'TRAINING': '교육',
+                            'EDUCATION': '교육',
+                            'BREAKFAST': '식사',
+                            'LUNCH': '식사',
+                            'DINNER': '식사',
+                            'MIDNIGHT_MEAL': '식사',
+                            'REST': '휴게',
+                            'FITNESS': '휴게',
+                            'LEAVE': '휴게',
+                            'IDLE': '휴게',
+                            'MOVEMENT': '이동',
+                            'TRANSIT': '경유',
+                            'COMMUTE_IN': '출입(IN)',
+                            'COMMUTE_OUT': '출입(OUT)'
+                        }
+                        
+                        # 활동별 시간 집계
+                        commute_minutes = 0  # 출입시간 별도 집계
+                        for code, minutes in activity_summary.items():
+                            korean_key = activity_mapping.get(code, code)
+                            if korean_key in ['업무', '업무(확실)']:
+                                work_minutes += minutes
+                            elif korean_key in ['회의', '교육']:
+                                meeting_minutes += minutes
+                            elif korean_key == '식사':
+                                meal_minutes += minutes
+                            elif korean_key == '휴게':
+                                rest_minutes += minutes
+                            elif korean_key in ['이동', '경유']:
+                                movement_minutes += minutes
+                            elif korean_key in ['출입(IN)', '출입(OUT)']:
+                                commute_minutes += minutes
+                            
+                            # 원본 영문 코드로도 체크 (매핑 누락 대비)
+                            if code in ['MOVEMENT', 'TRANSIT'] and movement_minutes == 0:
+                                movement_minutes += minutes
+                            elif code in ['REST', 'FITNESS', 'LEAVE', 'IDLE'] and rest_minutes == 0:
+                                rest_minutes += minutes
+                        
+                        # 디버깅
+                        self.logger.info(f"[DEBUG] {employee_id} - activity_summary: {activity_summary}")
+                        self.logger.info(f"[DEBUG] {employee_id} - 집계 결과: 업무={work_minutes}분, 회의={meeting_minutes}분, 식사={meal_minutes}분, 휴게={rest_minutes}분, 이동={movement_minutes}분")
             
             # 시간을 시간 단위로 변환
             actual_work_hours = work_minutes / 60
@@ -2108,6 +2161,7 @@ class OrganizationDashboard:
             rest_hours = rest_minutes / 60
             movement_hours = movement_minutes / 60
             meeting_hours = meeting_minutes / 60
+            commute_hours = commute_minutes / 60
             
             # 식사 세부 시간 (meal_data에서)
             breakfast_time = 0
@@ -2175,6 +2229,20 @@ class OrganizationDashboard:
                 if first_in.date() != last_out.date():
                     cross_day_flag = True
             
+            # activity_analysis 구조 생성 (화면 표시를 위해)
+            activity_distribution = {
+                '업무': work_minutes,
+                '회의': meeting_minutes,
+                '식사': meal_minutes,
+                '휴게': rest_minutes,
+                '이동': movement_minutes,
+                '출입(IN)': commute_minutes / 2,  # 출입시간을 IN/OUT으로 분할
+                '출입(OUT)': commute_minutes / 2
+            }
+            
+            # 0인 항목 제거
+            activity_distribution = {k: v for k, v in activity_distribution.items() if v > 0}
+            
             # 결과 반환
             return {
                 'employee_id': employee_id,
@@ -2186,8 +2254,12 @@ class OrganizationDashboard:
                 'attendance_hours': attendance_hours,
                 'actual_work_hours': actual_work_hours,
                 'work_estimation_rate': work_estimation_rate,
-                'meeting_hours': meeting_hours,
-                'meal_hours': meal_hours,
+                'meeting_time': meeting_hours,  # hours를 time으로 변경
+                'meal_time': meal_hours,  # hours를 time으로 변경 
+                'movement_time': movement_hours,  # hours를 time으로 변경
+                'rest_time': rest_hours,  # hours를 time으로 변경
+                'commute_time': commute_hours,  # 출입시간 추가
+                'meal_hours': meal_hours,  # 호환성을 위해 둘 다 유지
                 'movement_hours': movement_hours,
                 'rest_hours': rest_hours,
                 'breakfast_time': breakfast_hours,
@@ -2200,7 +2272,13 @@ class OrganizationDashboard:
                 'tag_count': tag_count,
                 'data_completeness': data_completeness,
                 'work_efficiency': work_efficiency,
-                'productivity_score': productivity_score
+                'productivity_score': productivity_score,
+                # activity_analysis 추가 (화면 표시용)
+                'activity_analysis': {
+                    'activity_distribution': activity_distribution,
+                    'primary_activity': max(activity_distribution.items(), key=lambda x: x[1])[0] if activity_distribution else 'UNKNOWN',
+                    'activity_diversity': len(activity_distribution)
+                }
             }
             
         except Exception as e:
