@@ -494,14 +494,14 @@ class DataUploadComponent:
         """Knox 및 Equipment 데이터를 daily_logs와 통합"""
         try:
             # Knox 데이터 로드
-            knox_approval_df = self.pickle_manager.load_pickle('knox_approval_data')
-            knox_pims_df = self.pickle_manager.load_pickle('knox_pims_data')
-            knox_mail_df = self.pickle_manager.load_pickle('knox_mail_data')
+            knox_approval_df = self.pickle_manager.load_dataframe('knox_approval_data')
+            knox_pims_df = self.pickle_manager.load_dataframe('knox_pims_data')
+            knox_mail_df = self.pickle_manager.load_dataframe('knox_mail_data')
             
             # Equipment 데이터 로드
-            eam_df = self.pickle_manager.load_pickle('eam_data')
-            lams_df = self.pickle_manager.load_pickle('lams_data')
-            mes_df = self.pickle_manager.load_pickle('mes_data')
+            eam_df = self.pickle_manager.load_dataframe('eam_data')
+            lams_df = self.pickle_manager.load_dataframe('lams_data')
+            mes_df = self.pickle_manager.load_dataframe('mes_data')
             
             # Knox 데이터 통합
             if any(df is not None for df in [knox_approval_df, knox_pims_df, knox_mail_df]):

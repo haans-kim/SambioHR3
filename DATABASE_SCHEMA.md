@@ -1,456 +1,352 @@
-# SambioHR2 Database Schema Documentation
+# Database Schema Documentation
 
-## 📊 Overview
+## 📊 Sambio Human Analytics Database Schema
 
-SambioHR2 uses SQLite as its database engine with SQLAlchemy ORM. The database consists of 15 core tables organized into 5 logical groups:
+> Last Updated: 2025-08-11 14:25:00
+> Database: `data/sambio_human.db`
+> Total Tables: 54
+> Total Records: 4,471,139
 
-1. **Employee & Organization** (3 tables)
-2. **Work & Activity Data** (4 tables)
-3. **Tag System** (4 tables)
-4. **HMM Model** (2 tables)
-5. **System & Logs** (2 tables)
+## 📈 Overview
 
-## 🗄️ Database Structure
+| Category | Tables | Total Records |
+|----------|--------|---------------|
+| Knox 시스템 데이터 | 3 | 502,093 |
+| Equipment 시스템 데이터 | 7 | 980,448 |
+| 인사/근태 데이터 | 8 | 374,248 |
+| 태깅 데이터 | 8 | 1,803,506 |
+| 식사 데이터 | 1 | 710,583 |
+| HMM 모델 관련 | 3 | 47 |
+| 분석 결과 | 5 | 84,285 |
+| 작업 관리 | 5 | 0 |
+| 배치 작업 | 4 | 121 |
+| 기타 | 7 | 15,808 |
+| **Total** | **54** | **4,471,139** |
 
-### Entity Relationship Diagram
+## 🔗 Table Relationships
 
+```mermaid
+erDiagram
+    employees ||--o{ daily_analysis_results : has
+    employees ||--o{ tag_data : generates
+    employees ||--o{ meal_data : consumes
+    employees ||--o{ knox_pims_data : schedules
+    employees ||--o{ knox_approval_data : approves
+    employees ||--o{ attendance_data : records
+    organization_data ||--o{ employees : contains
+    tag_location_master ||--o{ tag_data : locates
+    hmm_model_config ||--|| activity_states : defines
+    activity_states ||--o{ state_transition_rules : transitions
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│    employees    │────<│  daily_work_data │>────│  tag_logs       │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-         │                       │                         │
-         │                       │                         │
-         v                       v                         v
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│ organization    │     │   activities     │     │ tag_master      │
-│   _mapping      │     └──────────────────┘     └─────────────────┘
-└─────────────────┘              │                         │
-                                 │                         │
-                                 v                         v
-                        ┌──────────────────┐     ┌─────────────────┐
-                        │  hmm_states      │     │ location_tag    │
-                        └──────────────────┘     │   _mapping      │
-                                                 └─────────────────┘
-```
-
-## 📋 Table Specifications
-
-### 1. Employee & Organization Tables
-
-#### `employees`
-Core employee information table.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| employee_id | VARCHAR(20) | PRIMARY KEY | Employee ID (사번) |
-| name | VARCHAR(100) | NOT NULL | Employee name |
-| department | VARCHAR(100) | | Department name |
-| team | VARCHAR(100) | | Team name |
-| position | VARCHAR(50) | | Job position |
-| shift_type | VARCHAR(10) | CHECK IN ('DAY','NIGHT') | Shift assignment |
-| hire_date | DATE | | Employment start date |
-| status | VARCHAR(20) | DEFAULT 'ACTIVE' | Employment status |
-| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Record creation |
-| updated_at | TIMESTAMP | | Last update time |
-
-**Indexes:**
-- `idx_emp_dept`: (department)
-- `idx_emp_shift`: (shift_type)
-- `idx_emp_status`: (status)
-
-#### `organization_mapping`
-Organizational hierarchy mapping.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Record ID |
-| employee_id | VARCHAR(20) | FOREIGN KEY → employees | Employee reference |
-| center | VARCHAR(100) | | Center name |
-| bu | VARCHAR(100) | | Business unit |
-| team | VARCHAR(100) | | Team name |
-| group_name | VARCHAR(100) | | Group name |
-| part | VARCHAR(100) | | Part name |
-| valid_from | DATE | NOT NULL | Effective start date |
-| valid_to | DATE | | Effective end date |
-
-**Indexes:**
-- `idx_org_emp_date`: (employee_id, valid_from)
-- `idx_org_hierarchy`: (center, bu, team)
-
-#### `organization_summary`
-Aggregated organizational metrics.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Record ID |
-| date | DATE | NOT NULL | Summary date |
-| dept_name | VARCHAR(100) | NOT NULL | Department name |
-| metric_type | VARCHAR(50) | NOT NULL | Metric type |
-| value | FLOAT | | Metric value |
-| count | INTEGER | | Employee count |
-| shift | VARCHAR(10) | | Shift type (optional) |
-
-**Indexes:**
-- `idx_org_sum_date_dept`: (date, dept_name)
-
-### 2. Work & Activity Data Tables
-
-#### `daily_work_data`
-Daily work records with 2-shift support.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Record ID |
-| date | DATE | NOT NULL | Work date |
-| employee_code | VARCHAR(20) | FOREIGN KEY → employees | Employee reference |
-| name | VARCHAR(100) | | Employee name (denormalized) |
-| shift | VARCHAR(10) | | Shift type (DAY/NIGHT) |
-| clock_in_time | TIMESTAMP | | Clock-in timestamp |
-| clock_out_time | TIMESTAMP | | Clock-out timestamp |
-| cross_day_flag | BOOLEAN | DEFAULT FALSE | Midnight crossing indicator |
-| gross_work_time | FLOAT | | Total time (hours) |
-| actual_work_time | FLOAT | | Actual work time (hours) |
-| rest_time | FLOAT | | Rest time (hours) |
-| meal_times | JSON | | Meal durations {"breakfast": 0.5, ...} |
-| overtime | FLOAT | | Overtime hours |
-| data_quality | FLOAT | CHECK BETWEEN 0 AND 1 | Data reliability score |
-
-**Indexes:**
-- `idx_daily_work_date_emp`: (date, employee_code)
-- `idx_daily_work_shift`: (shift, date)
-
-#### `shift_work_data`
-Detailed shift work breakdown.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Record ID |
-| date | DATE | NOT NULL | Work date |
-| employee_code | VARCHAR(20) | FOREIGN KEY → employees | Employee reference |
-| day_shift_hours | FLOAT | DEFAULT 0 | Day shift hours |
-| night_shift_hours | FLOAT | DEFAULT 0 | Night shift hours |
-| transition_time | TIMESTAMP | | Shift transition time |
-| total_work_time | FLOAT | | Total hours worked |
-
-#### `activities`
-HMM-classified activity records.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Record ID |
-| employee_id | VARCHAR(20) | FOREIGN KEY → employees | Employee reference |
-| timestamp | TIMESTAMP | NOT NULL | Activity timestamp |
-| state | VARCHAR(50) | NOT NULL | HMM state |
-| duration | INTEGER | | Duration (minutes) |
-| confidence | FLOAT | CHECK BETWEEN 0 AND 1 | Prediction confidence |
-| location | VARCHAR(100) | | Physical location |
-| raw_data | JSON | | Original observation data |
-
-**Indexes:**
-- `idx_activities_emp_time`: (employee_id, timestamp)
-- `idx_activities_state`: (state)
-
-#### `work_sessions`
-Continuous work session tracking.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Session ID |
-| employee_id | VARCHAR(20) | FOREIGN KEY → employees | Employee reference |
-| session_date | DATE | NOT NULL | Session date |
-| start_time | TIMESTAMP | NOT NULL | Session start |
-| end_time | TIMESTAMP | | Session end |
-| session_type | VARCHAR(50) | | Type of work session |
-| total_duration | FLOAT | | Duration (hours) |
-| activity_breakdown | JSON | | Activity distribution |
-
-### 3. Tag System Tables
-
-#### `tag_master`
-Master tag definitions.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| tag_code | VARCHAR(10) | PRIMARY KEY | Unique tag code |
-| tag_category | CHAR(1) | CHECK IN ('G','N','T','M','O') | Category |
-| tag_name | VARCHAR(100) | NOT NULL | Tag name |
-| description | TEXT | | Detailed description |
-| priority | INTEGER | DEFAULT 0 | Processing priority |
-| is_active | BOOLEAN | DEFAULT TRUE | Active flag |
-
-**Categories:**
-- G: Gate (entry/exit points)
-- N: Non-work areas
-- T: Work areas
-- M: Meeting/conference
-- O: Other/special
-
-#### `tag_logs`
-Raw tag reading logs.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Log ID |
-| employee_code | VARCHAR(20) | NOT NULL | Employee ID |
-| timestamp | TIMESTAMP | NOT NULL | Tag read time |
-| location | VARCHAR(100) | NOT NULL | Physical location |
-| location_code | VARCHAR(20) | | Location code |
-| tag_type | VARCHAR(10) | | Entry/Exit type |
-| processed_flag | BOOLEAN | DEFAULT FALSE | Processing status |
-| session_id | VARCHAR(50) | | Related session |
-
-**Indexes:**
-- `idx_tag_logs_emp_time`: (employee_code, timestamp)
-- `idx_tag_logs_processed`: (processed_flag)
-
-#### `location_tag_mapping`
-Maps physical locations to logical tags.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Mapping ID |
-| location | VARCHAR(100) | NOT NULL UNIQUE | Physical location |
-| tag_code | VARCHAR(10) | FOREIGN KEY → tag_master | Associated tag |
-| is_primary | BOOLEAN | DEFAULT TRUE | Primary tag flag |
-| mapping_confidence | FLOAT | DEFAULT 1.0 | Mapping reliability |
-
-**Indexes:**
-- `idx_location_tag`: (location, tag_code)
-
-#### `state_transition_rules`
-HMM state transition rules.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Rule ID |
-| from_state | VARCHAR(50) | NOT NULL | Source state |
-| to_state | VARCHAR(50) | NOT NULL | Target state |
-| base_probability | FLOAT | CHECK BETWEEN 0 AND 1 | Base transition prob |
-| conditions | JSON | | Rule conditions |
-| priority | INTEGER | DEFAULT 0 | Rule priority |
-| is_active | BOOLEAN | DEFAULT TRUE | Active flag |
-
-**Indexes:**
-- `idx_transition_states`: (from_state, to_state)
-
-### 4. HMM Model Tables
-
-#### `hmm_states`
-HMM state definitions.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| state_id | INTEGER | PRIMARY KEY AUTOINCREMENT | State ID |
-| state_name | VARCHAR(50) | NOT NULL UNIQUE | State name |
-| state_category | VARCHAR(50) | | Category (WORK/MEAL/REST/etc) |
-| description | TEXT | | State description |
-| color_code | VARCHAR(7) | | UI color (#RRGGBB) |
-| icon | VARCHAR(50) | | UI icon name |
-
-#### `hmm_model_config`
-Model configuration and parameters.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Config ID |
-| model_version | VARCHAR(20) | NOT NULL | Model version |
-| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Creation time |
-| transition_matrix | JSON | | Full transition matrix |
-| emission_matrix | JSON | | Full emission matrix |
-| initial_probs | JSON | | Initial state probabilities |
-| training_metrics | JSON | | Training performance metrics |
-| is_active | BOOLEAN | DEFAULT FALSE | Active model flag |
-
-### 5. System & Log Tables
-
-#### `processing_log`
-System processing history.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Log ID |
-| process_type | VARCHAR(50) | NOT NULL | Process type |
-| start_time | TIMESTAMP | NOT NULL | Process start |
-| end_time | TIMESTAMP | | Process end |
-| status | VARCHAR(20) | | SUCCESS/FAILED/RUNNING |
-| records_processed | INTEGER | | Record count |
-| error_message | TEXT | | Error details |
-| metadata | JSON | | Additional info |
-
-#### `meal_logs`
-Meal time tracking.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | INTEGER | PRIMARY KEY AUTOINCREMENT | Log ID |
-| employee_id | VARCHAR(20) | FOREIGN KEY → employees | Employee reference |
-| date | DATE | NOT NULL | Meal date |
-| meal_type | VARCHAR(20) | CHECK IN ('BREAKFAST','LUNCH','DINNER','MIDNIGHT') | Meal type |
-| start_time | TIMESTAMP | | Meal start |
-| end_time | TIMESTAMP | | Meal end |
-| location | VARCHAR(100) | | Cafeteria location |
-| duration | INTEGER | | Duration (minutes) |
-
-**Indexes:**
-- `idx_meal_emp_date`: (employee_id, date)
-
-## 🔗 Relationships
-
-### Primary Relationships
-
-1. **employees → daily_work_data** (1:N)
-   - One employee has multiple daily work records
-   - Linked by: employee_code/employee_id
-
-2. **employees → tag_logs** (1:N)
-   - One employee generates multiple tag logs
-   - Linked by: employee_code
-
-3. **employees → activities** (1:N)
-   - One employee has multiple activity records
-   - Linked by: employee_id
-
-4. **tag_master → location_tag_mapping** (1:N)
-   - One tag can map to multiple locations
-   - Linked by: tag_code
-
-5. **employees → organization_mapping** (1:N)
-   - One employee can have multiple org assignments over time
-   - Linked by: employee_id
-
-### Junction Tables
-
-- **location_tag_mapping**: Links physical locations to logical tags
-- **state_transition_rules**: Defines valid state transitions
-- **organization_mapping**: Tracks organizational changes over time
-
-## 🔐 Constraints & Business Rules
-
-### Data Integrity Constraints
-
-1. **Shift Constraints**
-   - Day shift: 08:00-20:00
-   - Night shift: 20:00-08:00
-   - Cross-day flag required for night shifts
-
-2. **Meal Time Windows**
-   ```sql
-   CHECK (
-     (meal_type = 'BREAKFAST' AND TIME(start_time) BETWEEN '06:30' AND '09:00') OR
-     (meal_type = 'LUNCH' AND TIME(start_time) BETWEEN '11:20' AND '13:20') OR
-     (meal_type = 'DINNER' AND TIME(start_time) BETWEEN '17:00' AND '20:00') OR
-     (meal_type = 'MIDNIGHT' AND (TIME(start_time) >= '23:30' OR TIME(start_time) <= '01:00'))
-   )
-   ```
-
-3. **Work Time Validation**
-   ```sql
-   CHECK (actual_work_time <= gross_work_time)
-   CHECK (rest_time >= 0)
-   CHECK (overtime >= 0)
-   ```
-
-4. **Probability Constraints**
-   ```sql
-   CHECK (confidence BETWEEN 0 AND 1)
-   CHECK (base_probability BETWEEN 0 AND 1)
-   CHECK (data_quality BETWEEN 0 AND 1)
-   ```
-
-### Referential Integrity
-
-All foreign keys have CASCADE options:
-- **ON DELETE**: RESTRICT (prevent orphaned records)
-- **ON UPDATE**: CASCADE (propagate changes)
-
-## 📈 Performance Optimization
-
-### Index Strategy
-
-1. **Primary Indexes**: All primary keys
-2. **Foreign Key Indexes**: All foreign key columns
-3. **Query Optimization Indexes**:
-   - Date-based queries: (date, employee_code)
-   - Time-range queries: (timestamp)
-   - Status queries: (processed_flag, status)
-
-### Partitioning Strategy
-
-For large deployments, consider partitioning:
-- **tag_logs**: By month
-- **activities**: By month
-- **daily_work_data**: By quarter
-
-## 🔧 Maintenance
-
-### Regular Maintenance Tasks
-
-1. **Daily**
-   - Update organization_summary
-   - Process pending tag_logs
-   - Clean processing_log > 30 days
-
-2. **Weekly**
-   - Rebuild statistics
-   - Vacuum database
-   - Archive completed work_sessions
-
-3. **Monthly**
-   - Backup full database
-   - Analyze query performance
-   - Review and optimize indexes
-
-### Data Retention
-
-- **tag_logs**: 6 months (then archive)
-- **activities**: 1 year
-- **daily_work_data**: 2 years
-- **processing_log**: 30 days
-- **All others**: Indefinite
-
-## 📊 Sample Queries
-
-### 1. Get employee's daily activity summary
+
+## Knox 시스템 데이터
+
+### 📋 `knox_pims_data` - Knox PIMS (일정/회의)
+
+- **Records**: 66,645
+- **Description**: Knox PIMS 시스템의 일정 및 회의 데이터
+- **Period**: 2025-06-01 ~ 2025-06-30
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER | Primary Key |
+| employee_id | INTEGER | 직원 ID |
+| meeting_id | VARCHAR(100) | 일정 ID |
+| meeting_type | VARCHAR(50) | 키워드 분류 (회의/보고/면담, 업무, 교육/행사) |
+| start_time | DATETIME | 시작 시간 (GMT+9) |
+| end_time | DATETIME | 종료 시간 (GMT+9) |
+| created_at | DATETIME | 생성 시각 |
+
+### 📋 `knox_approval_data` - Knox 결재
+
+- **Records**: 339,818
+- **Description**: Knox 결재 시스템 데이터
+- **Period**: 2025-05-12 ~ 2025-07-23
+
+| Column | Type | Description |
+|--------|------|-------------|
+| Timestamp | TIMESTAMP | 타임스탬프 |
+| UserNo | INTEGER | 사용자 번호 |
+| Task | TEXT | 작업 내용 |
+| APID | TEXT | 결재 ID |
+| 비고 | TEXT | 비고 |
+| created_at | DATETIME | 생성 시각 |
+
+### 📋 `knox_mail_data` - Knox 메일
+
+- **Records**: 95,630
+- **Description**: Knox 메일 시스템 데이터
+- **Period**: 2025-06-26 ~ 2025-07-18
+
+| Column | Type | Description |
+|--------|------|-------------|
+| 메일key | TEXT | 메일 키 |
+| 발신일시_GMT9 | TEXT | 발신 시간 |
+| 발신인사번_text | TEXT | 발신인 사번 |
+| created_at | DATETIME | 생성 시각 |
+
+## Equipment 시스템 데이터
+
+### 📋 `eam_data` - EAM (안전설비시스템)
+
+- **Records**: 213,700
+- **Description**: EAM 로그인 이력
+- **Period**: 2025-06-01 ~ 2025-07-15
+
+| Column | Type | Description |
+|--------|------|-------------|
+| ATTEMPTDATE | DATETIME | 시도 일시 |
+| USERNO | INTEGER | 사용자 번호 |
+| ATTEMPTRESULT | TEXT | 시도 결과 |
+| APP | TEXT | 애플리케이션 |
+| created_at | DATETIME | 생성 시각 |
+
+### 📋 `lams_data` - LAMS (품질시스템)
+
+- **Records**: 2,245
+- **Description**: LAMS 스케줄 작성/수정 이력
+- **Period**: 2025-06-01 ~ 2025-07-04
+
+| Column | Type | Description |
+|--------|------|-------------|
+| User_No | INTEGER | 사용자 번호 |
+| DATE | DATETIME | 날짜 |
+| Task | TEXT | 작업 내용 |
+| created_at | DATETIME | 생성 시각 |
+
+### 📋 `mes_data` - MES (생산시스템)
+
+- **Records**: 76,040
+- **Description**: MES 로그인 이력
+- **Period**: 2025-06-01 ~ 2025-07-17
+
+| Column | Type | Description |
+|--------|------|-------------|
+| session | TEXT | 세션 |
+| login_time | DATETIME | 로그인 시간 |
+| USERNo | INTEGER | 사용자 번호 |
+| created_at | DATETIME | 생성 시각 |
+
+### 📋 `equis_data` - EQUIS 🆕
+
+- **Records**: 398,428
+- **Description**: EQUIS 시스템 데이터
+- **Period**: 2025-06-01 ~ 2025-07-15
+
+| Column | Type | Description |
+|--------|------|-------------|
+| Timestamp | DATETIME | 타임스탬프 |
+| USERNO( ID->사번매칭 ) | INTEGER | 사용자 번호 |
+| Event | TEXT | 이벤트 |
+| created_at | DATETIME | 생성 시각 |
+
+### 📋 `mdm_data` - MDM 🆕
+
+- **Records**: 290,035
+- **Description**: MDM 시스템 데이터
+- **Period**: 2025-06-01 ~ 2025-07-17
+
+| Column | Type | Description |
+|--------|------|-------------|
+| UserNo | INTEGER | 사용자 번호 |
+| Timestap | DATETIME | 타임스탬프 |
+| task | TEXT | 작업 (Logon successful/failed) |
+| created_at | DATETIME | 생성 시각 |
+
+## 인사/근태 데이터
+
+### 📋 `employees` - 직원 정보
+
+- **Records**: 5,142
+- **Description**: 직원 기본 정보
+
+| Column | Type | Description |
+|--------|------|-------------|
+| employee_id | INTEGER | 직원 ID (Primary Key) |
+| name | VARCHAR(50) | 성명 |
+| department | VARCHAR(100) | 부서 |
+| position | VARCHAR(50) | 직급 |
+| hire_date | DATE | 입사일 |
+| gender | VARCHAR(10) | 성별 |
+| shift_type | VARCHAR(20) | 근무 형태 |
+
+### 📋 `organization_data` - 조직 현황
+
+- **Records**: 5,142
+- **Description**: 조직 현황 자료
+
+| Column | Type | Description |
+|--------|------|-------------|
+| 사번 | INTEGER | 사번 |
+| 성명 | TEXT | 성명 |
+| 부서 | TEXT | 부서명 |
+| 직급 | TEXT | 직급 |
+| 입사년도 | INTEGER | 입사년도 |
+| 성별 | TEXT | 성별 |
+
+### 📋 `attendance_data` - 근태 사용
+
+- **Records**: 6,449
+- **Description**: 근태 사용 데이터
+- **Period**: 2025-01-01 ~ 2025-06-30
+
+| Column | Type | Description |
+|--------|------|-------------|
+| employee_id | INTEGER | 직원 ID |
+| attendance_date | DATE | 근태 날짜 |
+| attendance_code | VARCHAR(20) | 근태 코드 |
+| start_time | TIME | 시작 시간 |
+| end_time | TIME | 종료 시간 |
+
+### 📋 `claim_data` - 근무시간 Claim
+
+- **Records**: 154,849
+- **Description**: 근무시간 클레임 데이터
+- **Period**: 2025-06-01 ~ 2025-06-30
+
+| Column | Type | Description |
+|--------|------|-------------|
+| 근무일 | DATE | 근무일 |
+| 사번 | INTEGER | 사번 |
+| 성명 | TEXT | 성명 |
+| 부서 | TEXT | 부서 |
+| 근무시간 | FLOAT | 근무시간 |
+
+## 태깅 데이터
+
+### 📋 `tag_data` - 태깅 데이터
+
+- **Records**: 1,799,769
+- **Description**: RFID 태깅 로그 데이터
+
+| Column | Type | Description |
+|--------|------|-------------|
+| ENTE_DT | DATETIME | 태깅 시간 |
+| 사번 | INTEGER | 사번 |
+| NAME | TEXT | 성명 |
+| Tag_Code | VARCHAR(10) | 태그 코드 |
+| Location | VARCHAR(100) | 위치 |
+
+### 📋 `tag_location_master` - 태깅 지점 마스터
+
+- **Records**: 3,640
+- **Description**: 태깅 지점 정보
+
+| Column | Type | Description |
+|--------|------|-------------|
+| location_id | INTEGER | 위치 ID |
+| location_name | VARCHAR(100) | 위치명 |
+| location_type | VARCHAR(50) | 위치 유형 |
+| floor | INTEGER | 층 |
+| building | VARCHAR(50) | 건물 |
+
+## 식사 데이터
+
+### 📋 `meal_data` - 식사 태그 데이터
+
+- **Records**: 710,583
+- **Description**: 구내식당 이용 데이터
+- **Period**: 2025-04-01 ~ 2025-06-30
+
+| Column | Type | Description |
+|--------|------|-------------|
+| 취식일시 | DATETIME | 식사 시간 |
+| 사번 | INTEGER | 사번 |
+| 성명 | TEXT | 성명 |
+| 식당명 | TEXT | 식당명 |
+| 식대구분 | TEXT | 식사 구분 (아침/점심/저녁/야식) |
+
+## HMM 모델 관련
+
+### 📋 `hmm_model_config` - HMM 모델 설정
+
+- **Records**: 1
+- **Description**: Hidden Markov Model 설정
+
+| Column | Type | Description |
+|--------|------|-------------|
+| config_id | INTEGER | 설정 ID |
+| n_states | INTEGER | 상태 수 (17) |
+| model_params | TEXT | 모델 파라미터 (JSON) |
+| created_at | DATETIME | 생성 시각 |
+
+### 📋 `activity_states` - 활동 상태
+
+- **Records**: 17
+- **Description**: 17개 활동 상태 정의
+
+| Column | Type | Description |
+|--------|------|-------------|
+| state_id | INTEGER | 상태 ID |
+| state_name | VARCHAR(50) | 상태명 |
+| state_description | TEXT | 상태 설명 |
+
+### 📋 `state_transition_rules` - 상태 전이 규칙
+
+- **Records**: 29
+- **Description**: 상태 간 전이 확률
+
+| Column | Type | Description |
+|--------|------|-------------|
+| from_state | INTEGER | 시작 상태 |
+| to_state | INTEGER | 도착 상태 |
+| probability | FLOAT | 전이 확률 |
+
+## 📚 Usage Guide
+
+### Key Tables for Analysis
+
+1. **Employee Activity Analysis**
+   - Primary: `tag_data`, `employees`, `daily_analysis_results`
+   - Support: `meal_data`, `attendance_data`
+
+2. **Knox System Integration**
+   - `knox_pims_data`: Meeting/Schedule data (66,645 records)
+   - `knox_approval_data`: Approval workflow data (339,818 records)
+   - `knox_mail_data`: Email activity data (95,630 records)
+
+3. **Equipment Usage Tracking**
+   - `eam_data`: Safety equipment system (213,700 records)
+   - `lams_data`: Quality system (2,245 records)
+   - `mes_data`: Production system (76,040 records)
+   - `equis_data`: EQUIS system (398,428 records) 🆕
+   - `mdm_data`: MDM system (290,035 records) 🆕
+
+4. **HMM Analysis**
+   - `hmm_model_config`: Model configuration
+   - `activity_states`: 17 activity states
+   - `state_transition_rules`: Transition probabilities
+
+### Recommended Indexes
+
 ```sql
-SELECT 
-    e.name,
-    a.state,
-    SUM(a.duration) as total_minutes,
-    AVG(a.confidence) as avg_confidence
-FROM activities a
-JOIN employees e ON a.employee_id = e.employee_id
-WHERE a.employee_id = 'EMP001' 
-    AND DATE(a.timestamp) = '2025-06-15'
-GROUP BY e.name, a.state
-ORDER BY total_minutes DESC;
+-- For time-based queries
+CREATE INDEX idx_tag_data_timestamp ON tag_data(ENTE_DT);
+CREATE INDEX idx_knox_pims_start ON knox_pims_data(start_time);
+CREATE INDEX idx_meal_data_time ON meal_data(취식일시);
+
+-- For employee queries
+CREATE INDEX idx_tag_data_employee ON tag_data(사번);
+CREATE INDEX idx_knox_pims_employee ON knox_pims_data(employee_id);
+CREATE INDEX idx_meal_data_employee ON meal_data(사번);
+
+-- For location queries
+CREATE INDEX idx_tag_data_location ON tag_data(Location);
+CREATE INDEX idx_tag_data_code ON tag_data(Tag_Code);
 ```
 
-### 2. Compare shift efficiency
-```sql
-SELECT 
-    d.shift,
-    AVG(d.actual_work_time / d.gross_work_time) as efficiency,
-    COUNT(DISTINCT d.employee_code) as employee_count
-FROM daily_work_data d
-WHERE d.date BETWEEN '2025-06-01' AND '2025-06-30'
-GROUP BY d.shift;
-```
+## 📝 Notes
 
-### 3. Meal pattern analysis
-```sql
-SELECT 
-    m.meal_type,
-    AVG(m.duration) as avg_duration,
-    COUNT(*) as meal_count
-FROM meal_logs m
-JOIN employees e ON m.employee_id = e.employee_id
-WHERE e.shift_type = 'NIGHT'
-    AND m.date BETWEEN '2025-06-01' AND '2025-06-30'
-GROUP BY m.meal_type;
-```
+- All timestamp fields are stored in KST (GMT+9)
+- Employee IDs are stored as integers
+- The database supports 2-shift work system (Day: 08:00-20:00, Night: 20:00-08:00)
+- Meal time windows are critical for activity classification:
+  - Breakfast: 06:30-09:00
+  - Lunch: 11:20-13:20
+  - Dinner: 17:00-20:00
+  - Midnight meal: 23:30-01:00
+- HMM model uses 17 states for activity classification
 
 ---
-
-**Version**: 1.0.0  
-**Last Updated**: 2025-01-31  
-**Database Engine**: SQLite 3.x with SQLAlchemy ORM
+*Generated by Sambio Human Analytics System*
+*Last Updated: 2025-08-11*

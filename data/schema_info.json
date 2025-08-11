@@ -1,0 +1,5523 @@
+{
+  "schema": {
+    "abc_activity_data": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "sequence",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "department_code",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "department_name",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "activity_code_1",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "activity_code_2",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "activity_code_3",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "activity_classification",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "activity_target",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "duration_minutes",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "duration_hours",
+          "type": "FLOAT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "activity_major",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "activity_medium",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "activity_minor",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "activity_hierarchy",
+          "type": "VARCHAR(300)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "remarks",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "ix_abc_activity_data_employee_id",
+        "ix_abc_activity_data_work_date"
+      ]
+    },
+    "abc_data": {
+      "columns": [
+        {
+          "name": "성명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "사번",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "수행일자",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "순서",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "부서코드",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "부서명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "조직분류",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "ACT_NO_1",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "ACT_NO_2",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "ACT_NO_3",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "작업분류",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "작업대상",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "소요시간",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "비고",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "등록날짜",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Activity 대분류",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Activity 중분류",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Activity 소분류",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "BU_CD",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 14026,
+      "indexes": []
+    },
+    "activity_states": {
+      "columns": [
+        {
+          "name": "state_code",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "state_name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "state_category",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "color_code",
+          "type": "VARCHAR(10)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_work_time",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "display_order",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 11,
+      "indexes": [
+        "sqlite_autoindex_activity_states_1"
+      ]
+    },
+    "attendance_data": {
+      "columns": [
+        {
+          "name": "employee_id",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employee_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "department_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "position_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "attendance_code",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "attendance_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "start_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "end_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "attendance_days",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "start_time",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "end_time",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "attendance_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "reason",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "reason_detail",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "destination",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "contact",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "contact_relation",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "approval_status",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "last_modifier",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "first_approver",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "second_approver",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "third_approver",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 6449,
+      "indexes": [
+        "idx_attendance_code_employee_date",
+        "idx_attendance_date_range",
+        "idx_attendance_employee_startdate"
+      ]
+    },
+    "batch_error_logs": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "job_id",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employee_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "analysis_date",
+          "type": "DATE",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "error_type",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "error_message",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "error_details",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "retry_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "resolved",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": "FALSE",
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_batch_errors_job"
+      ]
+    },
+    "batch_job_checkpoints": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "job_id",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "checkpoint_time",
+          "type": "TIMESTAMP",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "checkpoint_type",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "processed_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "success_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "failure_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "remaining_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "current_speed",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "estimated_completion",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "message",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 91,
+      "indexes": [
+        "idx_batch_checkpoints_job"
+      ]
+    },
+    "batch_job_details": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "job_id",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employee_id",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "analysis_date",
+          "type": "DATE",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "error_message",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "start_time",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "end_time",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "processing_time",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "actual_work_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "claimed_work_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "efficiency_ratio",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "tag_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_batch_job_details_employee",
+        "idx_batch_job_details_job",
+        "sqlite_autoindex_batch_job_details_1"
+      ]
+    },
+    "batch_jobs": {
+      "columns": [
+        {
+          "name": "job_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "job_name",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "job_type",
+          "type": "TEXT",
+          "nullable": true,
+          "default": "'daily_analysis'",
+          "primary_key": 0
+        },
+        {
+          "name": "start_time",
+          "type": "TIMESTAMP",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "end_time",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "target_date_start",
+          "type": "DATE",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "target_date_end",
+          "type": "DATE",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "organization_level",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "organization_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "total_employees",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "processed_employees",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "success_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "failure_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "skip_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_processing_time",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "total_processing_time",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "num_workers",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "1",
+          "primary_key": 0
+        },
+        {
+          "name": "batch_size",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_by",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "error_message",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "notes",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 30,
+      "indexes": [
+        "idx_batch_jobs_dates",
+        "idx_batch_jobs_status",
+        "sqlite_autoindex_batch_jobs_1"
+      ]
+    },
+    "claim_data": {
+      "columns": [
+        {
+          "name": "근무일",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "급여요일",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "성명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "사번",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "부서",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "직급",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "WORKSCHDTYPNM",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "근무시간",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "시작",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "종료",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "제외시간",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "근태명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "근태코드",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "시작시간",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "종료시간",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "cross_day_work",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "실제근무시간",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 154849,
+      "indexes": []
+    },
+    "daily_analysis_results": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "analysis_date",
+          "type": "DATE",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "center_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "center_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "team_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "team_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_start",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_end",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "total_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "actual_work_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "claimed_work_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "efficiency_ratio",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "focused_work_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "equipment_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "meeting_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "training_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "meal_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "breakfast_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "lunch_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "dinner_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "midnight_meal_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "movement_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "rest_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "fitness_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "commute_in_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "commute_out_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "preparation_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "work_area_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "non_work_area_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "gate_area_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "confidence_score",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "activity_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "meal_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "tag_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "shift_type",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_type",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        },
+        {
+          "name": "job_grade",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 84189,
+      "indexes": [
+        "idx_dar_employee_date_hours",
+        "idx_dar_date_efficiency_desc",
+        "idx_dar_team_date_efficiency",
+        "idx_dar_center_date_efficiency",
+        "idx_dar_created",
+        "idx_dar_efficiency",
+        "idx_dar_team",
+        "idx_dar_group",
+        "idx_dar_center",
+        "idx_dar_employee_date",
+        "idx_dar_employee",
+        "idx_dar_date",
+        "sqlite_autoindex_daily_analysis_results_1"
+      ]
+    },
+    "daily_work_data": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "shift_type",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "actual_work_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "rest_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "non_work_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "meal_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "breakfast_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "lunch_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "dinner_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "midnight_meal_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "cross_day_flag",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "efficiency_ratio",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "data_quality_score",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 1780,
+      "indexes": [
+        "ix_daily_work_data_employee_id",
+        "ix_daily_work_data_work_date"
+      ]
+    },
+    "eam_data": {
+      "columns": [
+        {
+          "name": "ATTEMPTDATE",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "USERNO",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "ATTEMPTRESULT",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "APP",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 213700,
+      "indexes": []
+    },
+    "employee_info": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employee_name",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "gender",
+          "type": "VARCHAR(10)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "join_year",
+          "type": "VARCHAR(10)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "nationality",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "position_name",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "position_type",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "join_route",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_join_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "company_join_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "internal_dept_code",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "department_code",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "department_name",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "center",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "bu",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "team",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_name",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "part",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employment_status",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employee_type",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "job_title",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "job_function",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "ix_employee_info_employee_id"
+      ]
+    },
+    "employee_organization_mapping": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "org_code",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "start_date",
+          "type": "DATE",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "end_date",
+          "type": "DATE",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_type",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_org_mapping_employee",
+        "idx_employee_org",
+        "idx_active_mapping",
+        "idx_date_range"
+      ]
+    },
+    "employees": {
+      "columns": [
+        {
+          "name": "employee_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "center_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "center_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "team_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "team_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "position",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "job_grade",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 5093,
+      "indexes": [
+        "sqlite_autoindex_employees_1"
+      ]
+    },
+    "equipment_data": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "system_type",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "timestamp",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "action_type",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "application",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "ix_equipment_data_employee_id",
+        "ix_equipment_data_timestamp"
+      ]
+    },
+    "equipment_logs": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "datetime",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "equipment_type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "equipment_id",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "location",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "action",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_type",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "duration",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "details",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_equipment_logs_type_employee_time",
+        "idx_equipment_logs_employee_date_type",
+        "ix_equipment_logs_employee_id",
+        "ix_equipment_logs_datetime"
+      ]
+    },
+    "equis_data": {
+      "columns": [
+        {
+          "name": "Timestamp",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "USERNO( ID->사번매칭 )",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Event",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 398428,
+      "indexes": []
+    },
+    "hmm_model_config": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "model_name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "model_version",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "states",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "transition_matrix",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "emission_matrix",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "initial_probabilities",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "model_parameters",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "training_accuracy",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "validation_accuracy",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": []
+    },
+    "knox_approval_data": {
+      "columns": [
+        {
+          "name": "Timestamp",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "UserNo",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Task",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "APID",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "비고",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 339818,
+      "indexes": []
+    },
+    "knox_mail_data": {
+      "columns": [
+        {
+          "name": "메일key",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "발신일시_GMT9",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "발신인사번_text",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 95630,
+      "indexes": []
+    },
+    "knox_pims_data": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "meeting_id",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "meeting_type",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "start_time",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "end_time",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 66645,
+      "indexes": [
+        "ix_knox_pims_data_start_time",
+        "ix_knox_pims_data_employee_id"
+      ]
+    },
+    "lams_data": {
+      "columns": [
+        {
+          "name": "User_No",
+          "type": "REAL",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "DATE",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Task",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 2245,
+      "indexes": []
+    },
+    "location_tag_mapping": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "location_code",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "location_name",
+          "type": "VARCHAR(200)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "tag_code",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "mapping_confidence",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "mapping_rule",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 81,
+      "indexes": [
+        "idx_location_tag",
+        "ix_location_tag_mapping_location_code"
+      ]
+    },
+    "mdm_data": {
+      "columns": [
+        {
+          "name": "UserNo",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Timestap",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "task",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 290035,
+      "indexes": []
+    },
+    "meal_data": {
+      "columns": [
+        {
+          "name": "NO",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "취식일시",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "정산일",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "식당명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "배식구",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "식사가격",
+          "type": "SMALLINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "카드번호",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "수동입력여부",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "회사코드",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "회사",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "사원증종류",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "카드구분",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "기기번호",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "사번",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Knox ID",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "생년월일",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Domain ID",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "성명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "사원구분",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "사업장 코드",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "사업장",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "부서",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "직책",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "식단",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "테이크아웃",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "처리일시",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "식사대분류",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "식사구분명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "취식이벤트",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "취식번호",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 710583,
+      "indexes": []
+    },
+    "mes_data": {
+      "columns": [
+        {
+          "name": "session",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "login_time",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "USERNo",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 76040,
+      "indexes": []
+    },
+    "non_work_time": {
+      "columns": [
+        {
+          "name": "Unnamed: 0",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Unnamed: 1",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Unnamed: 2",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Unnamed: 3",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Unnamed: 4",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Unnamed: 5",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Unnamed: 6",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Unnamed: 7",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Unnamed: 8",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Unnamed: 9",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 201964,
+      "indexes": []
+    },
+    "non_work_time_data": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "exclude_time_code",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "exclude_time_type",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "start_time",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "end_time",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "exclude_duration",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "input_type",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_reflected",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "table_type",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_non_work_time_employee_date",
+        "ix_non_work_time_data_work_date",
+        "ix_non_work_time_data_employee_id"
+      ]
+    },
+    "o_tag_sources": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "source_type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "source_table",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "source_column",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": "TRUE",
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 4,
+      "indexes": []
+    },
+    "organization_analysis_job": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "job_type",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "target_date",
+          "type": "DATE",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "target_org_code",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "total_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "processed_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "progress_percentage",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "started_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "completed_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "error_message",
+          "type": "VARCHAR(500)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_by",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 1,
+      "indexes": [
+        "idx_job_status",
+        "idx_job_type_date"
+      ]
+    },
+    "organization_daily_stats": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "org_code",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_date",
+          "type": "DATE",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "total_employees",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "flexible_work_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "elastic_work_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_attendance_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_actual_work_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_work_efficiency",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_meeting_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_meal_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_movement_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_rest_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_data_confidence",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "std_actual_work_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "std_work_efficiency",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "min_work_efficiency",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "max_work_efficiency",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 96,
+      "indexes": [
+        "idx_org_efficiency",
+        "idx_org_date",
+        "idx_work_date"
+      ]
+    },
+    "organization_daily_summary": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "organization_id",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "organization_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "organization_type",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "summary_date",
+          "type": "DATE",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "parent_org_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "parent_org_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "total_employees",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "analyzed_employees",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "coverage_rate",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_total_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_actual_work_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_claimed_work_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_efficiency_ratio",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_confidence_score",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_work_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_meeting_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_meal_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_movement_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_rest_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_training_hours",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_work_area_ratio",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "avg_non_work_area_ratio",
+          "type": "REAL",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "efficiency_90_plus",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "efficiency_80_90",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "efficiency_70_80",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "efficiency_below_70",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "day_shift_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "night_shift_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "special_shift_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "nullable": true,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_ods_org_date",
+        "idx_ods_org",
+        "idx_ods_date",
+        "sqlite_autoindex_organization_daily_summary_1"
+      ]
+    },
+    "organization_data": {
+      "columns": [
+        {
+          "name": "NO.",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "사번",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "성명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "성별",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "입사년도",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "국적",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "직급명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "직급2*",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "입사경위2*",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "입사경위1",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "그룹입사일",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "당사입사일",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "내부부서코드",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "부서코드",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "부서명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "센터",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "BU",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "팀",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "그룹",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "파트",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "재직상태",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "인력유형",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "직책명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "직무",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "녹스메일",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 5142,
+      "indexes": []
+    },
+    "organization_mapping": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "center",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "division",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "team",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_name",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "part",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "unit",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "code",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "changed_dept_name",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "org_level",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "parent_center",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "english_dept_name",
+          "type": "VARCHAR(200)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "job_title",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "position",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employee_name",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "rr_description",
+          "type": "VARCHAR(500)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": []
+    },
+    "organization_master": {
+      "columns": [
+        {
+          "name": "org_code",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "org_name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "org_level",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "parent_org_code",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "display_order",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": "1",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 751,
+      "indexes": [
+        "idx_active_org",
+        "idx_parent_org",
+        "idx_org_level",
+        "sqlite_autoindex_organization_master_1"
+      ]
+    },
+    "organization_master_backup": {
+      "columns": [
+        {
+          "name": "team_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "team_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "center_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "center_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": []
+    },
+    "organization_monthly_stats": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "org_code",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "year",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "month",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_total_employees",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_flexible_work_count",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_elastic_work_count",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_attendance_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_actual_work_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_work_efficiency",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_meeting_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_meal_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_movement_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_rest_hours",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_data_confidence",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "working_days",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "efficiency_trend",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_org_year_month",
+        "idx_year_month"
+      ]
+    },
+    "organization_summary": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "org_id",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "org_name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "org_level",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_work_time",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "avg_efficiency_ratio",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "operation_rate",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "total_employees",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "day_shift_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "night_shift_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "ix_organization_summary_org_id",
+        "ix_organization_summary_date"
+      ]
+    },
+    "processing_log": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "process_type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "process_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "start_time",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "end_time",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "processed_records",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "error_count",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "error_message",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "processing_details",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 1,
+      "indexes": []
+    },
+    "shift_work_data": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "clock_in_time",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "clock_out_time",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "shift_duration",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "cross_midnight",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "shift_pattern",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_shift_work_employee_date",
+        "ix_shift_work_data_employee_id",
+        "ix_shift_work_data_work_date"
+      ]
+    },
+    "sqlite_sequence": {
+      "columns": [
+        {
+          "name": "name",
+          "type": "",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "seq",
+          "type": "",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 3,
+      "indexes": []
+    },
+    "state_transition_rules": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "from_tag",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "to_tag",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "from_state",
+          "type": "VARCHAR(50)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "to_state",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "base_probability",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "time_condition",
+          "type": "JSON",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "location_condition",
+          "type": "JSON",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "shift_condition",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "duration_condition",
+          "type": "JSON",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "priority",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 36,
+      "indexes": [
+        "ix_state_transition_rules_to_tag",
+        "ix_state_transition_rules_from_tag",
+        "idx_transition_states",
+        "idx_transition_tags"
+      ]
+    },
+    "tag_data": {
+      "columns": [
+        {
+          "name": "ENTE_DT",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "DAY_GB",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "DAY_NM",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "NAME",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "사번",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "CENTER",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "BU",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "TEAM",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "GROUP_A",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "PART",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "출입시각",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "DR_NO",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "DR_NM",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "DR_GB",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "INOUT_GB",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 1799769,
+      "indexes": [
+        "idx_tag_data_inout_employee",
+        "idx_tag_data_location_employee",
+        "idx_tag_data_datetime_employee",
+        "idx_tag_data_employee_date"
+      ]
+    },
+    "tag_location_master": {
+      "columns": [
+        {
+          "name": "정렬No.",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "출처파일",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "위치",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "기기번호",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "게이트명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "표기명",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "입출구분",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "공간구분_NM",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "공간구분_code",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "세부유형_NM",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "세부유형_code",
+          "type": "BIGINT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "Tag_Code",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "라벨링_활동",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "DR_NO",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 3640,
+      "indexes": []
+    },
+    "tag_logs": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "timestamp",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "tag_location",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "gate_number",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "gate_name",
+          "type": "VARCHAR(100)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "action_type",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "work_area_type",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "meal_type",
+          "type": "VARCHAR(20)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_tailgating",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "confidence_score",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_tag_logs_work_area_analysis",
+        "idx_tag_logs_meal_analysis",
+        "idx_tag_logs_employee_timestamp_action",
+        "ix_tag_logs_timestamp",
+        "ix_tag_logs_employee_id"
+      ]
+    },
+    "tag_master": {
+      "columns": [
+        {
+          "name": "tag_code",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "tag_name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "tag_category",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 12,
+      "indexes": [
+        "sqlite_autoindex_tag_master_1"
+      ]
+    },
+    "tag_processing_log": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "employee_id",
+          "type": "VARCHAR(20)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "process_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "original_location",
+          "type": "VARCHAR(200)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "mapped_tag",
+          "type": "VARCHAR(10)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "predicted_state",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "confidence_score",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "processing_time_ms",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "rule_applied",
+          "type": "VARCHAR(200)",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_anomaly",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "ix_tag_processing_log_employee_id",
+        "ix_tag_processing_log_process_date",
+        "idx_processing_emp_date"
+      ]
+    },
+    "tag_sequence_patterns": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "pattern_name",
+          "type": "VARCHAR(100)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "pattern_type",
+          "type": "VARCHAR(50)",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "tag_sequence",
+          "type": "JSON",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "state_sequence",
+          "type": "JSON",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "min_duration_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "max_duration_minutes",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "confidence_score",
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": []
+    },
+    "work_order_assignments": {
+      "columns": [
+        {
+          "name": "assignment_id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "order_id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "assignee_id",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "assignee_name",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "assigned_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        },
+        {
+          "name": "assigned_by",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "role",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "'executor'",
+          "primary_key": 0
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "'assigned'",
+          "primary_key": 0
+        },
+        {
+          "name": "accepted_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "started_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "completed_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_assignments_status",
+        "idx_assignments_assignee",
+        "idx_assignments_order"
+      ]
+    },
+    "work_order_attachments": {
+      "columns": [
+        {
+          "name": "attachment_id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "order_id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "file_name",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "file_path",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "file_type",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "file_size",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "uploaded_by",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "uploaded_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": []
+    },
+    "work_order_history": {
+      "columns": [
+        {
+          "name": "history_id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "order_id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "action_type",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "action_by",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "action_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        },
+        {
+          "name": "old_status",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "new_status",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "comment",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_history_date",
+        "idx_history_order"
+      ]
+    },
+    "work_order_items": {
+      "columns": [
+        {
+          "name": "item_id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "order_id",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "item_number",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "item_type",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "target_date_start",
+          "type": "DATE",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "target_date_end",
+          "type": "DATE",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "target_employees",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "'pending'",
+          "primary_key": 0
+        },
+        {
+          "name": "progress_rate",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": "0",
+          "primary_key": 0
+        },
+        {
+          "name": "result_summary",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "result_data",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_items_status",
+        "idx_items_order"
+      ]
+    },
+    "work_orders": {
+      "columns": [
+        {
+          "name": "order_id",
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null,
+          "primary_key": 1
+        },
+        {
+          "name": "order_number",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "order_type",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "priority",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "'medium'",
+          "primary_key": 0
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "'draft'",
+          "primary_key": 0
+        },
+        {
+          "name": "requester_id",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "requester_name",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "request_date",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        },
+        {
+          "name": "due_date",
+          "type": "DATE",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "target_type",
+          "type": "TEXT",
+          "nullable": false,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "center_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "center_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "group_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "team_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "team_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "approver_id",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "approver_name",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "approved_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "completed_date",
+          "type": "DATETIME",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "completion_note",
+          "type": "TEXT",
+          "nullable": true,
+          "default": null,
+          "primary_key": 0
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primary_key": 0
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        "idx_work_orders_target",
+        "idx_work_orders_due_date",
+        "idx_work_orders_requester",
+        "idx_work_orders_status",
+        "sqlite_autoindex_work_orders_1"
+      ]
+    }
+  },
+  "categories": {
+    "Knox 시스템 데이터": [
+      "knox_pims_data",
+      "knox_approval_data",
+      "knox_mail_data"
+    ],
+    "Equipment 시스템 데이터": [
+      "eam_data",
+      "lams_data",
+      "mes_data",
+      "equis_data",
+      "mdm_data",
+      "equipment_data",
+      "equipment_logs"
+    ],
+    "인사/근태 데이터": [
+      "employees",
+      "organization_data",
+      "organization_master",
+      "employee_organization_mapping",
+      "attendance_data",
+      "claim_data",
+      "non_work_time",
+      "non_work_time_data"
+    ],
+    "태깅 데이터": [
+      "tag_data",
+      "tag_logs",
+      "tag_master",
+      "tag_location_master",
+      "location_tag_mapping",
+      "tag_sequence_patterns",
+      "tag_processing_log",
+      "o_tag_sources"
+    ],
+    "식사 데이터": [
+      "meal_data"
+    ],
+    "HMM 모델 관련": [
+      "hmm_model_config",
+      "activity_states",
+      "state_transition_rules"
+    ],
+    "분석 결과": [
+      "daily_analysis_results",
+      "organization_daily_summary",
+      "organization_daily_stats",
+      "organization_monthly_stats",
+      "organization_summary"
+    ],
+    "작업 관리": [
+      "work_orders",
+      "work_order_assignments",
+      "work_order_items",
+      "work_order_history",
+      "work_order_attachments"
+    ],
+    "배치 작업": [
+      "batch_jobs",
+      "batch_job_details",
+      "batch_job_checkpoints",
+      "batch_error_logs"
+    ],
+    "기타": [
+      "daily_work_data",
+      "shift_work_data",
+      "abc_data",
+      "abc_activity_data",
+      "processing_log",
+      "organization_analysis_job",
+      "organization_master_backup"
+    ]
+  },
+  "generated_at": "2025-08-11T14:22:36.223281"
+}

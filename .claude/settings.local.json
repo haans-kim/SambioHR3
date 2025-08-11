@@ -49,7 +49,8 @@
       "mcp__sequential-thinking__sequentialthinking",
       "Bash(git stash:*)",
       "mcp__sequential-thinking__sequentialthinking",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(git cherry-pick:*)"
     ],
     "deny": []
   }

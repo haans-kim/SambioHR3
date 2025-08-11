@@ -69,6 +69,16 @@
       "table_name": "knox_mail_data",
       "display_name": "Knox 메일 데이터",
       "process_func_name": "process_knox_mail_data"
+    },
+    "EQUIS": {
+      "table_name": "equis_data",
+      "display_name": "EQUIS 데이터",
+      "process_func_name": "process_equis_data"
+    },
+    "MDM": {
+      "table_name": "mdm_data",
+      "display_name": "MDM 데이터",
+      "process_func_name": "process_mdm_data"
     }
   },
   "upload_config": {
@@ -211,6 +221,26 @@
       "dataframe_name": "knox_mail_data",
       "last_modified": "2025-07-31T14:44:12.442204",
       "row_count": 95630
+    },
+    "EQUIS": {
+      "files": [],
+      "file_names": [
+        "EQUIS_250601-250715.xlsx"
+      ],
+      "pickle_exists": false,
+      "dataframe_name": "equis_data",
+      "last_modified": null,
+      "row_count": 0
+    },
+    "MDM": {
+      "files": [],
+      "file_names": [
+        "MDM_250601-250717.xlsx"
+      ],
+      "pickle_exists": false,
+      "dataframe_name": "mdm_data",
+      "last_modified": null,
+      "row_count": 0
     }
   }
 }

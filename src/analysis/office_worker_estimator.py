@@ -153,8 +153,13 @@ class OfficeWorkerEstimator:
         
         # 시스템 사용 로그
         if 'source' in data.columns:
-            system_data = data[data['source'].isin(['EAM', 'LAMS', 'MES'])].astype(activities.dtypes, errors='ignore')
-            activities = pd.concat([activities, system_data])
+            system_data = data[data['source'].isin(['EAM', 'LAMS', 'MES'])]
+            if not system_data.empty:
+                # dtype 일치를 위해 필요한 컬럼만 선택하고 타입 변환
+                common_cols = list(set(activities.columns) & set(system_data.columns))
+                if common_cols:
+                    system_data = system_data[common_cols]
+                activities = pd.concat([activities, system_data], ignore_index=True)
         
         # 중복 제거 및 시간순 정렬
         if not activities.empty:
