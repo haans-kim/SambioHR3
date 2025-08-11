@@ -100,7 +100,7 @@ class DatabaseManager:
                     return [dict(zip(columns, row)) for row in result.fetchall()]
                 else:
                     # INSERT/UPDATE/DELETE의 경우 영향받은 행 수 반환
-                    self.logger.debug(f"Query executed, rows affected: {result.rowcount}")
+                    # Query executed - removed debug logging
                     return []
                     
         except SQLAlchemyError as e:
@@ -536,11 +536,11 @@ class DatabaseManager:
         df_copy.rename(columns=column_mapping, inplace=True)
         
         # 디버깅: 변환 전 데이터 타입 확인
-        self.logger.debug("attendance_data 컬럼 타입:")
+        # Data type debugging removed
         for col in df_copy.columns:
             if col in ['start_time', 'end_time']:
                 sample_val = df_copy[col].dropna().iloc[0] if not df_copy[col].dropna().empty else None
-                self.logger.debug(f"  {col}: {type(sample_val)}")
+                # Column type debug removed
         
         # datetime.time 타입 컬럼을 문자열로 변환
         time_columns = ['start_time', 'end_time']
@@ -610,7 +610,7 @@ class DatabaseManager:
                             converted_values.append(val)
                     
                     if has_time_objects:
-                        self.logger.debug(f"{col} 컬럼의 시간 객체를 문자열로 변환")
+                        # Time objects converted to string - removed debug logging
                         df_copy[col] = converted_values
             
             # 데이터베이스에 저장

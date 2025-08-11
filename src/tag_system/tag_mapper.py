@@ -64,7 +64,7 @@ class TagMapper:
                 
             for keyword in keywords:
                 if keyword.lower() in search_text:
-                    logger.debug(f"위치 '{location_name}'를 태그 '{tag_code}'로 매핑 (키워드: {keyword})")
+                    # Location mapped to tag - removed debug logging
                     self.location_cache[cache_key] = tag_code
                     return tag_code
         
@@ -75,7 +75,7 @@ class TagMapper:
             return tag
         
         # 기본값은 G1 (주업무 공간)
-        logger.debug(f"위치 '{location_name}'를 기본 태그 'G1'로 매핑")
+        # Location mapped to default tag G1 - removed debug logging
         self.location_cache[cache_key] = "G1"
         return "G1"
     

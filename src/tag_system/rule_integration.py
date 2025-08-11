@@ -78,7 +78,7 @@ class RuleIntegration:
             
             # 규칙에 매칭되지 않으면 None
             if state is None:
-                logger.debug(f"규칙 매칭 없음: {tag_data['tag']} at {tag_data['timestamp']}")
+                # No rule match - removed debug logging
                 # 확률적 추론이나 기본값 처리는 상위 레벨에서
                 results.append(None)
             else:

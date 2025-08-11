@@ -64,7 +64,7 @@ class IndividualAnalyzer:
         """
         # employee_id를 문자열로 변환 (정수로 들어올 수 있음)
         employee_id = str(employee_id)
-        self.logger.debug(f"개인별 분석 시작: {employee_id}, {start_date} ~ {end_date}")
+        # Individual analysis started - removed debug logging
         
         try:
             # 기본 데이터 수집
@@ -103,7 +103,7 @@ class IndividualAnalyzer:
                 hit_rate = (self._cache_hit_count / total_requests) * 100
                 self.logger.info(f"캐시 통계 - 히트율: {hit_rate:.1f}% (총 {total_requests}회 요청)")
             
-            self.logger.debug(f"개인별 분석 완료: {employee_id}")
+            # Individual analysis completed - removed debug logging
             return analysis_result
             
         except Exception as e:
@@ -134,7 +134,7 @@ class IndividualAnalyzer:
                         return claim_df
                     return pd.DataFrame()
                 except FileNotFoundError:
-                    self.logger.debug(f"Pickle file not found for {table_name}")
+                    # Pickle file not found - removed debug logging
                     return pd.DataFrame()
                 except Exception as e:
                     self.logger.warning(f"Error loading {table_name}: {e}")
@@ -155,7 +155,7 @@ class IndividualAnalyzer:
                         return tag_df
                     return pd.DataFrame()
                 except FileNotFoundError:
-                    self.logger.debug(f"Pickle file not found for {table_name}")
+                    # Pickle file not found - removed debug logging
                     return pd.DataFrame()
                 except Exception as e:
                     self.logger.warning(f"Error loading {table_name}: {e}")
@@ -169,7 +169,7 @@ class IndividualAnalyzer:
                         return abc_df
                     return pd.DataFrame()
                 except FileNotFoundError:
-                    self.logger.debug(f"Pickle file not found for {table_name}")
+                    # Pickle file not found - removed debug logging
                     return pd.DataFrame()
                 except Exception as e:
                     self.logger.warning(f"Error loading {table_name}: {e}")
@@ -190,7 +190,7 @@ class IndividualAnalyzer:
                         return meal_df
                     return pd.DataFrame()
                 except FileNotFoundError:
-                    self.logger.debug(f"Pickle file not found for {table_name}")
+                    # Pickle file not found - removed debug logging
                     return pd.DataFrame()
                 except Exception as e:
                     self.logger.warning(f"Error loading {table_name}: {e}")
@@ -471,7 +471,7 @@ class IndividualAnalyzer:
             # 경유 태그가 30분 이상 지속되면 업무로 변경
             if (entry.get('state') == '경유' and 
                 entry.get('duration_minutes', 0) > 30):
-                self.logger.debug(f"꼬리물기 패턴 감지: {entry['timestamp']} 에서 {entry.get('duration_minutes', 0):.1f}분 지속")
+                # Tail pattern detected - removed debug logging
                 
                 # 상태를 '업무'로 변경
                 entry['state'] = '업무'

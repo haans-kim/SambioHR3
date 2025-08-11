@@ -40,7 +40,7 @@ class ViterbiAlgorithm:
         # 캐시 키 생성
         cache_key = self._generate_cache_key(observation_sequence)
         if use_cache and cache_key in self.prediction_cache:
-            self.logger.debug(f"캐시된 예측 결과 반환: {cache_key}")
+            # Cached prediction returned - removed debug logging
             return self.prediction_cache[cache_key]
         
         # 관측 시퀀스 인코딩

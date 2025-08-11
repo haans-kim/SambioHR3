@@ -24,7 +24,7 @@ class SingletonMeta(type):
             if cls not in cls._instances:
                 instance = super().__call__(*args, **kwargs)
                 cls._instances[cls] = instance
-                logger.debug(f"{cls.__name__} 싱글톤 인스턴스 생성")
+                # Singleton instance created - removed debug logging
             return cls._instances[cls]
 
 
@@ -38,14 +38,14 @@ class SingletonDatabaseManager(DatabaseManager, metaclass=SingletonMeta):
         if not self._initialized:
             super().__init__(*args, **kwargs)
             SingletonDatabaseManager._initialized = True
-            logger.debug("SingletonDatabaseManager 초기화 완료")
+            # SingletonDatabaseManager initialized - removed debug logging
     
     def _auto_load_pickle_data(self):
         """
         첫 번째 인스턴스 생성 시에만 pickle 데이터 로드
         """
         if hasattr(self, '_pickle_loaded'):
-            logger.debug("Pickle 데이터가 이미 로드되어 있습니다.")
+            # Pickle data already loaded - removed debug logging
             return
             
         super()._auto_load_pickle_data()
@@ -64,7 +64,7 @@ class SingletonPickleManager(PickleManager, metaclass=SingletonMeta):
         if not self._initialized:
             super().__init__(*args, **kwargs)
             SingletonPickleManager._initialized = True
-            logger.debug("SingletonPickleManager 초기화 완료")
+            # SingletonPickleManager initialized - removed debug logging
     
     def load_dataframe(self, name: str, version: Optional[str] = None):
         """
@@ -73,7 +73,7 @@ class SingletonPickleManager(PickleManager, metaclass=SingletonMeta):
         cache_key = f"{name}_{version or 'latest'}"
         
         if cache_key in self._cache:
-            logger.debug(f"캐시 히트: {cache_key}")
+            # Cache hit - removed debug logging
             return self._cache[cache_key]
         
         # 캐시에 없으면 부모 클래스에서 로드
@@ -85,17 +85,17 @@ class SingletonPickleManager(PickleManager, metaclass=SingletonMeta):
                 # 가장 오래된 항목 제거
                 first_key = next(iter(self._cache))
                 del self._cache[first_key]
-                logger.debug(f"캐시 오버플로우 - 제거: {first_key}")
+                # Cache overflow - removed debug logging
             
             self._cache[cache_key] = df
-            logger.debug(f"캐시 저장: {cache_key}")
+            # Cache saved - removed debug logging
         
         return df
     
     def clear_cache(self):
         """캐시 비우기"""
         self._cache.clear()
-        logger.debug("PickleManager 캐시 비움")
+        # PickleManager cache cleared - removed debug logging
 
 
 def get_database_manager():
@@ -114,4 +114,4 @@ def reset_singletons():
     SingletonDatabaseManager._initialized = False
     SingletonPickleManager._initialized = False
     SingletonPickleManager._cache.clear()
-    logger.debug("모든 싱글톤 인스턴스 초기화")
+    # All singleton instances reset - removed debug logging

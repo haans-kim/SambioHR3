@@ -51,7 +51,7 @@ class PerformanceCache:
         try:
             # 캐시 유효성 확인
             if self._is_cache_valid('tag_data'):
-                logger.debug("태그 데이터 캐시 히트")
+                # Cache hit - removed debug logging
                 return self.tag_data_cache
             
             # 캐시 미스 - 새로 로드
@@ -83,7 +83,7 @@ class PerformanceCache:
         """조직 데이터 캐시된 로드"""
         try:
             if self._is_cache_valid('organization'):
-                logger.debug("조직 데이터 캐시 히트")
+                # Cache hit - removed debug logging
                 return self.organization_data_cache
             
             logger.info("조직 데이터 새로 로드 중...")
@@ -122,7 +122,7 @@ class PerformanceCache:
                 cache_entry = self.analysis_results_cache[cache_key]
                 cache_time = cache_entry.get('cached_at')
                 if cache_time and (datetime.now() - cache_time).seconds < 300:  # 5분 TTL
-                    logger.debug(f"일별 태그 데이터 캐시 히트: {employee_id}")
+                    # Cache hit - removed debug logging
                     return cache_entry.get('data')
             
             # 전체 태그 데이터 가져오기 (캐시 활용)
@@ -174,7 +174,7 @@ class PerformanceCache:
                     'cached_at': datetime.now()
                 }
                 
-                logger.debug(f"일별 태그 데이터 필터링 완료: {employee_id}, {len(daily_data)}건")
+                # Data filtering complete - removed debug logging
             
             return daily_data if not daily_data.empty else None
             
@@ -187,7 +187,7 @@ class PerformanceCache:
         try:
             # 캐시 유효성 확인
             if self._is_cache_valid('tag_location_master'):
-                logger.debug("태깅지점 마스터 데이터 캐시 히트")
+                # Cache hit - removed debug logging
                 return self.tag_location_master_cache
             
             # 캐시 미스 - 새로 로드
@@ -243,7 +243,7 @@ class PerformanceCache:
         try:
             # 캐시 유효성 확인
             if self._is_cache_valid('claim_data'):
-                logger.debug("Claim 데이터 캐시 히트")
+                # Cache hit - removed debug logging
                 return self.claim_data_cache
             
             # 캐시 미스 - 새로 로드
