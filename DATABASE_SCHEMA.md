@@ -2,10 +2,10 @@
 
 ## 📊 Sambio Human Analytics Database Schema
 
-> Last Updated: 2025-08-11 14:25:00
+> Last Updated: 2025-08-11 14:35:00
 > Database: `data/sambio_human.db`
 > Total Tables: 54
-> Total Records: 4,471,139
+> Total Records: 4,671,321
 
 ## 📈 Overview
 
@@ -13,15 +13,15 @@
 |----------|--------|---------------|
 | Knox 시스템 데이터 | 3 | 502,093 |
 | Equipment 시스템 데이터 | 7 | 980,448 |
-| 인사/근태 데이터 | 8 | 374,248 |
+| 인사/근태 데이터 | 10 | 590,238 |
 | 태깅 데이터 | 8 | 1,803,506 |
 | 식사 데이터 | 1 | 710,583 |
 | HMM 모델 관련 | 3 | 47 |
 | 분석 결과 | 5 | 84,285 |
 | 작업 관리 | 5 | 0 |
 | 배치 작업 | 4 | 121 |
-| 기타 | 7 | 15,808 |
-| **Total** | **54** | **4,471,139** |
+| 기타 | 5 | 0 |
+| **Total** | **54** | **4,671,321** |
 
 ## 🔗 Table Relationships
 
@@ -187,16 +187,35 @@ erDiagram
 ### 📋 `attendance_data` - 근태 사용
 
 - **Records**: 6,449
-- **Description**: 근태 사용 데이터
+- **Description**: 근태 사용 데이터 (휴가, 출장, 교육 등)
 - **Period**: 2025-01-01 ~ 2025-06-30
+- **주요 근태 코드**: AA(연차), CG(경조), AH(반차), AP(공가), AC(대체휴가), IR(재택근무)
 
 | Column | Type | Description |
 |--------|------|-------------|
-| employee_id | INTEGER | 직원 ID |
-| attendance_date | DATE | 근태 날짜 |
-| attendance_code | VARCHAR(20) | 근태 코드 |
-| start_time | TIME | 시작 시간 |
-| end_time | TIME | 종료 시간 |
+| employee_id | BIGINT | 직원 ID |
+| employee_name | TEXT | 직원 성명 |
+| department_name | TEXT | 부서명 |
+| position_name | TEXT | 직급명 |
+| attendance_code | TEXT | 근태 코드 (AA, CG, AH, AP 등) |
+| attendance_name | TEXT | 근태명 |
+| start_date | DATETIME | 시작 날짜 |
+| end_date | DATETIME | 종료 날짜 |
+| attendance_days | FLOAT | 근태 일수 |
+| start_time | TEXT | 시작 시간 |
+| end_time | TEXT | 종료 시간 |
+| attendance_hours | FLOAT | 근태 시간 |
+| reason | TEXT | 사유 |
+| reason_detail | TEXT | 상세 사유 |
+| destination | TEXT | 목적지 (출장 등) |
+| contact | TEXT | 연락처 |
+| contact_relation | TEXT | 연락처 관계 |
+| created_date | DATETIME | 생성 날짜 |
+| approval_status | TEXT | 승인 상태 |
+| last_modifier | TEXT | 최종 수정자 |
+| first_approver | TEXT | 1차 승인자 |
+| second_approver | TEXT | 2차 승인자 |
+| third_approver | TEXT | 3차 승인자 |
 
 ### 📋 `claim_data` - 근무시간 Claim
 
@@ -211,6 +230,51 @@ erDiagram
 | 성명 | TEXT | 성명 |
 | 부서 | TEXT | 부서 |
 | 근무시간 | FLOAT | 근무시간 |
+
+### 📋 `non_work_time` - 비근무시간
+
+- **Records**: 201,964
+- **Description**: 비근무시간 데이터 (휴가, 외출, 교육 등)
+- **Period**: 2025-06 데이터
+
+| Column | Type | Description |
+|--------|------|-------------|
+| 사번 | INTEGER | 사번 |
+| 근무일자 | DATE | 근무 날짜 |
+| 제외시간코드 | VARCHAR(20) | 제외시간 코드 (AT10, AT04 등) |
+| 시작시간 | TIME | 시작 시간 |
+| 종료시간 | TIME | 종료 시간 |
+| 입력구분 | VARCHAR(20) | 입력 구분 (Auto, Manual) |
+| 반영여부 | VARCHAR(20) | 반영 여부 (자동반영 등) |
+| 테이블구분 | VARCHAR(20) | 테이블 구분 (최종 등) |
+
+### 📋 `abc_data` - ABC 활동 데이터
+
+- **Records**: 14,026
+- **Description**: ABC 활동 분류 데이터 (업무 활동 분류)
+- **Period**: 2025-06 데이터
+
+| Column | Type | Description |
+|--------|------|-------------|
+| 성명 | TEXT | 성명 |
+| 사번 | INTEGER | 사번 |
+| 수행일자 | DATE | 수행 날짜 |
+| 순서 | INTEGER | 순서 |
+| 부서코드 | VARCHAR(20) | 부서 코드 |
+| 부서명 | TEXT | 부서명 |
+| 조직분류 | TEXT | 조직 분류 |
+| ACT_NO_1 | VARCHAR(20) | 활동 번호 1 |
+| ACT_NO_2 | VARCHAR(20) | 활동 번호 2 |
+| ACT_NO_3 | VARCHAR(20) | 활동 번호 3 |
+| 작업분류 | TEXT | 작업 분류 |
+| 작업대상 | TEXT | 작업 대상 |
+| 소요시간 | FLOAT | 소요 시간 |
+| 비고 | TEXT | 비고 |
+| 등록날짜 | DATETIME | 등록 날짜 |
+| Activity 대분류 | TEXT | Activity 대분류 |
+| Activity 중분류 | TEXT | Activity 중분류 (Investigation, Support 등) |
+| Activity 소분류 | TEXT | Activity 소분류 |
+| BU_CD | VARCHAR(20) | Business Unit 코드 |
 
 ## 태깅 데이터
 
