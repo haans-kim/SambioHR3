@@ -154,6 +154,9 @@ class SambioHumanApp:
             if st.button("작업지시 관리", use_container_width=True):
                 st.session_state.current_page = "작업지시 관리"
             
+            if st.button("부서별 차이 분석", use_container_width=True):
+                st.session_state.current_page = "부서별 차이 분석"
+            
             # 현재 페이지가 없으면 홈으로 설정
             if 'current_page' not in st.session_state:
                 st.session_state.current_page = "홈"
@@ -204,6 +207,8 @@ class SambioHumanApp:
             self.render_work_order_management()
         elif current_page == '대규모 배치 분석':
             self.render_batch_analysis()
+        elif current_page == '부서별 차이 분석':
+            self.render_dept_difference_analysis()
     
     def render_home_page(self):
         """홈 페이지 렌더링"""
@@ -617,6 +622,11 @@ class SambioHumanApp:
         # 배치 분석 모니터 렌더링
         batch_monitor = BatchAnalysisMonitor()
         batch_monitor.render()
+
+    def render_dept_difference_analysis(self):
+        """부서별 차이 분석 페이지 렌더링"""
+        from src.ui.components.dept_difference_analysis import render_page
+        render_page()
 
 
 def main():

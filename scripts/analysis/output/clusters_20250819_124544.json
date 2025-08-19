@@ -1,0 +1,49 @@
+{
+  "0": {
+    "name": "Type_B_혼합형",
+    "size": 10,
+    "teams": [
+      [
+        "EPCV센터",
+        "EPM팀"
+      ],
+      [
+        "EPCV센터",
+        "안전환경팀"
+      ],
+      [
+        "EPCV센터",
+        "Facility Operation팀"
+      ],
+      [
+        "EPCV센터",
+        "Facility Technology팀"
+      ],
+      [
+        "경영지원센터",
+        "MES팀"
+      ],
+      [
+        "바이오연구소",
+        "선행공정개발Lab"
+      ],
+      [
+        "상생협력센터",
+        "구매팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 5팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT Technical Excellence팀"
+      ],
+      [
+        "품질운영센터",
+        "QC Operations팀"
+      ]
+    ],
+    "avg_location_fixity": 76.6,
+    "avg_data_density": 21.4,
+    "total_employees": 

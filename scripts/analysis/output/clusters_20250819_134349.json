@@ -1,0 +1,439 @@
+{
+  "0": {
+    "name": "Type_E_사무중심형",
+    "size": 8,
+    "teams": [
+      [
+        "CDO개발센터",
+        "CDO개발센터"
+      ],
+      [
+        "People센터",
+        "정보보호팀"
+      ],
+      [
+        "People센터",
+        "인사지원담당"
+      ],
+      [
+        "경영지원센터",
+        "Operational Excellence담당"
+      ],
+      [
+        "대표이사",
+        "대표이사"
+      ],
+      [
+        "상생협력센터",
+        "상생협력센터"
+      ],
+      [
+        "영업센터",
+        "영업센터"
+      ],
+      [
+        "오퍼레이션센터",
+        "DP담당"
+      ]
+    ],
+    "avg_location_fixity": 27.7,
+    "avg_data_density": 14.4,
+    "total_employees": 18
+  },
+  "1": {
+    "name": "Type_E_사무중심형",
+    "size": 42,
+    "teams": [
+      [
+        "CDO개발센터",
+        "ADC개발팀"
+      ],
+      [
+        "CDO개발센터",
+        "CDO지원그룹"
+      ],
+      [
+        "CDO개발센터",
+        "CMC Support팀"
+      ],
+      [
+        "CDO개발센터",
+        "항체배양PD팀"
+      ],
+      [
+        "CDO개발센터",
+        "항체정제PD팀"
+      ],
+      [
+        "People센터",
+        "HR Strategy그룹"
+      ],
+      [
+        "People센터",
+        "Learning·Development팀"
+      ],
+      [
+        "People센터",
+        "People센터"
+      ],
+      [
+        "People센터",
+        "Talent Acquisition팀"
+      ],
+      [
+        "People센터",
+        "People Experience팀"
+      ],
+      [
+        "People센터",
+        "Talent Management팀"
+      ],
+      [
+        "People센터",
+        "인프라복지팀"
+      ],
+      [
+        "경영지원센터",
+        "IR팀"
+      ],
+      [
+        "경영지원센터",
+        "경영지원센터"
+      ],
+      [
+        "경영지원센터",
+        "사업전략팀"
+      ],
+      [
+        "경영지원센터",
+        "재경팀"
+      ],
+      [
+        "경영지원센터",
+        "준법경영팀"
+      ],
+      [
+        "경영지원센터",
+        "지속가능경영팀"
+      ],
+      [
+        "경영지원센터",
+        "CSV그룹"
+      ],
+      [
+        "경영지원센터",
+        "IT팀"
+      ],
+      [
+        "경영지원센터",
+        "OES혁신그룹"
+      ],
+      [
+        "경영진단팀",
+        "경영진단팀"
+      ],
+      [
+        "바이오연구소",
+        "AI Lab"
+      ],
+      [
+        "바이오연구소",
+        "Bio R&D지원그룹"
+      ],
+      [
+        "바이오연구소",
+        "GT기술Lab"
+      ],
+      [
+        "바이오연구소",
+        "Open Innovation그룹"
+      ],
+      [
+        "바이오연구소",
+        "선행공정개발Lab"
+      ],
+      [
+        "바이오연구소",
+        "펩타이드 T/F"
+      ],
+      [
+        "바이오연구소",
+        "항체기술Lab"
+      ],
+      [
+        "영업센터",
+        "CDO SE팀"
+      ],
+      [
+        "영업센터",
+        "CMO SE팀"
+      ],
+      [
+        "영업센터",
+        "Market Intelligence팀"
+      ],
+      [
+        "영업센터",
+        "Sales&Operation팀"
+      ],
+      [
+        "영업센터",
+        "Global PA팀"
+      ],
+      [
+        "영업센터",
+        "PM팀"
+      ],
+      [
+        "영업센터",
+        "마케팅팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "DP Compliance팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "무균충전팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "이물검사·패키징팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 1팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 2팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT PD팀"
+      ]
+    ],
+    "avg_location_fixity": 20.9,
+    "avg_data_density": 18.1,
+    "total_employees": 1725
+  },
+  "2": {
+    "name": "Type_A_생산고정형",
+    "size": 27,
+    "teams": [
+      [
+        "EPCV센터",
+        "EPM팀"
+      ],
+      [
+        "EPCV센터",
+        "안전환경팀"
+      ],
+      [
+        "EPCV센터",
+        "Facility Operation팀"
+      ],
+      [
+        "EPCV센터",
+        "Facility Technology팀"
+      ],
+      [
+        "경영지원센터",
+        "MES팀"
+      ],
+      [
+        "상생협력센터",
+        "구매팀"
+      ],
+      [
+        "상생협력센터",
+        "대외협력팀"
+      ],
+      [
+        "상생협력센터",
+        "커뮤니케이션팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Validation팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "ADC/mRNA운영팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "DS Compliance그룹"
+      ],
+      [
+        "오퍼레이션센터",
+        "DS System Readiness그룹"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 3팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 4A팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 4B팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 5팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "오퍼레이션기획팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "오퍼레이션혁신팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT 1팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT 2팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT Technical Excellence팀"
+      ],
+      [
+        "품질운영센터",
+        "Compliance QA팀"
+      ],
+      [
+        "품질운영센터",
+        "Operation QA팀"
+      ],
+      [
+        "품질운영센터",
+        "Technical QA팀"
+      ],
+      [
+        "품질운영센터",
+        "ASAT팀"
+      ],
+      [
+        "품질운영센터",
+        "QC Operations팀"
+      ],
+      [
+        "품질운영센터",
+        "QC Support팀"
+      ]
+    ],
+    "avg_location_fixity": 85.3,
+    "avg_data_density": 16.8,
+    "total_employees": 3245
+  },
+  "3": {
+    "name": "Type_E_사무중심형",
+    "size": 5,
+    "teams": [
+      [
+        "영업센터",
+        "CDO Sales팀"
+      ],
+      [
+        "영업센터",
+        "CMO Sales팀"
+      ],
+      [
+        "영업센터",
+        "SBA Support그룹"
+      ],
+      [
+        "영업센터",
+        "Sales&Operation담당"
+      ],
+      [
+        "영업센터",
+        "영업지원담당"
+      ]
+    ],
+    "avg_location_fixity": 4.5,
+    "avg_data_density": 4.9,
+    "total_employees": 5
+  },
+  "4": {
+    "name": "Type_A_생산고정형",
+    "size": 16,
+    "teams": [
+      [
+        "EPCV센터",
+        "EPCV센터"
+      ],
+      [
+        "EPCV센터",
+        "Corporate Engineering팀"
+      ],
+      [
+        "EPCV센터",
+        "E&F담당"
+      ],
+      [
+        "바이오연구소",
+        "바이오연구소"
+      ],
+      [
+        "오퍼레이션센터",
+        "오퍼레이션센터"
+      ],
+      [
+        "오퍼레이션센터",
+        "DS담당"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT PMO T/F"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT담당"
+      ],
+      [
+        "품질운영센터",
+        "Client Quality팀"
+      ],
+      [
+        "품질운영센터",
+        "DI 개선 T/F"
+      ],
+      [
+        "품질운영센터",
+        "Quality PMO그룹"
+      ],
+      [
+        "품질운영센터",
+        "Regulatory Affairs그룹"
+      ],
+      [
+        "품질운영센터",
+        "품질운영센터"
+      ],
+      [
+        "품질운영센터",
+        "Batch Disposition그룹"
+      ],
+      [
+        "품질운영센터",
+        "QC Performance관리그룹"
+      ],
+      [
+        "품질운영센터",
+        "QC담당"
+      ]
+    ],
+    "avg_location_fixity": 85.3,
+    "avg_data_density": 12.1,
+    "total_employees": 115
+  }
+}

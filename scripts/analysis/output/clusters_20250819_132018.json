@@ -1,0 +1,206 @@
+{
+  "0": {
+    "name": "Type_C_사무중심",
+    "size": 14,
+    "teams": [
+      [
+        "CDO개발센터",
+        "CMC Support팀"
+      ],
+      [
+        "CDO개발센터",
+        "항체배양PD팀"
+      ],
+      [
+        "CDO개발센터",
+        "항체정제PD팀"
+      ],
+      [
+        "경영지원센터",
+        "사업전략팀"
+      ],
+      [
+        "경영지원센터",
+        "재경팀"
+      ],
+      [
+        "바이오연구소",
+        "항체기술Lab"
+      ],
+      [
+        "영업센터",
+        "PM팀"
+      ],
+      [
+        "영업센터",
+        "마케팅팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "DP Compliance팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "무균충전팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "이물검사·패키징팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 1팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 2팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT PD팀"
+      ]
+    ],
+    "avg_location_fixity": 16.6,
+    "avg_data_density": 17.2,
+    "total_employees": 1355
+  },
+  "1": {
+    "name": "Type_A_생산중심",
+    "size": 13,
+    "teams": [
+      [
+        "EPCV센터",
+        "Corporate Engineering팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Validation팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "DS Compliance그룹"
+      ],
+      [
+        "오퍼레이션센터",
+        "DS System Readiness그룹"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 3팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 4A팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 4B팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "오퍼레이션기획팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "오퍼레이션혁신팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT 2팀"
+      ],
+      [
+        "품질운영센터",
+        "Compliance QA팀"
+      ],
+      [
+        "품질운영센터",
+        "Operation QA팀"
+      ],
+      [
+        "품질운영센터",
+        "Technical QA팀"
+      ]
+    ],
+    "avg_location_fixity": 88.0,
+    "avg_data_density": 13.6,
+    "total_employees": 1648
+  },
+  "2": {
+    "name": "Type_A_생산중심",
+    "size": 6,
+    "teams": [
+      [
+        "상생협력센터",
+        "구매팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "Plant 5팀"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT 1팀"
+      ],
+      [
+        "품질운영센터",
+        "ASAT팀"
+      ],
+      [
+        "품질운영센터",
+        "QC Operations팀"
+      ],
+      [
+        "품질운영센터",
+        "QC Support팀"
+      ]
+    ],
+    "avg_location_fixity": 89.0,
+    "avg_data_density": 18.5,
+    "total_employees": 1047
+  },
+  "3": {
+    "name": "Type_B_혼합형",
+    "size": 9,
+    "teams": [
+      [
+        "CDO개발센터",
+        "ADC개발팀"
+      ],
+      [
+        "EPCV센터",
+        "EPM팀"
+      ],
+      [
+        "EPCV센터",
+        "안전환경팀"
+      ],
+      [
+        "EPCV센터",
+        "Facility Operation팀"
+      ],
+      [
+        "EPCV센터",
+        "Facility Technology팀"
+      ],
+      [
+        "경영지원센터",
+        "IT팀"
+      ],
+      [
+        "경영지원센터",
+        "MES팀"
+      ],
+      [
+        "바이오연구소",
+        "선행공정개발Lab"
+      ],
+      [
+        "오퍼레이션센터",
+        "MSAT Technical Excellence팀"
+      ]
+    ],
+    "avg_location_fixity": 60.1,
+    "avg_data_density": 21.5,
+    "total_employees": 656
+  }
+}

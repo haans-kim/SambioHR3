@@ -229,7 +229,7 @@
       ],
       "pickle_exists": false,
       "dataframe_name": "equis_data",
-      "last_modified": null,
+      "last_modified": "-",
       "row_count": 0
     },
     "MDM": {
@@ -239,7 +239,7 @@
       ],
       "pickle_exists": false,
       "dataframe_name": "mdm_data",
-      "last_modified": null,
+      "last_modified": "-",
       "row_count": 0
     }
   }

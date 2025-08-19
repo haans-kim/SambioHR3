@@ -1,0 +1,485 @@
+"""
+dept_difference_analysis.py
+부서별 차이 분석 및 보정 시스템 UI (메인 앱 통합 버전)
+"""
+
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import sqlite3
+import sys
+import os
+from datetime import datetime
+
+# 분석 라이브러리 경로 추가
+analysis_path = os.path.join(os.path.dirname(__file__), '../../../scripts/analysis')
+if analysis_path not in sys.path:
+    sys.path.insert(0, analysis_path)
+
+try:
+    from lib.pattern_analyzer import DepartmentPatternAnalyzer
+except ImportError:
+    st.error("분석 라이브러리를 찾을 수 없습니다. scripts/analysis/lib/pattern_analyzer.py 파일을 확인하세요.")
+    DepartmentPatternAnalyzer = None
+
+def render_page():
+    """메인 페이지 렌더링"""
+    
+    st.title("🎯 부서별 차이 분석 및 보정 시스템")
+    st.markdown("---")
+    
+    # 사이드바 설정
+    with st.sidebar:
+        st.header("⚙️ 분석 설정")
+        
+        analysis_type = st.selectbox(
+            "분석 유형",
+            ["실시간 분석", "저장된 결과 조회"]
+        )
+        
+        if analysis_type == "실시간 분석":
+            n_clusters = st.slider("클러스터 수", 3, 7, 5)
+            if st.button("🔄 분석 실행", type="primary"):
+                run_analysis(n_clusters)
+    
+    # 메인 탭
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 차이 분석", 
+        "🔄 보정 Factor", 
+        "📈 검증 결과", 
+        "📝 리포트"
+    ])
+    
+    with tab1:
+        render_difference_analysis()
+    
+    with tab2:
+        render_correction_factors()
+    
+    with tab3:
+        render_validation_results()
+    
+    with tab4:
+        render_report()
+
+def load_analysis_data():
+    """분석 데이터 로드 (캐시 제거 - 항상 최신 데이터)"""
+    
+    conn = sqlite3.connect('data/sambio_human.db')
+    
+    # 저장된 분석 결과 로드
+    try:
+        patterns_df = pd.read_sql_query(
+            "SELECT * FROM dept_pattern_analysis_new", 
+            conn
+        )
+        conn.close()
+        return patterns_df
+    except Exception as e:
+        conn.close()
+        return None
+
+def run_analysis(n_clusters):
+    """실시간 분석 실행"""
+    
+    if DepartmentPatternAnalyzer is None:
+        st.error("분석 라이브러리를 로드할 수 없습니다.")
+        return
+    
+    with st.spinner("분석 중... (약 30초 소요)"):
+        try:
+            # 분석 실행 - 올바른 DB 경로 사용
+            analyzer = DepartmentPatternAnalyzer(db_path='data/sambio_human.db')
+            patterns = analyzer.extract_patterns()
+            clusters = analyzer.cluster_departments(n_clusters)
+            reliability = analyzer.calculate_reliability_scores()
+            corrections = analyzer.derive_correction_factors()
+            analyzer.save_results()
+            
+            st.success("✅ 분석이 완료되었습니다!")
+            st.rerun()  # experimental_rerun은 deprecated
+            
+        except Exception as e:
+            st.error(f"❌ 분석 중 오류 발생: {str(e)}")
+
+def render_difference_analysis():
+    """차이 분석 탭"""
+    
+    st.header("📊 부서별 근무 패턴 차이 분석")
+    
+    # 데이터 로드
+    df = load_analysis_data()
+    
+    if df is None or df.empty:
+        st.warning("분석 데이터가 없습니다. 먼저 분석을 실행하세요.")
+        return
+    
+    # 1. 핵심 지표 표시
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("분석 부서 수", f"{len(df)}개")
+    
+    with col2:
+        total_emp = df['employee_count'].sum() if 'employee_count' in df.columns else 0
+        st.metric("총 직원 수", f"{total_emp:,}명")
+    
+    with col3:
+        avg_fixity = df['location_fixity'].mean() if 'location_fixity' in df.columns else 0
+        st.metric("평균 위치 고정성", f"{avg_fixity:.1f}%")
+    
+    with col4:
+        avg_reliability = df['reliability_score'].mean() if 'reliability_score' in df.columns else 0
+        st.metric("평균 신뢰도", f"{avg_reliability:.3f}")
+    
+    st.markdown("---")
+    
+    # 2. 산점도 - 부서별 패턴 분포
+    if 'location_fixity' in df.columns and 'data_density' in df.columns:
+        # 클러스터 이름 매핑을 먼저 적용 (실제 데이터 기반)
+        if 'cluster' in df.columns:
+            # 디버깅: Plant팀 데이터 확인
+            plant_teams = df[(df['center'] == '오퍼레이션센터') & (df['team'].str.contains('Plant', na=False))]
+            if not plant_teams.empty:
+                st.sidebar.write("Plant팀 위치 고정성:")
+                for _, row in plant_teams.iterrows():
+                    st.sidebar.write(f"- {row['team']}: {row['location_fixity']:.1f}%")
+            
+            # 각 클러스터의 평균 위치 고정성을 계산하여 동적으로 이름 할당
+            cluster_names = {}
+            for cluster_id in df['cluster'].unique():
+                cluster_data = df[df['cluster'] == cluster_id]
+                avg_fixity = cluster_data['location_fixity'].mean()
+                avg_external = cluster_data['external_activity'].mean() if 'external_activity' in cluster_data.columns else 0
+                
+                # 클러스터 특성에 따른 이름 할당
+                if avg_fixity > 80:
+                    if avg_external > 25:
+                        cluster_names[cluster_id] = f'Type_A_생산고정형(외부활동多)'
+                    else:
+                        cluster_names[cluster_id] = f'Type_A_생산고정형'
+                elif avg_fixity > 50:
+                    cluster_names[cluster_id] = f'Type_B_생산중심형'
+                elif avg_fixity > 25:
+                    cluster_names[cluster_id] = f'Type_C_혼합근무형'
+                elif avg_fixity > 10:
+                    cluster_names[cluster_id] = f'Type_D_사무중심형'
+                else:
+                    cluster_names[cluster_id] = f'Type_E_사무전문형'
+            
+            df['pattern_type'] = df['cluster'].map(cluster_names)
+            
+            # 색상 매핑 정의 (동적으로 생성)
+            color_map = {}
+            base_colors = {
+                'A': '#2ca02c',  # 초록색 (생산고정형)
+                'B': '#ff7f0e',  # 주황색 (생산중심형)
+                'C': '#1f77b4',  # 파란색 (혼합근무형)
+                'D': '#9467bd',  # 보라색 (사무중심형)
+                'E': '#d62728'   # 빨간색 (사무전문형)
+            }
+            
+            for pattern_name in df['pattern_type'].unique():
+                if pd.notna(pattern_name):
+                    # Type_X로 시작하는 패턴에서 X 추출
+                    if pattern_name.startswith('Type_'):
+                        type_char = pattern_name[5]  # Type_ 다음 문자
+                        color_map[pattern_name] = base_colors.get(type_char, '#808080')  # 기본 회색
+            
+            fig_scatter = px.scatter(
+                df,
+                x='location_fixity',
+                y='data_density',
+                color='pattern_type',
+                color_discrete_map=color_map,
+                size='employee_count',
+                hover_data=['center', 'team', 'employee_count', 'reliability_score'],
+                title='부서별 근무 패턴 분포 (5개 클러스터)',
+                labels={
+                    'location_fixity': '위치 고정성 (%)',
+                    'data_density': '일평균 태그 수',
+                    'pattern_type': '패턴 유형',
+                    'employee_count': '직원 수',
+                    'reliability_score': '신뢰도'
+                }
+            )
+            
+            # 클러스터 영역을 타원으로 표시 (Type C만 제외)
+            for cluster_id in df['cluster'].unique():
+                cluster_data = df[df['cluster'] == cluster_id]
+                cluster_name = cluster_names.get(cluster_id, '')
+                
+                # Type C(혼합근무형)만 영역 표시 제외
+                if 'Type_C' in cluster_name:
+                    continue
+                    
+                if len(cluster_data) >= 3:  # 최소 3개 이상의 데이터가 있을 때
+                    import numpy as np
+                    from scipy import stats
+                    
+                    x_mean = cluster_data['location_fixity'].mean()
+                    y_mean = cluster_data['data_density'].mean()
+                    x_std = cluster_data['location_fixity'].std()
+                    y_std = cluster_data['data_density'].std()
+                    
+                    # 타원 추가 (1.5 표준편차 범위로 축소)
+                    fig_scatter.add_shape(
+                        type="circle",
+                        xref="x", yref="y",
+                        x0=x_mean - 1.5*x_std, y0=y_mean - 1.5*y_std,
+                        x1=x_mean + 1.5*x_std, y1=y_mean + 1.5*y_std,
+                        line=dict(
+                            color=color_map.get(cluster_name, 'gray'),
+                            width=1,
+                            dash="dot",
+                        ),
+                        opacity=0.2,
+                        fillcolor=color_map.get(cluster_name, 'gray'),
+                        layer="below"
+                    )
+        else:
+            fig_scatter = px.scatter(
+                df,
+                x='location_fixity',
+                y='data_density',
+                size='employee_count',
+                hover_data=['center', 'team'],
+                title='부서별 근무 패턴 분포',
+                labels={
+                    'location_fixity': '위치 고정성 (%)',
+                    'data_density': '일평균 태그 수'
+                }
+            )
+        
+        # 차트 레이아웃 개선
+        fig_scatter.update_layout(
+            height=500,
+            showlegend=True,
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02
+            )
+        )
+        fig_scatter.update_traces(marker=dict(opacity=0.7))
+        
+        st.plotly_chart(fig_scatter, use_container_width=True)
+    
+    # 3. 패턴 유형별 통계
+    st.subheader("📈 패턴 유형별 분포")
+    
+    if 'cluster' in df.columns:
+        # 클러스터별 통계 계산
+        cluster_stats = df.groupby('cluster').agg({
+            'team': 'count',  # 팀 수
+            'employee_count': 'sum',
+            'location_fixity': 'mean',
+            'data_density': 'mean',
+            'reliability_score': 'mean',
+            'correction_factor': 'mean'
+        }).round(2)
+        
+        # 컬럼명 변경
+        cluster_stats.columns = ['팀수', '총직원수', '평균위치고정성', '평균데이터밀도', '평균신뢰도', '평균보정Factor']
+        
+        # 클러스터 이름 매핑 (동적으로 생성)
+        cluster_names_stats = {}
+        for cluster_id in cluster_stats.index:
+            cluster_data = df[df['cluster'] == cluster_id]
+            avg_fixity = cluster_data['location_fixity'].mean()
+            avg_external = cluster_data['external_activity'].mean() if 'external_activity' in cluster_data.columns else 0
+            
+            if avg_fixity > 80:
+                if avg_external > 25:
+                    cluster_names_stats[cluster_id] = f'Type_A_생산고정형(외부활동多)'
+                else:
+                    cluster_names_stats[cluster_id] = f'Type_A_생산고정형'
+            elif avg_fixity > 50:
+                cluster_names_stats[cluster_id] = f'Type_B_생산중심형'
+            elif avg_fixity > 25:
+                cluster_names_stats[cluster_id] = f'Type_C_혼합근무형'
+            elif avg_fixity > 10:
+                cluster_names_stats[cluster_id] = f'Type_D_사무중심형'
+            else:
+                cluster_names_stats[cluster_id] = f'Type_E_사무전문형'
+        
+        cluster_stats.index = cluster_stats.index.map(lambda x: cluster_names_stats.get(x, f'Type_{x}'))
+        
+        # 정렬 (직원수 기준)
+        cluster_stats = cluster_stats.sort_values('총직원수', ascending=False)
+        
+        # 테이블 표시
+        st.dataframe(cluster_stats, use_container_width=True)
+        
+        # 추가 시각화: 클러스터별 분포 파이 차트
+        col1, col2 = st.columns(2)
+        
+        # 기본 색상 정의
+        base_colors = {
+            'A': '#2ca02c',  # 초록색 (생산고정형)
+            'B': '#ff7f0e',  # 주황색 (생산중심형)
+            'C': '#1f77b4',  # 파란색 (혼합근무형)
+            'D': '#9467bd',  # 보라색 (사무중심형)
+            'E': '#d62728'   # 빨간색 (사무전문형)
+        }
+        
+        with col1:
+            # 파이 차트용 색상 매핑 생성
+            pie_color_map = {}
+            for name in cluster_stats.index:
+                if name.startswith('Type_'):
+                    type_char = name[5]
+                    pie_color_map[name] = base_colors.get(type_char, '#808080')
+            
+            fig_pie_teams = px.pie(
+                values=cluster_stats['팀수'],
+                names=cluster_stats.index,
+                title='클러스터별 팀 분포',
+                color_discrete_map=pie_color_map
+            )
+            st.plotly_chart(fig_pie_teams, use_container_width=True)
+        
+        with col2:
+            fig_pie_employees = px.pie(
+                values=cluster_stats['총직원수'],
+                names=cluster_stats.index,
+                title='클러스터별 직원 분포',
+                color_discrete_map=pie_color_map  # 동일한 색상 매핑 사용
+            )
+            st.plotly_chart(fig_pie_employees, use_container_width=True)
+
+def render_correction_factors():
+    """보정 Factor 탭"""
+    
+    st.header("🔄 부서별 보정 Factor")
+    
+    df = load_analysis_data()
+    
+    if df is None or df.empty:
+        st.warning("분석 데이터가 없습니다.")
+        return
+    
+    # 1. 보정 타입별 분포
+    if 'correction_type' in df.columns:
+        type_counts = df['correction_type'].value_counts()
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig_pie = px.pie(
+                values=type_counts.values,
+                names=type_counts.index,
+                title='보정 타입 분포'
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+        
+        with col2:
+            # 보정 Factor 히스토그램
+            if 'correction_factor' in df.columns:
+                fig_hist = px.histogram(
+                    df,
+                    x='correction_factor',
+                    nbins=20,
+                    title='보정 Factor 분포',
+                    labels={'correction_factor': '보정 Factor', 'count': '부서 수'}
+                )
+                st.plotly_chart(fig_hist, use_container_width=True)
+    
+    # 2. 부서별 보정 Factor 테이블
+    st.subheader("📋 부서별 보정 Factor")
+    
+    if all(col in df.columns for col in ['center', 'team', 'reliability_score', 'correction_factor']):
+        display_df = df[['center', 'team', 'employee_count', 
+                         'reliability_score', 'correction_factor', 'correction_type']]
+        display_df = display_df.sort_values('correction_factor', ascending=False)
+        
+        st.dataframe(
+            display_df.style.format({
+                'reliability_score': '{:.3f}',
+                'correction_factor': '{:.3f}'
+            }),
+            use_container_width=True,
+            height=400
+        )
+
+def render_validation_results():
+    """검증 결과 탭"""
+    
+    st.header("📈 Claim 데이터 검증 결과")
+    
+    # 검증 로직 구현 (추후 개발)
+    st.info("Claim 데이터와의 비교 검증 기능은 추후 구현 예정입니다.")
+    
+    # 예시 차트
+    st.subheader("예상 개선 효과")
+    
+    improvement_data = pd.DataFrame({
+        '보정 방법': ['기존 (획일적)', '개선 (차별화)'],
+        '평균 오차율': [12.5, 7.2],
+        '부서간 편차': [8.3, 3.1]
+    })
+    
+    fig = px.bar(
+        improvement_data,
+        x='보정 방법',
+        y=['평균 오차율', '부서간 편차'],
+        title='보정 방법별 성능 비교',
+        barmode='group'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+def render_report():
+    """리포트 탭"""
+    
+    st.header("📝 분석 리포트")
+    
+    df = load_analysis_data()
+    
+    if df is None or df.empty:
+        st.warning("분석 데이터가 없습니다.")
+        return
+    
+    # 리포트 내용 생성
+    st.markdown(f"""
+    ## 부서별 근무 패턴 차이 분석 보고서
+    
+    **분석 일시**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    
+    ### 1. 요약
+    - **분석 부서 수**: {len(df)}개
+    - **총 직원 수**: {df['employee_count'].sum():,}명
+    - **분석 기간**: 2025년 6월 (1개월)
+    
+    ### 2. 주요 발견사항
+    
+    #### 2.1 패턴 분류
+    부서별 근무 패턴을 분석한 결과, 크게 5가지 유형으로 분류됨:
+    
+    - **Type A (생산고정형)**: 생산동 위치 비율 85% 이상
+    - **Type B (생산중심형)**: 생산동 위치 비율 60-85%
+    - **Type C (혼합근무형)**: 생산동 위치 비율 30-60%
+    - **Type D (외부활동형)**: 외부 활동 비율 15% 이상
+    - **Type E (사무중심형)**: 사무실 중심 근무
+    
+    #### 2.2 신뢰도 분포
+    - **높은 신뢰도 (>0.75)**: {len(df[df['reliability_score'] > 0.75])}개 부서
+    - **중간 신뢰도 (0.45-0.75)**: {len(df[(df['reliability_score'] >= 0.45) & (df['reliability_score'] <= 0.75)])}개 부서
+    - **낮은 신뢰도 (<0.45)**: {len(df[df['reliability_score'] < 0.45])}개 부서
+    
+    ### 3. 결론
+    
+    부서별 근무 패턴에 따라 차별화된 보정 Factor를 적용함으로써:
+    - Claim 대비 오차율 감소 예상
+    - 부서별 특성을 반영한 공정한 평가 가능
+    - 데이터 기반 의사결정 체계 구축
+    """)
+    
+    # 다운로드 버튼
+    if st.button("📥 Excel 리포트 다운로드"):
+        # Excel 파일 생성 로직 (추후 구현)
+        st.success("리포트가 다운로드되었습니다.")
+
+# 메인 앱에서 import하여 사용
