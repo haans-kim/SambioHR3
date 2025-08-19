@@ -136,7 +136,7 @@ def render_difference_analysis():
     st.markdown("---")
     
     # 2. 산점도 - 부서별 패턴 분포
-    if 'location_fixity' in df.columns and 'data_density' in df.columns:
+    if 'location_fixity' in df.columns and 'data_density' in df.columns or 'movement_complexity' in df.columns:
         # 클러스터 이름 매핑을 먼저 적용 (실제 데이터 기반)
         if 'cluster' in df.columns:
             # 디버깅: Plant팀 데이터 확인
@@ -150,103 +150,76 @@ def render_difference_analysis():
             cluster_names = {}
             for cluster_id in df['cluster'].unique():
                 cluster_data = df[df['cluster'] == cluster_id]
+                
+                # 현재 데이터에 있는 지표들로 계산
                 avg_fixity = cluster_data['location_fixity'].mean()
-                avg_external = cluster_data['external_activity'].mean() if 'external_activity' in cluster_data.columns else 0
+                avg_movement = cluster_data['movement_complexity'].mean()
                 avg_office = cluster_data['office_ratio'].mean() if 'office_ratio' in cluster_data.columns else 0
+                avg_external = cluster_data['external_activity'].mean() if 'external_activity' in cluster_data.columns else 0
                 
-                # primary_plant 정보 추출
-                primary_plant = 'Unknown'
-                if 'primary_plant' in cluster_data.columns:
-                    mode_result = cluster_data['primary_plant'].mode()
-                    if len(mode_result) > 0:
-                        primary_plant = mode_result[0]
-                
-                # Plant별 비율 계산
+                # Plant별 비율로 생산 중심 판단
                 p1_avg = cluster_data['p1_ratio'].mean() if 'p1_ratio' in cluster_data.columns else 0
                 p2_avg = cluster_data['p2_ratio'].mean() if 'p2_ratio' in cluster_data.columns else 0
                 p3_avg = cluster_data['p3_ratio'].mean() if 'p3_ratio' in cluster_data.columns else 0
                 p4_avg = cluster_data['p4_ratio'].mean() if 'p4_ratio' in cluster_data.columns else 0
                 p5_avg = cluster_data['p5_ratio'].mean() if 'p5_ratio' in cluster_data.columns else 0
+                production_total = p1_avg + p2_avg + p3_avg + p4_avg + p5_avg
                 
-                # 특정 Plant가 압도적으로 높은지 확인
-                max_plant_ratio = max(p1_avg, p2_avg, p3_avg, p4_avg, p5_avg)
-                
-                # 클러스터 특성에 따른 이름 할당
-                if avg_office > 40:
+                # 클러스터 타입 결정 (현재 데이터 기반)
+                if avg_fixity > 70 and avg_movement < 5:
+                    cluster_names[cluster_id] = f'Type_{cluster_id}_고정근무형'
+                elif avg_movement > 10:
+                    cluster_names[cluster_id] = f'Type_{cluster_id}_이동활발형'
+                elif avg_office > 50:
                     cluster_names[cluster_id] = f'Type_{cluster_id}_사무중심형'
-                elif max_plant_ratio > 40:  # 특정 Plant가 40% 이상이면 그 Plant 중심
-                    if p1_avg == max_plant_ratio:
-                        cluster_names[cluster_id] = f'Type_{cluster_id}_P1중심형'
-                    elif p2_avg == max_plant_ratio:
-                        cluster_names[cluster_id] = f'Type_{cluster_id}_P2중심형'
-                    elif p3_avg == max_plant_ratio:
-                        cluster_names[cluster_id] = f'Type_{cluster_id}_P3중심형'
-                    elif p4_avg == max_plant_ratio:
-                        cluster_names[cluster_id] = f'Type_{cluster_id}_P4중심형'
-                    else:
-                        cluster_names[cluster_id] = f'Type_{cluster_id}_P5중심형'
-                elif avg_fixity > 90:
-                    cluster_names[cluster_id] = f'Type_{cluster_id}_생산집중형'
-                elif avg_fixity > 70:
-                    cluster_names[cluster_id] = f'Type_{cluster_id}_생산활동형'
-                elif avg_fixity > 50:
-                    cluster_names[cluster_id] = f'Type_{cluster_id}_복합활동형'
-                elif avg_fixity > 30:
-                    cluster_names[cluster_id] = f'Type_{cluster_id}_혼합근무형'
+                elif production_total > 70:
+                    cluster_names[cluster_id] = f'Type_{cluster_id}_생산중심형'
+                elif avg_external > 20:
+                    cluster_names[cluster_id] = f'Type_{cluster_id}_외부활동형'
                 else:
-                    if avg_external > 20:
-                        cluster_names[cluster_id] = f'Type_{cluster_id}_외부활동형'
-                    else:
-                        cluster_names[cluster_id] = f'Type_{cluster_id}_지원업무형'
+                    cluster_names[cluster_id] = f'Type_{cluster_id}_복합활동형'
             
             df['pattern_type'] = df['cluster'].map(cluster_names)
             
-            # 색상 매핑 정의 (새로운 클러스터 타입에 맞게)
+            # 색상 매핑 정의 (행동 패턴 기반 클러스터 타입)
             color_map = {}
-            color_palette = [
-                '#2ca02c',  # 초록색
-                '#ff7f0e',  # 주황색  
-                '#1f77b4',  # 파란색
-                '#d62728',  # 빨간색
-                '#9467bd',  # 보라색
-                '#8c564b',  # 갈색
-                '#e377c2',  # 핑크색
-                '#7f7f7f',  # 회색
-            ]
             
             # 각 패턴 타입에 색상 할당
             unique_patterns = df['pattern_type'].unique()
-            for i, pattern_name in enumerate(unique_patterns):
+            for pattern_name in unique_patterns:
                 if pd.notna(pattern_name):
                     # 특정 키워드에 따른 색상 지정
-                    if 'P1' in pattern_name:
-                        color_map[pattern_name] = '#2ca02c'  # 초록
-                    elif 'P2' in pattern_name:
-                        color_map[pattern_name] = '#ff7f0e'  # 주황
-                    elif 'P3' in pattern_name:
-                        color_map[pattern_name] = '#1f77b4'  # 파랑
-                    elif 'P4' in pattern_name:
-                        color_map[pattern_name] = '#d62728'  # 빨강
-                    elif 'P5' in pattern_name:
-                        color_map[pattern_name] = '#9467bd'  # 보라
-                    elif '사무' in pattern_name:
-                        color_map[pattern_name] = '#8c564b'  # 갈색
-                    elif '복합' in pattern_name or '혼합' in pattern_name:
-                        color_map[pattern_name] = '#7f7f7f'  # 회색
+                    if '고정근무형' in pattern_name:
+                        color_map[pattern_name] = '#d62728'  # 빨강 - 고정
+                    elif '이동활발형' in pattern_name:
+                        color_map[pattern_name] = '#2ca02c'  # 초록 - 활발
+                    elif '사무중심형' in pattern_name:
+                        color_map[pattern_name] = '#1f77b4'  # 파랑 - 사무
+                    elif '생산중심형' in pattern_name:
+                        color_map[pattern_name] = '#ff7f0e'  # 주황 - 생산
+                    elif '외부활동형' in pattern_name:
+                        color_map[pattern_name] = '#9467bd'  # 보라 - 외부
+                    elif '복합활동형' in pattern_name:
+                        color_map[pattern_name] = '#7f7f7f'  # 회색 - 복합
                     else:
-                        # 나머지는 순환 색상 할당
-                        color_map[pattern_name] = color_palette[i % len(color_palette)]
+                        color_map[pattern_name] = '#8c564b'  # 갈색 - 기타
+            
+            # 현재 데이터에 있는 컬럼으로 축 선택
+            x_axis = 'location_fixity'  # 위치 고정성
+            y_axis = 'movement_complexity' if 'movement_complexity' in df.columns else 'data_density'  # 이동 복잡도 또는 데이터 밀도
             
             fig_scatter = px.scatter(
                 df,
-                x='location_fixity',
-                y='data_density',
+                x=x_axis,
+                y=y_axis,
                 color='pattern_type',
                 color_discrete_map=color_map,
                 size='employee_count',
-                hover_data=['center', 'team', 'employee_count', 'reliability_score'],
-                title='부서별 근무 패턴 분포 (5개 클러스터)',
+                hover_data=['center', 'team', 'employee_count', 'office_ratio', 'external_activity', 'reliability_score'],
+                title='부서별 행동 패턴 분포 (5개 클러스터)',
                 labels={
+                    'movement_complexity': '이동 복잡도 (장소 다양성)',
+                    'tag_diversity': '태그 다양성 (행동 다양성)',
                     'location_fixity': '위치 고정성 (%)',
                     'data_density': '일평균 태그 수',
                     'pattern_type': '패턴 유형',
@@ -307,54 +280,34 @@ def render_difference_analysis():
         cluster_names_stats = {}
         for cluster_id in cluster_stats.index:
             cluster_data = df[df['cluster'] == cluster_id]
+            
+            # 현재 데이터에 있는 지표들로 계산
             avg_fixity = cluster_data['location_fixity'].mean()
-            avg_external = cluster_data['external_activity'].mean() if 'external_activity' in cluster_data.columns else 0
+            avg_movement = cluster_data['movement_complexity'].mean()
             avg_office = cluster_data['office_ratio'].mean() if 'office_ratio' in cluster_data.columns else 0
+            avg_external = cluster_data['external_activity'].mean() if 'external_activity' in cluster_data.columns else 0
             
-            # primary_plant 정보 추출
-            primary_plant = 'Unknown'
-            if 'primary_plant' in cluster_data.columns:
-                mode_result = cluster_data['primary_plant'].mode()
-                if len(mode_result) > 0:
-                    primary_plant = mode_result[0]
-            
-            # Plant별 비율 계산
+            # Plant별 비율로 생산 중심 판단
             p1_avg = cluster_data['p1_ratio'].mean() if 'p1_ratio' in cluster_data.columns else 0
             p2_avg = cluster_data['p2_ratio'].mean() if 'p2_ratio' in cluster_data.columns else 0
             p3_avg = cluster_data['p3_ratio'].mean() if 'p3_ratio' in cluster_data.columns else 0
             p4_avg = cluster_data['p4_ratio'].mean() if 'p4_ratio' in cluster_data.columns else 0
             p5_avg = cluster_data['p5_ratio'].mean() if 'p5_ratio' in cluster_data.columns else 0
+            production_total = p1_avg + p2_avg + p3_avg + p4_avg + p5_avg
             
-            # 특정 Plant가 압도적으로 높은지 확인
-            max_plant_ratio = max(p1_avg, p2_avg, p3_avg, p4_avg, p5_avg)
-            
-            # 클러스터 특성에 따른 이름 할당
-            if avg_office > 40:
+            # 클러스터 타입 결정 (현재 데이터 기반)
+            if avg_fixity > 70 and avg_movement < 5:
+                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_고정근무형'
+            elif avg_movement > 10:
+                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_이동활발형'
+            elif avg_office > 50:
                 cluster_names_stats[cluster_id] = f'Type_{cluster_id}_사무중심형'
-            elif max_plant_ratio > 40:  # 특정 Plant가 40% 이상이면 그 Plant 중심
-                if p1_avg == max_plant_ratio:
-                    cluster_names_stats[cluster_id] = f'Type_{cluster_id}_P1중심형'
-                elif p2_avg == max_plant_ratio:
-                    cluster_names_stats[cluster_id] = f'Type_{cluster_id}_P2중심형'
-                elif p3_avg == max_plant_ratio:
-                    cluster_names_stats[cluster_id] = f'Type_{cluster_id}_P3중심형'
-                elif p4_avg == max_plant_ratio:
-                    cluster_names_stats[cluster_id] = f'Type_{cluster_id}_P4중심형'
-                else:
-                    cluster_names_stats[cluster_id] = f'Type_{cluster_id}_P5중심형'
-            elif avg_fixity > 90:
-                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_생산집중형'
-            elif avg_fixity > 70:
-                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_생산활동형'
-            elif avg_fixity > 50:
-                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_복합활동형'
-            elif avg_fixity > 30:
-                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_혼합근무형'
+            elif production_total > 70:
+                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_생산중심형'
+            elif avg_external > 20:
+                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_외부활동형'
             else:
-                if avg_external > 20:
-                    cluster_names_stats[cluster_id] = f'Type_{cluster_id}_외부활동형'
-                else:
-                    cluster_names_stats[cluster_id] = f'Type_{cluster_id}_지원업무형'
+                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_복합활동형'
         
         cluster_stats.index = cluster_stats.index.map(lambda x: cluster_names_stats.get(x, f'Type_{x}'))
         
@@ -371,22 +324,20 @@ def render_difference_analysis():
             # 파이 차트용 색상 매핑 생성 (scatter plot과 동일한 로직)
             pie_color_map = {}
             for name in cluster_stats.index:
-                if 'P1' in name:
-                    pie_color_map[name] = '#2ca02c'  # 초록
-                elif 'P2' in name:
-                    pie_color_map[name] = '#ff7f0e'  # 주황
-                elif 'P3' in name:
-                    pie_color_map[name] = '#1f77b4'  # 파랑
-                elif 'P4' in name:
-                    pie_color_map[name] = '#d62728'  # 빨강
-                elif 'P5' in name:
-                    pie_color_map[name] = '#9467bd'  # 보라
-                elif '사무' in name:
-                    pie_color_map[name] = '#8c564b'  # 갈색
-                elif '복합' in name or '혼합' in name:
-                    pie_color_map[name] = '#7f7f7f'  # 회색
+                if '고정근무형' in name:
+                    pie_color_map[name] = '#d62728'  # 빨강 - 고정
+                elif '이동활발형' in name:
+                    pie_color_map[name] = '#2ca02c'  # 초록 - 활발
+                elif '사무중심형' in name:
+                    pie_color_map[name] = '#1f77b4'  # 파랑 - 사무
+                elif '생산중심형' in name:
+                    pie_color_map[name] = '#ff7f0e'  # 주황 - 생산
+                elif '외부활동형' in name:
+                    pie_color_map[name] = '#9467bd'  # 보라 - 외부
+                elif '복합활동형' in name:
+                    pie_color_map[name] = '#7f7f7f'  # 회색 - 복합
                 else:
-                    pie_color_map[name] = '#e377c2'  # 핑크 (기타)
+                    pie_color_map[name] = '#8c564b'  # 갈색 - 기타
             
             fig_pie_teams = px.pie(
                 values=cluster_stats['팀수'],
