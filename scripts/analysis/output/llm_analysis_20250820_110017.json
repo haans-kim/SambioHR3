@@ -1,0 +1,91 @@
+{
+  "analysis_type": "clustering",
+  "timestamp": "2025-08-20T11:00:17.145850",
+  "total_teams": 98,
+  "total_employees": 5108,
+  "clusters": {
+    "디지털협업중심형": {
+      "team_count": 25,
+      "total_employees": 251,
+      "teams": [
+        "CDO SE팀",
+        "CDO개발센터",
+        "Client Quality팀",
+        "DS담당",
+        "E&F담당"
+      ],
+      "avg_knox": 188.08399999999997,
+      "avg_equipment": 14.924000000000001
+    },
+    "회의협업중심형": {
+      "team_count": 6,
+      "total_employees": 377,
+      "teams": [
+        "CMC Support팀",
+        "Plant 4B팀",
+        "마케팅팀",
+        "오퍼레이션센터",
+        "항체배양PD팀"
+      ],
+      "avg_knox": 56.666666666666664,
+      "avg_equipment": 53.28333333333334
+    },
+    "균형업무형": {
+      "team_count": 21,
+      "total_employees": 1511,
+      "teams": [
+        "CDO Sales팀",
+        "CDO지원그룹",
+        "CMO SE팀",
+        "CMO Sales팀",
+        "Global PA팀"
+      ],
+      "avg_knox": 61.66666666666668,
+      "avg_equipment": 18.98095238095238
+    },
+    "현장이동활발형": {
+      "team_count": 17,
+      "total_employees": 762,
+      "teams": [
+        "AI Lab",
+        "Bio R&D지원그룹",
+        "CSV그룹",
+        "Corporate Engineering팀",
+        "DP담당"
+      ],
+      "avg_knox": 57.247058823529414,
+      "avg_equipment": 34.9
+    },
+    "저활동형": {
+      "team_count": 1,
+      "total_employees": 1,
+      "teams": [
+        "바이오연구소"
+      ],
+      "avg_knox": 11.0,
+      "avg_equipment": 0.0
+    },
+    "장비운영집중형": {
+      "team_count": 28,
+      "total_employees": 2206,
+      "teams": [
+        "ADC/mRNA운영팀",
+        "ADC개발팀",
+        "ASAT팀",
+        "Batch Disposition그룹",
+        "Compliance QA팀"
+      ],
+      "avg_knox": 64.25357142857142,
+      "avg_equipment": 207.27142857142863
+    }
+  },
+  "insights": [
+    "✅ 조직 전체의 디지털 협업 수준이 높음 (평균 93.1건/인)",
+    "🏭 장비 사용이 활발한 제조 중심 조직 (평균 76.4건/인)",
+    "📊 디지털협업중심형 유형이 25개 팀으로 주요 패턴",
+    "📊 균형업무형 유형이 21개 팀으로 주요 패턴",
+    "📊 현장이동활발형 유형이 17개 팀으로 주요 패턴",
+    "📊 장비운영집중형 유형이 28개 팀으로 주요 패턴",
+    "🌟 Operational Excellence담당은 디지털 협업 최상위 팀 (벤치마킹 대상)"
+  ]
+}

@@ -157,6 +157,9 @@ class SambioHumanApp:
             if st.button("부서별 차이 분석", use_container_width=True):
                 st.session_state.current_page = "부서별 차이 분석"
             
+            if st.button("AI 패턴 분석", use_container_width=True):
+                st.session_state.current_page = "AI 패턴 분석"
+            
             # 현재 페이지가 없으면 홈으로 설정
             if 'current_page' not in st.session_state:
                 st.session_state.current_page = "홈"
@@ -209,6 +212,8 @@ class SambioHumanApp:
             self.render_batch_analysis()
         elif current_page == '부서별 차이 분석':
             self.render_dept_difference_analysis()
+        elif current_page == 'AI 패턴 분석':
+            self.render_ai_pattern_analysis()
     
     def render_home_page(self):
         """홈 페이지 렌더링"""
@@ -627,6 +632,28 @@ class SambioHumanApp:
         """부서별 차이 분석 페이지 렌더링"""
         from src.ui.components.dept_difference_analysis import render_page
         render_page()
+    
+    def render_ai_pattern_analysis(self):
+        """AI 패턴 분석 페이지 렌더링"""
+        # 세련된 비즈니스 스타일 헤더
+        st.markdown("""
+        <div style="background: linear-gradient(90deg, #2E86AB 0%, #4A9BC6 100%); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+            <h2 style="color: white; margin: 0; font-size: 1.8rem; font-weight: 600;">
+                AI Pattern Analysis
+            </h2>
+            <p style="color: rgba(255,255,255,0.9); margin: 0.3rem 0 0 0; font-size: 0.95rem;">
+                LLM 기반 지능형 패턴 분석 시스템
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # LLM 패턴 분석 컴포넌트 렌더링
+        try:
+            from src.ui.components.llm_pattern_analysis import render_page
+            render_page()
+        except ImportError as e:
+            st.error(f"AI 패턴 분석 컴포넌트를 로드할 수 없습니다: {e}")
+            st.info("분석 라이브러리가 정상적으로 설치되었는지 확인하세요.")
 
 
 def main():
