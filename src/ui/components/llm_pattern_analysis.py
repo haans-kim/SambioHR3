@@ -160,35 +160,127 @@ def render_ai_analysis(analysis_type, min_employees=5):
     
     st.header("AI 기반 패턴 분석")
     
-    if LLMPatternAnalyzer is None:
-        st.error("분석기를 로드할 수 없습니다.")
-        return
+    # LLM 선택 옵션 추가
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        llm_option = st.selectbox(
+            "분석 엔진 선택",
+            ["규칙 기반 (무료)", "OpenAI GPT-4 (유료)"],
+            help="GPT-4를 사용하면 더 정교한 분석이 가능합니다"
+        )
+    
+    with col2:
+        if llm_option == "OpenAI GPT-4 (유료)":
+            st.info("예상 비용: ~$0.03")
     
     # 제외된 팀 정보 표시
     st.info(f"분석 기준: 직원수 {min_employees}명 이상의 실제 팀만 포함 (상위 조직 및 담당 레벨 제외)")
     
     # 분석 실행 버튼
     if st.button("AI 분석 실행", type="primary"):
-        with st.spinner("AI가 데이터를 분석하고 있습니다... (약 10초)"):
-            # 분석기 초기화
-            analyzer = LLMPatternAnalyzer(db_path='data/sambio_human.db')
-            
-            # 최소 직원수 설정 적용
-            analyzer.prepare_data_for_llm(min_employees=min_employees)
-            
-            # 분석 실행
-            result = analyzer.analyze_with_llm(analysis_type, min_employees=min_employees)
-            
-            # 세션에 저장
-            st.session_state['llm_analysis_result'] = result
-            
-            st.success("분석이 완료되었습니다!")
+        if llm_option == "OpenAI GPT-4 (유료)":
+            # OpenAI GPT 사용
+            try:
+                # OpenAI 분석기 import
+                from lib.llm_analyzer_openai import LLMPatternAnalyzerWithOpenAI
+                
+                with st.spinner("GPT-4가 데이터를 분석하고 있습니다..."):
+                    # API 키 설정 (실제 운영 시에는 환경변수나 secrets에서 가져와야 함)
+                    api_key = os.environ.get('OPENAI_API_KEY', 'YOUR_API_KEY_HERE')
+                    
+                    if api_key == 'YOUR_API_KEY_HERE':
+                        st.error("OpenAI API 키가 설정되지 않았습니다. 환경변수 OPENAI_API_KEY를 설정해주세요.")
+                        return
+                    
+                    # GPT 분석기 초기화
+                    gpt_analyzer = LLMPatternAnalyzerWithOpenAI(
+                        db_path='data/sambio_human.db',
+                        api_key=api_key
+                    )
+                    
+                    # 데이터 준비
+                    gpt_analyzer.prepare_data_for_llm(min_employees=min_employees)
+                    
+                    # GPT 분석 실행
+                    result = gpt_analyzer.analyze_with_gpt(analysis_type, min_employees=min_employees)
+                    
+                    # 세션에 저장
+                    st.session_state['llm_analysis_result'] = result
+                    
+                    # LLM 사용 정보 표시
+                    if 'llm_used' in result:
+                        st.success(f"✅ 분석 완료! (사용된 엔진: {result['llm_used']})")
+                        
+                        # 토큰 사용량 표시
+                        if 'tokens_used' in result:
+                            estimated_cost = result['tokens_used'] * 0.00002
+                            st.info(f"📊 토큰 사용: {result['tokens_used']:,}개 | 💰 예상 비용: ${estimated_cost:.4f}")
+                    else:
+                        st.success("분석이 완료되었습니다!")
+                        
+            except ImportError:
+                st.error("OpenAI 분석기를 로드할 수 없습니다. 규칙 기반으로 전환합니다.")
+                # 폴백: 규칙 기반 사용
+                use_rule_based = True
+            except Exception as e:
+                st.error(f"GPT 분석 중 오류 발생: {str(e)}")
+                st.info("규칙 기반 분석으로 전환합니다.")
+                use_rule_based = True
+        else:
+            use_rule_based = True
+        
+        # 규칙 기반 분석
+        if llm_option == "규칙 기반 (무료)" or 'use_rule_based' in locals():
+            if LLMPatternAnalyzer is None:
+                st.error("분석기를 로드할 수 없습니다.")
+                return
+                
+            with st.spinner("AI가 데이터를 분석하고 있습니다... (약 10초)"):
+                # 분석기 초기화
+                analyzer = LLMPatternAnalyzer(db_path='data/sambio_human.db')
+                
+                # 최소 직원수 설정 적용
+                analyzer.prepare_data_for_llm(min_employees=min_employees)
+                
+                # 분석 실행
+                result = analyzer.analyze_with_llm(analysis_type, min_employees=min_employees)
+                
+                # 세션에 저장
+                st.session_state['llm_analysis_result'] = result
+                
+                st.success("✅ 분석 완료! (규칙 기반 엔진 사용)")
     
     # 분석 결과 표시
     if 'llm_analysis_result' in st.session_state:
         result = st.session_state['llm_analysis_result']
         
         st.markdown("---")
+        
+        # LLM 사용 정보를 상단에 표시
+        if 'llm_used' in result:
+            with st.expander("🔍 분석 엔진 상세 정보", expanded=False):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("사용된 엔진", result.get('llm_used', 'Unknown'))
+                with col2:
+                    if 'tokens_used' in result:
+                        st.metric("토큰 사용량", f"{result.get('tokens_used', 0):,}")
+                with col3:
+                    if 'tokens_used' in result:
+                        cost = result.get('tokens_used', 0) * 0.00002
+                        st.metric("실제 비용", f"${cost:.4f}")
+                
+                # 원시 응답 데이터 표시 (디버깅용)
+                if st.checkbox("🔧 디버그 정보 표시"):
+                    st.json({
+                        "analysis_type": result.get('analysis_type'),
+                        "timestamp": result.get('timestamp'),
+                        "llm_used": result.get('llm_used'),
+                        "tokens_used": result.get('tokens_used', 0),
+                        "total_teams": result.get('total_teams'),
+                        "total_employees": result.get('total_employees'),
+                        "num_clusters": len(result.get('clusters', {}))
+                    })
         
         # 클러스터 정보
         st.subheader("발견된 패턴 그룹")
