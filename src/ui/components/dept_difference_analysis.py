@@ -115,6 +115,70 @@ def render_difference_analysis():
         st.warning("분석 데이터가 없습니다. 먼저 분석을 실행하세요.")
         return
     
+    # 팀별 태그 개수 데이터 표시 추가
+    st.subheader("📋 팀별 태그 개수 데이터")
+    
+    # 표시할 컬럼 선택
+    tag_columns = []
+    
+    # 기본 정보
+    basic_cols = ['center', 'bu', 'team', 'employee_count']
+    for col in basic_cols:
+        if col in df.columns:
+            tag_columns.append(col)
+    
+    # 태그 개수 컬럼들 (TagCode별) - T2, T3, M1, M2 제외
+    count_cols = ['g1_count', 'g2_count', 'g3_count', 'g4_count',
+                  'n1_count', 'n2_count', 't1_count',
+                  'knox_total_count', 'knox_approval_count',
+                  'knox_pims_count', 'knox_mail_count', 'o_tag_count', 
+                  'eam_count', 'lams_count', 'mes_count', 'equis_count', 'mdm_count']
+    
+    for col in count_cols:
+        if col in df.columns:
+            tag_columns.append(col)
+    
+    if tag_columns:
+        # 데이터프레임 표시
+        display_df = df[tag_columns].copy()
+        
+        # 팀별로 정렬
+        if 'center' in display_df.columns and 'team' in display_df.columns:
+            display_df = display_df.sort_values(['center', 'team'])
+        
+        # 스크롤 가능한 테이블로 표시
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            height=300
+        )
+        
+        # 요약 통계
+        st.markdown("### 📊 태그 개수 요약")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if 'o_tag_count' in df.columns:
+                total_o = df['o_tag_count'].sum()
+                st.metric("총 O태그 (장비)", f"{total_o:,}")
+        
+        with col2:
+            if 'knox_total_count' in df.columns:
+                total_knox = df['knox_total_count'].sum()
+                st.metric("총 Knox (결재+회의+메일)", f"{total_knox:,}")
+        
+        with col3:
+            if 't1_count' in df.columns:
+                total_t1 = df['t1_count'].sum()
+                st.metric("총 T1 (이동공간)", f"{total_t1:,}")
+        
+        with col4:
+            if 'g3_count' in df.columns:
+                total_g3 = df['g3_count'].sum()
+                st.metric("총 G3 (회의/협업)", f"{total_g3:,}")
+    
+    st.markdown("---")
+    
     # 1. 핵심 지표 표시
     col1, col2, col3, col4 = st.columns(4)
     
@@ -126,8 +190,8 @@ def render_difference_analysis():
         st.metric("총 직원 수", f"{total_emp:,}명")
     
     with col3:
-        avg_fixity = df['location_fixity'].mean() if 'location_fixity' in df.columns else 0
-        st.metric("평균 위치 고정성", f"{avg_fixity:.1f}%")
+        avg_diversity = df['tag_diversity'].mean() if 'tag_diversity' in df.columns else 0
+        st.metric("평균 태그 다양성", f"{avg_diversity:.1f}")
     
     with col4:
         avg_reliability = df['reliability_score'].mean() if 'reliability_score' in df.columns else 0
@@ -135,47 +199,34 @@ def render_difference_analysis():
     
     st.markdown("---")
     
-    # 2. 산점도 - 부서별 패턴 분포
-    if 'location_fixity' in df.columns and 'data_density' in df.columns or 'movement_complexity' in df.columns:
-        # 클러스터 이름 매핑을 먼저 적용 (실제 데이터 기반)
+    # 2. 태그 기반 클러스터링 시각화
+    st.subheader("🎯 태그 기반 클러스터링 결과")
+    
+    # 태그 개수 기반 산점도 그리기
+    if 'o_tag_count' in df.columns and 'knox_total_count' in df.columns:
+        # 클러스터 이름 매핑을 먼저 적용 (태그 개수 기반)
         if 'cluster' in df.columns:
-            # 디버깅: Plant팀 데이터 확인
-            plant_teams = df[(df['center'] == '오퍼레이션센터') & (df['team'].str.contains('Plant', na=False))]
-            if not plant_teams.empty:
-                st.sidebar.write("Plant팀 위치 고정성:")
-                for _, row in plant_teams.iterrows():
-                    st.sidebar.write(f"- {row['team']}: {row['location_fixity']:.1f}%")
             
             # 각 클러스터의 특성을 계산하여 동적으로 이름 할당
             cluster_names = {}
             for cluster_id in df['cluster'].unique():
                 cluster_data = df[df['cluster'] == cluster_id]
                 
-                # 현재 데이터에 있는 지표들로 계산
-                avg_fixity = cluster_data['location_fixity'].mean()
-                avg_movement = cluster_data['movement_complexity'].mean()
-                avg_office = cluster_data['office_ratio'].mean() if 'office_ratio' in cluster_data.columns else 0
-                avg_external = cluster_data['external_activity'].mean() if 'external_activity' in cluster_data.columns else 0
+                # 태그 개수 기반으로 클러스터 특성 계산
+                avg_o_tag = cluster_data['o_tag_count'].mean() if 'o_tag_count' in cluster_data.columns else 0
+                avg_knox = cluster_data['knox_total_count'].mean() if 'knox_total_count' in cluster_data.columns else 0
+                avg_t1 = cluster_data['t1_count'].mean() if 't1_count' in cluster_data.columns else 0
+                avg_g3 = cluster_data['g3_count'].mean() if 'g3_count' in cluster_data.columns else 0
                 
-                # Plant별 비율로 생산 중심 판단
-                p1_avg = cluster_data['p1_ratio'].mean() if 'p1_ratio' in cluster_data.columns else 0
-                p2_avg = cluster_data['p2_ratio'].mean() if 'p2_ratio' in cluster_data.columns else 0
-                p3_avg = cluster_data['p3_ratio'].mean() if 'p3_ratio' in cluster_data.columns else 0
-                p4_avg = cluster_data['p4_ratio'].mean() if 'p4_ratio' in cluster_data.columns else 0
-                p5_avg = cluster_data['p5_ratio'].mean() if 'p5_ratio' in cluster_data.columns else 0
-                production_total = p1_avg + p2_avg + p3_avg + p4_avg + p5_avg
-                
-                # 클러스터 타입 결정 (현재 데이터 기반)
-                if avg_fixity > 70 and avg_movement < 5:
-                    cluster_names[cluster_id] = f'Type_{cluster_id}_고정근무형'
-                elif avg_movement > 10:
+                # 클러스터 타입 결정 (태그 개수 기반)
+                if avg_o_tag > 1000:
+                    cluster_names[cluster_id] = f'Type_{cluster_id}_장비집중형'
+                elif avg_knox > 1000:
+                    cluster_names[cluster_id] = f'Type_{cluster_id}_협업중심형'
+                elif avg_t1 > 500:
                     cluster_names[cluster_id] = f'Type_{cluster_id}_이동활발형'
-                elif avg_office > 50:
-                    cluster_names[cluster_id] = f'Type_{cluster_id}_사무중심형'
-                elif production_total > 70:
-                    cluster_names[cluster_id] = f'Type_{cluster_id}_생산중심형'
-                elif avg_external > 20:
-                    cluster_names[cluster_id] = f'Type_{cluster_id}_외부활동형'
+                elif avg_g3 > 50:
+                    cluster_names[cluster_id] = f'Type_{cluster_id}_회의중심형'
                 else:
                     cluster_names[cluster_id] = f'Type_{cluster_id}_복합활동형'
             
@@ -204,9 +255,9 @@ def render_difference_analysis():
                     else:
                         color_map[pattern_name] = '#8c564b'  # 갈색 - 기타
             
-            # 현재 데이터에 있는 컬럼으로 축 선택
-            x_axis = 'location_fixity'  # 위치 고정성
-            y_axis = 'movement_complexity' if 'movement_complexity' in df.columns else 'data_density'  # 이동 복잡도 또는 데이터 밀도
+            # 태그 개수 기반으로 축 선택
+            x_axis = 'o_tag_count' if 'o_tag_count' in df.columns else 'total_tags'
+            y_axis = 'knox_total_count' if 'knox_total_count' in df.columns else 't1_count'
             
             fig_scatter = px.scatter(
                 df,
@@ -215,16 +266,16 @@ def render_difference_analysis():
                 color='pattern_type',
                 color_discrete_map=color_map,
                 size='employee_count',
-                hover_data=['center', 'team', 'employee_count', 'office_ratio', 'external_activity', 'reliability_score'],
-                title='부서별 행동 패턴 분포 (5개 클러스터)',
+                hover_data=['center', 'team', 'employee_count', 't1_count', 'g3_count'],
+                title='태그 개수 기반 부서별 패턴 분포 (5개 클러스터)',
                 labels={
-                    'movement_complexity': '이동 복잡도 (장소 다양성)',
-                    'tag_diversity': '태그 다양성 (행동 다양성)',
-                    'location_fixity': '위치 고정성 (%)',
-                    'data_density': '일평균 태그 수',
+                    'o_tag_count': 'O태그 개수 (장비 사용)',
+                    'knox_total_count': 'Knox 총 개수 (결재+회의+메일)',
+                    't1_count': 'T1태그 개수 (이동)',
+                    'g3_count': 'G3태그 개수 (회의)',
                     'pattern_type': '패턴 유형',
                     'employee_count': '직원 수',
-                    'reliability_score': '신뢰도'
+                    'total_tags': '총 태그 수'
                 }
             )
             
@@ -232,14 +283,14 @@ def render_difference_analysis():
         else:
             fig_scatter = px.scatter(
                 df,
-                x='location_fixity',
-                y='data_density',
+                x='total_tags',
+                y='tags_per_person',
                 size='employee_count',
                 hover_data=['center', 'team'],
                 title='부서별 근무 패턴 분포',
                 labels={
-                    'location_fixity': '위치 고정성 (%)',
-                    'data_density': '일평균 태그 수'
+                    'total_tags': '총 태그 수',
+                    'tags_per_person': '인당 태그 수'
                 }
             )
         
@@ -267,45 +318,35 @@ def render_difference_analysis():
         cluster_stats = df.groupby('cluster').agg({
             'team': 'count',  # 팀 수
             'employee_count': 'sum',
-            'location_fixity': 'mean',
-            'data_density': 'mean',
+            'tags_per_person': 'mean',
+            'tag_diversity': 'mean',
             'reliability_score': 'mean',
             'correction_factor': 'mean'
         }).round(2)
         
         # 컬럼명 변경
-        cluster_stats.columns = ['팀수', '총직원수', '평균위치고정성', '평균데이터밀도', '평균신뢰도', '평균보정Factor']
+        cluster_stats.columns = ['팀수', '총직원수', '인당태그수', '태그다양성', '평균신뢰도', '평균보정Factor']
         
         # 클러스터 이름 매핑 (동적으로 생성 - 위와 동일한 로직)
         cluster_names_stats = {}
         for cluster_id in cluster_stats.index:
             cluster_data = df[df['cluster'] == cluster_id]
             
-            # 현재 데이터에 있는 지표들로 계산
-            avg_fixity = cluster_data['location_fixity'].mean()
-            avg_movement = cluster_data['movement_complexity'].mean()
-            avg_office = cluster_data['office_ratio'].mean() if 'office_ratio' in cluster_data.columns else 0
-            avg_external = cluster_data['external_activity'].mean() if 'external_activity' in cluster_data.columns else 0
+            # 태그 개수 기반으로 클러스터 특성 계산
+            avg_o_tag = cluster_data['o_tag_count'].mean() if 'o_tag_count' in cluster_data.columns else 0
+            avg_knox = cluster_data['knox_total_count'].mean() if 'knox_total_count' in cluster_data.columns else 0
+            avg_t1 = cluster_data['t1_count'].mean() if 't1_count' in cluster_data.columns else 0
+            avg_g3 = cluster_data['g3_count'].mean() if 'g3_count' in cluster_data.columns else 0
             
-            # Plant별 비율로 생산 중심 판단
-            p1_avg = cluster_data['p1_ratio'].mean() if 'p1_ratio' in cluster_data.columns else 0
-            p2_avg = cluster_data['p2_ratio'].mean() if 'p2_ratio' in cluster_data.columns else 0
-            p3_avg = cluster_data['p3_ratio'].mean() if 'p3_ratio' in cluster_data.columns else 0
-            p4_avg = cluster_data['p4_ratio'].mean() if 'p4_ratio' in cluster_data.columns else 0
-            p5_avg = cluster_data['p5_ratio'].mean() if 'p5_ratio' in cluster_data.columns else 0
-            production_total = p1_avg + p2_avg + p3_avg + p4_avg + p5_avg
-            
-            # 클러스터 타입 결정 (현재 데이터 기반)
-            if avg_fixity > 70 and avg_movement < 5:
-                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_고정근무형'
-            elif avg_movement > 10:
+            # 클러스터 타입 결정 (태그 개수 기반)
+            if avg_o_tag > 1000:
+                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_장비집중형'
+            elif avg_knox > 1000:
+                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_협업중심형'
+            elif avg_t1 > 500:
                 cluster_names_stats[cluster_id] = f'Type_{cluster_id}_이동활발형'
-            elif avg_office > 50:
-                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_사무중심형'
-            elif production_total > 70:
-                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_생산중심형'
-            elif avg_external > 20:
-                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_외부활동형'
+            elif avg_g3 > 50:
+                cluster_names_stats[cluster_id] = f'Type_{cluster_id}_회의중심형'
             else:
                 cluster_names_stats[cluster_id] = f'Type_{cluster_id}_복합활동형'
         

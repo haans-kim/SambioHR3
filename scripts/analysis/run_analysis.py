@@ -86,11 +86,11 @@ def create_visualizations(df):
     
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     
-    # 1. 위치 고정성 분포
-    axes[0, 0].hist(df['location_fixity'], bins=20, edgecolor='black')
-    axes[0, 0].set_xlabel('위치 고정성 (%)')
-    axes[0, 0].set_ylabel('부서 수')
-    axes[0, 0].set_title('부서별 위치 고정성 분포')
+    # 1. O태그(장비) vs Knox 데이터 분포
+    axes[0, 0].scatter(df['o_tag_count'], df['knox_total_count'], alpha=0.6)
+    axes[0, 0].set_xlabel('O태그 개수 (장비 사용)')
+    axes[0, 0].set_ylabel('Knox 총 개수 (결재+회의+메일)')
+    axes[0, 0].set_title('부서별 장비 사용 vs 협업 활동')
     
     # 2. 신뢰도 vs 보정 Factor
     axes[0, 1].scatter(df['reliability_score'], df['correction_factor'])

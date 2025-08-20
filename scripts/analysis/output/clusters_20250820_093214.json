@@ -1,0 +1,20 @@
+{
+  "0": {
+    "name": "Type_0_장비집중형",
+    "size": 1,
+    "teams": [
+      [
+        "품질운영센터",
+        "QC Operations팀"
+      ]
+    ],
+    "avg_t1_tags": 55829.0,
+    "avg_g3_tags": 1436.0,
+    "avg_gate_tags": 36637.0,
+    "avg_plant_tags": 57271.0,
+    "avg_knox_tags": 478.0,
+    "avg_o_tags": 31808.0,
+    "total_employees": 235,
+    "type": "장비집중형"
+  }
+}
