@@ -471,6 +471,16 @@ def render_visualization(min_employees=5):
     # 스케일 정규화 옵션
     use_log_scale = st.checkbox("로그 스케일 사용 (데이터 분포가 치우친 경우)", value=False)
     
+    # 색상 맵 정의 (일관된 색상 사용)
+    color_map = {
+        '장비운영집중형': '#1f77b4',  # 파란색
+        '현장이동활발형': '#ff7f0e',  # 주황색
+        '디지털협업중심형': '#2ca02c',  # 녹색
+        '균형업무형': '#d62728',  # 빨간색
+        '회의협업중심형': '#9467bd',  # 보라색
+        '저활동형': '#8c564b'  # 갈색
+    }
+    
     # 산점도 생성
     fig_scatter = px.scatter(
         viz_df,
@@ -479,19 +489,31 @@ def render_visualization(min_employees=5):
         color='cluster',
         size='employee_count',
         hover_data=['team', 'employee_count', 'knox_per_person', 'o_per_person'],
-        title=f'{x_label} vs {y_label} 패턴 분포',
+        title=f'{x_label} vs {y_label} 패턴 분포 (수정된 클러스터링)',
         labels={
             x_col: x_label,
             y_col: y_label,
             'cluster': '패턴 유형',
             'employee_count': '직원 수'
-        }
+        },
+        color_discrete_map=color_map
     )
     
     # 로그 스케일 적용 (선택시)
     if use_log_scale:
         fig_scatter.update_xaxes(type='log', title=f'{x_label} (로그 스케일)')
         fig_scatter.update_yaxes(type='log', title=f'{y_label} (로그 스케일)')
+    else:
+        # 축 범위를 실제 데이터에 맞게 동적 조정 (여유 10% 추가)
+        # Y축: 실제 최대값 기준으로 설정
+        y_max = viz_df[y_col].max()
+        y_range = [0, y_max * 1.1] if y_max > 0 else [0, 100]
+        fig_scatter.update_yaxes(range=y_range)
+        
+        # X축: 실제 최대값 기준으로 설정
+        x_max = viz_df[x_col].max()
+        x_range = [0, x_max * 1.1] if x_max > 0 else [0, 100]
+        fig_scatter.update_xaxes(range=x_range)
     
     # 그리드 라인 추가로 가독성 향상
     fig_scatter.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
