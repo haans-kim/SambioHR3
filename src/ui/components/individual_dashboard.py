@@ -5184,9 +5184,17 @@ class IndividualDashboard:
         # 4개 메트릭 표시 (근무 형태 제외)
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("출근 시각", analysis_result['work_start'].strftime('%H:%M'))
+            work_start = analysis_result['work_start']
+            if isinstance(work_start, str):
+                st.metric("출근 시각", work_start)
+            else:
+                st.metric("출근 시각", work_start.strftime('%H:%M'))
         with col2:
-            st.metric("퇴근 시각", analysis_result['work_end'].strftime('%H:%M'))
+            work_end = analysis_result['work_end']
+            if isinstance(work_end, str):
+                st.metric("퇴근 시각", work_end)
+            else:
+                st.metric("퇴근 시각", work_end.strftime('%H:%M'))
         with col3:
             # 체류시간을 HH:MM 형식으로 변환
             total_hours = analysis_result.get('total_hours', 0)
@@ -5404,6 +5412,14 @@ class IndividualDashboard:
         work_start = analysis_result['work_start']
         work_end = analysis_result['work_end']
         
+        # 문자열인 경우 datetime으로 변환
+        from datetime import datetime as dt
+        if isinstance(work_start, str):
+            # HH:MM 형식 가정
+            work_start = dt.strptime(work_start, '%H:%M').replace(year=2024, month=1, day=1)
+        if isinstance(work_end, str):
+            work_end = dt.strptime(work_end, '%H:%M').replace(year=2024, month=1, day=1)
+        
         # 각 세그먼트를 막대로 추가
         for segment in segments:
             if pd.notna(segment['start_time']) and pd.notna(segment['end_time']):
@@ -5551,6 +5567,14 @@ class IndividualDashboard:
         work_start = analysis_result['work_start']
         work_end = analysis_result['work_end']
         
+        # 문자열인 경우 datetime으로 변환
+        from datetime import datetime as dt
+        if isinstance(work_start, str):
+            # HH:MM 형식 가정
+            work_start = dt.strptime(work_start, '%H:%M').replace(year=2024, month=1, day=1)
+        if isinstance(work_end, str):
+            work_end = dt.strptime(work_end, '%H:%M').replace(year=2024, month=1, day=1)
+        
         # 모든 활동을 하나의 타임라인에 표시
         fig = go.Figure()
         
@@ -5558,8 +5582,13 @@ class IndividualDashboard:
             if pd.notna(segment['start_time']) and pd.notna(segment['end_time']):
                 activity_code = segment.get('activity_code', 'WORK')
                 
+                # segment의 시간도 문자열인지 확인
+                seg_start = segment['start_time']
+                if isinstance(seg_start, str):
+                    seg_start = dt.strptime(seg_start, '%H:%M').replace(year=2024, month=1, day=1)
+                
                 # 시간을 분 단위로 변환
-                start_minutes = (segment['start_time'] - work_start).total_seconds() / 60
+                start_minutes = (seg_start - work_start).total_seconds() / 60
                 duration = segment['duration_minutes']
                 
                 # hover 텍스트 생성
@@ -6300,8 +6329,16 @@ class IndividualDashboard:
         
         with col2:
             st.markdown("**📍 실제 태그 데이터**")
-            st.write(f"• 실제 출근: {analysis_result['work_start'].strftime('%H:%M')}")
-            st.write(f"• 실제 퇴근: {analysis_result['work_end'].strftime('%H:%M')}")
+            work_start = analysis_result['work_start']
+            work_end = analysis_result['work_end']
+            if isinstance(work_start, str):
+                st.write(f"• 실제 출근: {work_start}")
+            else:
+                st.write(f"• 실제 출근: {work_start.strftime('%H:%M')}")
+            if isinstance(work_end, str):
+                st.write(f"• 실제 퇴근: {work_end}")
+            else:
+                st.write(f"• 실제 퇴근: {work_end.strftime('%H:%M')}")
             st.write(f"• 실제 체류시간: {format_hours_to_hhmm(analysis_result['total_hours'])}")
             
             # 실제 활동 시간 계산
@@ -6344,8 +6381,21 @@ class IndividualDashboard:
             claim_end_hour, claim_end_min = 17, 0
         
         # 실제 근무시간
-        actual_start = analysis_result['work_start'].hour + analysis_result['work_start'].minute / 60
-        actual_end = analysis_result['work_end'].hour + analysis_result['work_end'].minute / 60
+        work_start = analysis_result['work_start']
+        work_end = analysis_result['work_end']
+        if isinstance(work_start, str):
+            # 문자열인 경우 HH:MM 형식으로 가정
+            parts = work_start.split(':')
+            actual_start = int(parts[0]) + int(parts[1]) / 60 if len(parts) == 2 else 0
+        else:
+            actual_start = work_start.hour + work_start.minute / 60
+        
+        if isinstance(work_end, str):
+            # 문자열인 경우 HH:MM 형식으로 가정
+            parts = work_end.split(':')
+            actual_end = int(parts[0]) + int(parts[1]) / 60 if len(parts) == 2 else 0
+        else:
+            actual_end = work_end.hour + work_end.minute / 60
         
         # 근태기록 근무시간
         claim_start = claim_start_hour + claim_start_min / 60
@@ -6359,7 +6409,7 @@ class IndividualDashboard:
             name='실제',
             marker_color='lightblue',
             base=actual_start,
-            text=f"{analysis_result['work_start'].strftime('%H:%M')} - {analysis_result['work_end'].strftime('%H:%M')}",
+            text=f"{work_start if isinstance(work_start, str) else work_start.strftime('%H:%M')} - {work_end if isinstance(work_end, str) else work_end.strftime('%H:%M')}",
             textposition='inside'
         ))
         

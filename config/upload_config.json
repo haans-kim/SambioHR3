@@ -85,12 +85,13 @@
     "Tagging Data": {
       "files": [],
       "file_names": [
-        "Tag_data_25.6.xlsx"
+        "입출문기록(25.1)_1일~15일.xlsx",
+        "입출문기록(25.1)_16일~31일.xlsx"
       ],
       "pickle_exists": true,
       "dataframe_name": "tag_data",
-      "last_modified": "2025-07-21T17:16:00.343322",
-      "row_count": 1799769
+      "last_modified": "2025-09-11T09:40:00.860026",
+      "row_count": 1575822
     },
     "태깅지점": {
       "files": [],
